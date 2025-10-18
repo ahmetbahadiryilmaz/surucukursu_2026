@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="utf-8" />
+    <title>{{title}}</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f0f0f0;
+            margin: 0;
+            padding: 20px;
+        }
+        .login-container {
+            max-width: 400px;
+            margin: 100px auto;
+            background: white;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        .logo {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        .logo h1 {
+            color: #2c3e50;
+            margin: 0;
+        }
+        .form-group {
+            margin-bottom: 20px;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+            color: #333;
+        }
+        input[type="text"],
+        input[type="password"] {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            box-sizing: border-box;
+            font-size: 14px;
+        }
+        .btn-login {
+            width: 100%;
+            padding: 12px;
+            background-color: #3498db;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            font-size: 16px;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+        .btn-login:hover {
+            background-color: #2980b9;
+        }
+        .error {
+            color: #e74c3c;
+            margin-bottom: 15px;
+            padding: 10px;
+            background-color: #fdf2f2;
+            border: 1px solid #f5c6cb;
+            border-radius: 4px;
+        }
+        .no-session-info {
+            background-color: #fff3cd;
+            border: 1px solid #ffeaa7;
+            padding: 10px;
+            border-radius: 4px;
+            margin-bottom: 20px;
+            color: #856404;
+        }
+        .footer {
+            text-align: center;
+            margin-top: 20px;
+            font-size: 12px;
+            color: #666;
+        }
+    </style>
+</head>
+<body>
+    <div class="login-container">
+        <div class="logo">
+            <h1>MEBBİS</h1>
+            <p>Milli Eğitim Bakanlığı Bilgi İşlem Sistemi</p>
+        </div>
+
+        {{#if noSession}}
+        <div class="no-session-info">
+            <strong>Bilgi:</strong> Oturum bilgisi bulunamadı. Lütfen tekrar giriş yapınız.
+        </div>
+        {{/if}}
+
+        {{#if error}}
+        <div class="error">
+            {{error}}
+        </div>
+        {{/if}}
+
+        <form method="POST" action="{{formAction}}">
+            <input type="hidden" name="__VIEWSTATE" value="{{viewState}}" />
+            <input type="hidden" name="__EVENTVALIDATION" value="{{eventValidation}}" />
+
+            <div class="form-group">
+                <label for="txtKullaniciAd">Kullanıcı Adı:</label>
+                <input type="text" id="txtKullaniciAd" name="txtKullaniciAd" value="{{txtKullaniciAd}}" required />
+            </div>
+
+            <div class="form-group">
+                <label for="txtSifre">Şifre:</label>
+                <input type="password" id="txtSifre" name="txtSifre" required />
+            </div>
+
+            <button type="submit" name="btnGiris" value="Giriş" class="btn-login">
+                Giriş
+            </button>
+        </form>
+
+        <div class="footer">
+            <p>&copy; 2024 Milli Eğitim Bakanlığı. Tüm hakları saklıdır.</p>
+        </div>
+    </div>
+</body>
+</html>
