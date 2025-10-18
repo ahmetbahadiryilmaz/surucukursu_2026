@@ -1,0 +1,17 @@
+{
+  "name": "surucukursu-monorepo",
+  "private": true,
+  "packageManager": "pnpm@9.0.0",
+  "devDependencies": {
+    "turbo": "^2.0.0"
+  },
+  "scripts": {
+    "postinstall": "node -e \"try { require('fs').rmSync('node_modules/rxjs', { recursive: true, force: true }); } catch (e) {}\"",
+    "build": "turbo build",
+    "dev": "turbo dev",
+    "dev:file-server": "turbo dev --filter=@surucukursu/file-server",
+    "php-worker": "turbo run php-worker",
+    "migrate:fresh": "pnpm --filter=@surucukursu/database migrate:fresh",
+    "lint": "turbo lint"
+  }
+}
