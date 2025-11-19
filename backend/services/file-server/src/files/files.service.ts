@@ -104,14 +104,20 @@ export class FilesService {
   }
 
   private getSafeFilePath(filename: string): string {
-    // Remove any path traversal attempts
-    const sanitized = path.normalize(filename).replace(/^(\.\.[\/\\])+/, '');
+    // Normalize the path and remove leading slashes
+    const normalized = path.normalize(filename).replace(/^[\/\\]+/, '');
     
-    // Ensure the path doesn't contain dangerous characters
-    if (sanitized.includes('..') || sanitized.includes('/') || sanitized.includes('\\')) {
-      throw new Error('Invalid file path');
+    // Check for path traversal attempts
+    if (normalized.includes('..')) {
+      throw new Error('Invalid file path: path traversal not allowed');
     }
     
-    return sanitized;
+    // Ensure the resolved path is within storage directory
+    const fullPath = path.resolve(this.storagePath, normalized);
+    if (!fullPath.startsWith(this.storagePath)) {
+      throw new Error('Invalid file path: outside storage directory');
+    }
+    
+    return normalized;
   }
 }

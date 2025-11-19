@@ -1,5 +1,6 @@
 import { Injectable, Logger, BadGatewayException } from '@nestjs/common';
 import axios, { AxiosResponse } from 'axios';
+import { env } from '@surucukursu/shared';
 
 export interface ServiceConfig {
   name: string;
@@ -15,25 +16,19 @@ export class ProxyService {
   private readonly services: Record<string, ServiceConfig> = {
     'api': {
       name: 'API Server',
-      baseUrl: process.env.API_SERVER_URL || 'http://localhost:3001',
+      baseUrl: `http://localhost:${env.services.apiServer.port}`,
       timeout: 30000,
       retries: 3
     },
     'files': {
       name: 'File Service',
-      baseUrl: process.env.FILE_SERVICE_URL || 'http://localhost:3002',
+      baseUrl: `http://localhost:${env.services.fileService.port}`,
       timeout: 60000,
       retries: 2
     },
-    'socket': {
-      name: 'Socket Service',
-      baseUrl: process.env.SOCKET_SERVICE_URL || 'http://localhost:3003',
-      timeout: 10000,
-      retries: 1
-    },
     'worker': {
       name: 'Worker Service',
-      baseUrl: process.env.WORKER_SERVICE_URL || 'http://localhost:3004',
+      baseUrl: `http://localhost:${env.services.workerService.port}`,
       timeout: 120000,
       retries: 1
     }
@@ -57,17 +52,27 @@ export class ProxyService {
     this.logger.log(`Proxying ${method} ${url}`);
 
     try {
-      const response = await axios({
+      // Determine responseType: use stream for file service (binary data)
+      const axiosOptions: any = {
         method: method.toLowerCase() as any,
         url,
         data,
         headers: {
-          'Content-Type': 'application/json',
+          // Forward client headers without overriding Content-Type
           ...headers
         },
         timeout: service.timeout,
         validateStatus: () => true // Don't throw on HTTP error status codes
-      });
+      };
+
+      if (serviceName === 'files') {
+        // Stream binary responses (PDFs, images, etc.) so proxy can pipe them
+        axiosOptions.responseType = 'stream';
+        // CRITICAL: Disable text encoding to preserve binary data integrity
+        axiosOptions.responseEncoding = null;
+      }
+
+      const response = await axios(axiosOptions);
 
       this.logger.log(`Response from ${service.name}: ${response.status}`);
       return response;

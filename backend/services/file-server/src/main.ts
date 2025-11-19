@@ -3,11 +3,8 @@ import { FastifyAdapter, NestFastifyApplication } from '@nestjs/platform-fastify
 import { ValidationPipe } from '@nestjs/common';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { AppModule } from './app.module';
-import { config } from 'dotenv';
+import { env } from '@surucukursu/shared';
 import * as path from 'path';
-
-// Load environment variables from the backend .env file
-config({ path: path.resolve(__dirname, '../../../.env') });
 
 async function bootstrap() {
   console.log('Starting File Server...');
@@ -50,7 +47,7 @@ async function bootstrap() {
   const document = SwaggerModule.createDocument(app, config);
   SwaggerModule.setup('docs', app, document);
 
-  const port = 3002; // File service port
+  const port = env.services.fileService.port || 3002;
   await app.listen(port, '0.0.0.0');
 
   console.log(`🚀 File Server is running on: http://localhost:${port}`);

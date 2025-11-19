@@ -22,7 +22,7 @@ export class AppController {
           headers,
           data: req.body,
           params: req.query,
-        })
+        }),
       );
       res.status(response.status).send(response.data);
     } catch (error: any) {

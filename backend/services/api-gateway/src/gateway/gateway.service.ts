@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import { env } from '@surucukursu/shared';
 
 @Injectable()
 export class GatewayService {
@@ -8,10 +9,10 @@ export class GatewayService {
       message: 'API Gateway is running',
       timestamp: new Date().toISOString(),
       services: {
-        'api-server': 'http://localhost:3001',
-        'file-service': 'http://localhost:3002',
-        'worker-service': 'http://localhost:3003',
-        'database-service': 'Available'
+        'api-server': `http://localhost:${env.services.apiServer.port}`,
+        'file-service': `http://localhost:${env.services.fileService.port}`,
+        'worker-service': `http://localhost:${env.services.workerService.port}`,
+        'database-service': `http://localhost:${env.services.databaseService.port}`
       }
     };
   }
@@ -20,7 +21,7 @@ export class GatewayService {
     return {
       name: '@surucukursu/api-gateway',
       version: '1.0.0',
-      environment: process.env.NODE_ENV || 'development',
+      environment: env.app.nodeEnv,
       uptime: process.uptime(),
       memory: process.memoryUsage(),
       timestamp: new Date().toISOString()

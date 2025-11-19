@@ -36,7 +36,7 @@ export default defineConfig({
     allowedHosts: ["test.mtsk.app"],
     proxy: {
       '/api': {
-        target: 'http://localhost:3000',
+        target: `http://localhost:${process.env.VITE_API_GATEWAY_PORT || '9501'}`,
         changeOrigin: true,
         secure: false,
       },

@@ -61,6 +61,21 @@ export class EnvironmentVariables {
   @IsOptional()
   DATABASE_SERVICE_PORT?: number = 3002;
 
+  @IsNumber()
+  @Type(() => Number)
+  @IsOptional()
+  FILE_SERVICE_PORT?: number = 3002;
+
+  @IsNumber()
+  @Type(() => Number)
+  @IsOptional()
+  SOCKET_SERVICE_PORT?: number = 3003;
+
+  @IsNumber()
+  @Type(() => Number)
+  @IsOptional()
+  WORKER_SERVICE_PORT?: number = 3004;
+
   @IsString()
   @IsOptional()
   NODE_ENV?: string = 'development';
@@ -244,6 +259,7 @@ export const env = {
     const config = getEnv();
     return {
       url: config.BACKEND_URL || 'http://localhost:3000',
+      apiBaseUrl: `http://localhost:${config.API_SERVER_PORT || 3001}/api/v1`,
     };
   },
 
@@ -258,6 +274,15 @@ export const env = {
       },
       databaseService: {
         port: config.DATABASE_SERVICE_PORT || 3002,
+      },
+      fileService: {
+        port: config.FILE_SERVICE_PORT || 3002,
+      },
+      socketService: {
+        port: config.SOCKET_SERVICE_PORT || 3003,
+      },
+      workerService: {
+        port: config.WORKER_SERVICE_PORT || 3004,
       },
     };
   },

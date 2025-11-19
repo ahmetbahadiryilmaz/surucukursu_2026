@@ -2,27 +2,51 @@
   "$schema": "https://turbo.build/schema.json",
   "ui": "tui",
   "globalDependencies": ["pnpm-lock.yaml"],
-  "globalEnv": ["NODE_ENV", "PORT"],
+  "globalEnv": [
+    "NODE_ENV",
+    "PORT",
+    "DB_HOST",
+    "DB_PORT",
+    "DB_USERNAME",
+    "DB_PASSWORD",
+    "DB_DATABASE",
+    "HOST"
+  ],
   "tasks": {
     "build": {
       "dependsOn": ["^build"],
-      "inputs": ["src/**", "package.json", "tsconfig.json", "vite.config.ts", "tsconfig.node.json", "prisma/**"],
-      "outputs": ["dist/**", "build/**"],
+      "inputs": [
+        "src/**",
+        "package.json",
+        "tsconfig.json",
+        "vite.config.ts",
+        "tsconfig.node.json",
+        "prisma/**"
+      ],
+      "outputs": ["dist/**", "build/**", "../../dist/**"],
       "env": ["NODE_ENV", "PORT"]
     },
     "dev": {
       "cache": false,
-      "persistent": true
+      "persistent": true,
+      "interactive": true
+    },
+    "pdf-worker": {
+      "cache": false,
+      "persistent": true,
+      "interactive": true
     },
     "php-worker": {
       "cache": false,
-      "persistent": true
+      "persistent": true,
+      "interactive": true
     },
     "lint": {},
     "test": {},
     "start:dev": {
       "cache": false,
-      "persistent": true
+      "persistent": true,
+      "interactive": true
     }
   }
 }

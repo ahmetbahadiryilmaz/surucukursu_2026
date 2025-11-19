@@ -70,9 +70,9 @@ export class SktController {
     postSkt04002(@Res() reply: FastifyReply, @Body() body: any) {
         return this.sktService.handleSkt04002Post(reply, body);
     }
+ 
 
-    // Additional common SKT endpoints can be added here
-    
+ 
     @Get('skt01002.aspx')
     @ApiOperation({ summary: 'Get student document upload' })
     @ApiResponse({ status: 200, description: 'Returns document upload form' })

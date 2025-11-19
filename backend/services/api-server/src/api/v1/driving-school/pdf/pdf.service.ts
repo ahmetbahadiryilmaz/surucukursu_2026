@@ -71,6 +71,7 @@ export class PdfService implements OnModuleInit {
             mode: PdfGenerationMode.SINGLE,
             userId: userId,
             data: {
+                drivingSchoolId: code, // Pass driving school ID for folder naming (DS[id])
                 studentId: dto.studentId,
                 template: dto.template || 'certificate',
                 data: dto.data || {},
@@ -114,6 +115,7 @@ export class PdfService implements OnModuleInit {
             mode: PdfGenerationMode.GROUP,
             userId: userId,
             data: {
+                drivingSchoolId: code, // Pass driving school ID for folder naming (DS[id])
                 studentIds: dto.studentIds,
                 template: dto.template || 'certificate',
                 data: dto.data || [],

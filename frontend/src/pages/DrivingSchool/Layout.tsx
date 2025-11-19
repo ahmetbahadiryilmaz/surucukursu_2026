@@ -11,6 +11,7 @@ import Kursum from "./Kursum";
 import StudentsTable from "./Students";
 import AraclarTable from "./Cars/Araclar";
 import SimulasyonRaporlariTable from "./SimulasyonRaporlari"; 
+import DosyalarimPage from "./Dosyalarim";
 import { DropdownMenu, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuContent } from "@/components/ui/dropdown-menu";
 import DrivingSchoolDashboard from "./Dashboard/DashboardPage";
 import DrivingSchoolHesabim from "./DrivingSchoolHesabim";
@@ -316,6 +317,7 @@ console.log("User data cleared, theme preference preserved");
             />
             <Route path="cars" element={<AraclarTable />} />
             <Route path="simulasyon-raporlari" element={<SimulasyonRaporlariTable />} />
+            <Route path="dosyalarim" element={<DosyalarimPage />} />
             <Route path="hesabim" element={<DrivingSchoolHesabim />} />
             <Route path="/" element={<DrivingSchoolDashboard />} />
           </Routes>

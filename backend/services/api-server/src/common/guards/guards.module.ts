@@ -10,6 +10,11 @@ import { DrivingSchoolGuard } from './driving-school.guard';
     TypeOrmModule.forFeature([SessionEntity, DrivingSchoolEntity]),
   ],
   providers: [AuthGuard, AdminGuard, DrivingSchoolGuard],
-  exports: [AuthGuard, AdminGuard, DrivingSchoolGuard]
+  exports: [
+    AuthGuard, 
+    AdminGuard, 
+    DrivingSchoolGuard,
+    TypeOrmModule // Export TypeOrmModule so repositories are available to importing modules
+  ]
 })
 export class GuardsModule {}

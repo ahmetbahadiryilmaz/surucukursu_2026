@@ -247,6 +247,29 @@ class ApiService {
     }
   };
 
+  // Files management
+  files = {
+    // Get list of files for a driving school
+    getFiles: async (id: string): Promise<{ success: boolean; drivingSchoolId: string; files: any[] }> => {
+      const response = await this.axiosService.get(`/driving-school/${id}/files`);
+      return response.data;
+    },
+
+    // Download a specific file
+    downloadFile: async (id: string, filename: string): Promise<Blob> => {
+      const response = await this.axiosService.get(`/driving-school/${id}/files/download/${filename}`, {
+        responseType: 'blob'
+      });
+      return response.data;
+    },
+
+    // Get file information
+    getFileInfo: async (id: string, filename: string): Promise<any> => {
+      const response = await this.axiosService.get(`/driving-school/${id}/files/info/${filename}`);
+      return response.data;
+    }
+  };
+
   // Admin methods
   admin = {
     // Admins Endpoints

@@ -35,6 +35,7 @@ export class ProxyController {
     @Res() res: FastifyReply,
     @Param() params: any
   ) {
+    console.log(`\n🌐 GATEWAY: Proxying file request: ${req.method} ${req.url}`);
     return this.handleProxy('files', req, res, params);
   }
 
@@ -86,14 +87,38 @@ export class ProxyController {
         headers as Record<string, string>
       );
 
-      // Set response headers
+      // Filter out hop-by-hop headers and set the rest on the reply.
+      // See RFC 7230 Section 6.1 for hop-by-hop header names.
+      const hopByHop = new Set([
+        'connection',
+        'keep-alive',
+        'proxy-authenticate',
+        'proxy-authorization',
+        'te',
+        'trailers',
+        'transfer-encoding',
+        'upgrade'
+      ]);
+
       Object.entries(response.headers).forEach(([key, value]) => {
-        if (typeof value === 'string') {
-          res.header(key, value);
+        const lname = key.toLowerCase();
+        if (hopByHop.has(lname)) return;
+        // Only set string headers (axios may include arrays in some cases)
+        if (typeof value === 'string' || typeof value === 'number') {
+          res.header(key, String(value));
         }
       });
 
-      // Send response
+      // If the proxied response is a stream (axios responseType: 'stream'), send the stream
+      // directly so Fastify can pipe it to the client without buffering.
+      const isStream = response.data && typeof response.data.pipe === 'function';
+
+      if (isStream) {
+        res.status(response.status);
+        return res.send(response.data);
+      }
+
+      // Non-stream response (JSON/text) — send as-is
       res.status(response.status).send(response.data);
       
     } catch (error) {

@@ -1,8 +1,10 @@
 // Socket Configuration Constants
 
+const API_GATEWAY_PORT = import.meta.env.VITE_API_GATEWAY_PORT || '9501';
+
 export const SOCKET_CONFIG = {
   // Base URLs for different environments
-  DEVELOPMENT: "ws://localhost:3001",
+  DEVELOPMENT: `ws://localhost:${API_GATEWAY_PORT}`,
   STAGING: "wss://test.mtsk.app",
   PRODUCTION: "wss://staging.mtsk.app",
 

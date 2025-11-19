@@ -1,8 +1,11 @@
 // API Configuration Constants
 
+// Use API Gateway (port 9501) for all requests
+const API_GATEWAY_PORT = import.meta.env.VITE_API_GATEWAY_PORT || '9501';
+
 export const API_CONFIG = {
   // Base URLs for different environments
-  DEVELOPMENT: "http://localhost:3001/api/v1",
+  DEVELOPMENT: `http://localhost:${API_GATEWAY_PORT}/api/v1`,
   STAGING: "https://test.mtsk.app/api/v1", 
   PRODUCTION: "https://staging.mtsk.app/api/v1",
   

@@ -12,12 +12,14 @@ export interface PdfGenerationRequest {
 }
 
 export interface SinglePdfData {
+  drivingSchoolId: string; // Driving school ID for folder naming (DS[id])
   studentId: number;
   template: string;
   data: Record<string, any>;
 }
 
 export interface GroupPdfData {
+  drivingSchoolId: string; // Driving school ID for folder naming (DS[id])
   studentIds: number[];
   template: string;
   data: Record<string, any>[];
