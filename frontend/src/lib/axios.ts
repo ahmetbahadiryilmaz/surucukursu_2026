@@ -9,8 +9,10 @@ class AxiosService {
 
   private constructor(baseURL?: string) {
     const API_GATEWAY_PORT = import.meta.env.VITE_API_GATEWAY_PORT || '9501';
+    // Use the gateway base WITH /api/v1 suffix
+    const gatewayBase = `http://localhost:${API_GATEWAY_PORT}/api/v1`;
     this.api = axios.create({
-      baseURL: baseURL || process.env.REACT_APP_API_BASE_URL || `http://localhost:${API_GATEWAY_PORT}/api/v1`,
+      baseURL: baseURL || process.env.REACT_APP_API_BASE_URL || gatewayBase,
       headers: {
         "Content-Type": "application/json",
       },

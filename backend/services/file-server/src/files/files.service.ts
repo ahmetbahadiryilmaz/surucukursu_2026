@@ -17,9 +17,23 @@ export class FilesService {
   private readonly storagePath: string;
 
   constructor() {
-    // Storage path relative to the file-server service
-    this.storagePath = path.resolve(__dirname, '../../../../storage');
+    // Storage path - try multiple possible locations
+    // In development: from backend/services/file-server/src -> backend/storage
+    // In production: from dist/file-server -> backend/storage
+    const possiblePaths = [
+      path.resolve(process.cwd(), 'storage'),                    // From backend/
+      path.resolve(process.cwd(), '../storage'),                 // From backend/services/file-server
+      path.resolve(process.cwd(), '../../storage'),              // From backend/services/file-server/src
+      path.resolve(__dirname, '../../../../storage'),            // From src/files (dev)
+      path.resolve(__dirname, '../../../storage'),               // From dist/files (build)
+    ];
+
+    // Find the first existing storage path
+    this.storagePath = possiblePaths.find(p => fs.existsSync(p)) || possiblePaths[0];
+    
     this.logger.log(`Storage path initialized: ${this.storagePath}`);
+    this.logger.log(`Process CWD: ${process.cwd()}`);
+    this.logger.log(`__dirname: ${__dirname}`);
     
     // Ensure storage directory exists
     this.ensureStorageExists();

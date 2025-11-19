@@ -5,7 +5,6 @@ import { PdfModule } from './pdf/pdf.module';
 import { StudentsModule } from './students/students.module';
 import { CarsModule } from './cars/cars.module';
 import { DashboardModule } from './dashboard/dashboard.module';
-import { FilesModule } from './files/files.module';
 
 @Module({
     imports: [
@@ -15,7 +14,6 @@ import { FilesModule } from './files/files.module';
         StudentsModule,
         CarsModule,
         DashboardModule,
-        FilesModule,
     ],
     providers: [],
     exports: [
@@ -25,7 +23,6 @@ import { FilesModule } from './files/files.module';
         StudentsModule,
         CarsModule,
         DashboardModule,
-        FilesModule,
     ],
 })
 export class DrivingSchoolModule { }

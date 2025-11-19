@@ -58,22 +58,30 @@ import type {
 class ApiService {
   private static instance: ApiService;
   private axiosService: AxiosService;
+  private fileAxiosService: AxiosService; // Separate axios instance for file service
   private readonly API_BASE_URL: string;
+  private readonly FILE_BASE_URL: string;
 
   private constructor() {
     // Determine API base URL based on environment/domain
     this.API_BASE_URL = this.getApiBaseUrl();
+    this.FILE_BASE_URL = this.getFileBaseUrl();
     
     // Initialize axios service with project-specific base URL
     this.axiosService = AxiosService.getInstance(this.API_BASE_URL);
     
-    // Set up unauthorized handler and initial token
+    // Initialize separate axios service for file server (without /api/v1)
+    this.fileAxiosService = new (AxiosService as any)(this.FILE_BASE_URL);
+    
+    // Set up unauthorized handler and initial token for both services
     this.axiosService.setUnauthorizedHandler(() => this.handleUnauthorized());
+    this.fileAxiosService.setUnauthorizedHandler(() => this.handleUnauthorized());
     
     // Set initial token if it exists
     const token = this.getToken();
     if (token) {
       this.axiosService.setToken(token);
+      this.fileAxiosService.setToken(token);
     }
   }
 
@@ -99,6 +107,25 @@ class ApiService {
     
     // Default to production
     return API_CONFIG.PRODUCTION;
+  }
+
+  // Determine File server base URL (without /api/v1)
+  private getFileBaseUrl(): string {
+    const hostname = window.location.hostname;
+    const API_GATEWAY_PORT = import.meta.env.VITE_API_GATEWAY_PORT || '9501';
+    
+    // If local development
+    if (hostname === 'localhost' || hostname.startsWith('127.0.0.1')) {
+      return `http://localhost:${API_GATEWAY_PORT}`;
+    }
+    
+    // If domain contains 'test ekullanici' (staging)
+    if (hostname.includes('test') && hostname.includes('ekullanici')) {
+      return 'https://test.mtsk.app';
+    }
+    
+    // Default to production
+    return 'https://staging.mtsk.app';
   }
 
   // Singleton pattern
@@ -250,22 +277,43 @@ class ApiService {
   // Files management
   files = {
     // Get list of files for a driving school
-    getFiles: async (id: string): Promise<{ success: boolean; drivingSchoolId: string; files: any[] }> => {
-      const response = await this.axiosService.get(`/driving-school/${id}/files`);
+    getFiles: async (code: string): Promise<{ success: boolean; drivingSchoolId: string; files: any[] }> => {
+      console.log(`\n🔵 FRONTEND: Calling getFiles for driving school: ${code}`);
+      console.log(`   Base URL: ${this.FILE_BASE_URL}`);
+      console.log(`   Request URL: /files/driving-school/${code}`);
+      console.log(`   Full URL: ${this.FILE_BASE_URL}/files/driving-school/${code}`);
+      
+      // Use file axios service (no /api/v1 prefix)
+      const response = await this.fileAxiosService.get(`/files/driving-school/${code}`);
+      
+      console.log(`   ✅ Response received:`, response.data);
       return response.data;
     },
 
     // Download a specific file
-    downloadFile: async (id: string, filename: string): Promise<Blob> => {
-      const response = await this.axiosService.get(`/driving-school/${id}/files/download/${filename}`, {
+    downloadFile: async (code: string, filename: string): Promise<Blob> => {
+      console.log(`\n🔵 FRONTEND: Downloading file ${filename} for driving school: ${code}`);
+      console.log(`   Full URL: ${this.FILE_BASE_URL}/files/driving-school/${code}/download/${filename}`);
+      
+      // Use file axios service (no /api/v1 prefix)
+      const response = await this.fileAxiosService.get(`/files/driving-school/${code}/download/${filename}`, {
         responseType: 'blob'
       });
       return response.data;
     },
 
+    // View PDF file inline (for preview in browser)
+    viewFile: async (code: string, filename: string): Promise<string> => {
+      // Return the URL for viewing the PDF inline
+      return `${this.FILE_BASE_URL}/files/driving-school/${code}/view/${filename}`;
+    },
+
     // Get file information
-    getFileInfo: async (id: string, filename: string): Promise<any> => {
-      const response = await this.axiosService.get(`/driving-school/${id}/files/info/${filename}`);
+    getFileInfo: async (code: string, filename: string): Promise<any> => {
+      console.log(`\n🔵 FRONTEND: Getting file info for ${filename} in driving school: ${code}`);
+      
+      // Use file axios service (no /api/v1 prefix)
+      const response = await this.fileAxiosService.get(`/files/driving-school/${code}/info/${filename}`);
       return response.data;
     }
   };
@@ -513,8 +561,9 @@ class ApiService {
   // Public methods for token management
   public setToken(token: string): void {
     localStorage.setItem("token", token);
-    // Also set the token in axios headers immediately
+    // Also set the token in both axios services immediately
     this.axiosService.setToken(token);
+    this.fileAxiosService.setToken(token);
   }
 
   public setUser(user: any): void {

@@ -34,6 +34,14 @@ export class ProxyService {
     }
   };
 
+  constructor() {
+    // Log service configurations on initialization
+    this.logger.log('🔧 Service configurations:');
+    Object.entries(this.services).forEach(([key, config]) => {
+      this.logger.log(`   ${key}: ${config.baseUrl}`);
+    });
+  }
+
   async proxyRequest(
     serviceName: string,
     path: string,

@@ -64,7 +64,7 @@ export class EnvironmentVariables {
   @IsNumber()
   @Type(() => Number)
   @IsOptional()
-  FILE_SERVICE_PORT?: number = 3002;
+  FILE_SERVICE_PORT?: number = 9504;
 
   @IsNumber()
   @Type(() => Number)
@@ -276,7 +276,7 @@ export const env = {
         port: config.DATABASE_SERVICE_PORT || 3002,
       },
       fileService: {
-        port: config.FILE_SERVICE_PORT || 3002,
+        port: config.FILE_SERVICE_PORT || 9504,
       },
       socketService: {
         port: config.SOCKET_SERVICE_PORT || 3003,

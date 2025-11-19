@@ -10,6 +10,7 @@ import {
 import { ApiTags, ApiOperation } from '@nestjs/swagger';
 import { FastifyRequest, FastifyReply } from 'fastify';
 import { ProxyService } from './proxy.service';
+import { env } from '@surucukursu/shared';
 
 @ApiTags('Proxy')
 @Controller()
@@ -25,6 +26,8 @@ export class ProxyController {
     @Res() res: FastifyReply,
     @Param() params: any
   ) {
+    console.log(`\n🌐 GATEWAY REQUEST: ${req.method} ${req.url}`);
+    console.log(`   ➡️  Routing to api-server`);
     return this.handleProxy('api', req, res, params);
   }
 
@@ -35,7 +38,10 @@ export class ProxyController {
     @Res() res: FastifyReply,
     @Param() params: any
   ) {
-    console.log(`\n🌐 GATEWAY: Proxying file request: ${req.method} ${req.url}`);
+    console.log(`\n🟢 GATEWAY FILES REQUEST: ${req.method} ${req.url}`);
+    console.log(`   Original URL: ${req.url}`);
+    console.log(`   Will proxy to file-server at port ` + env.services.fileService.port);
+    console.log(`   📁 Routing to file-server`);
     return this.handleProxy('files', req, res, params);
   }
 
@@ -66,9 +72,11 @@ export class ProxyController {
     params: any
   ) {
     try {
-      // Extract path after service name, but keep /api prefix for api service
+      // Extract path after service name
+      // For 'api' and 'files' services, keep the full path including the service prefix
+      // For other services, remove the service prefix from the path
       let path = req.url;
-      if (serviceName !== 'api') {
+      if (serviceName !== 'api' && serviceName !== 'files') {
         path = req.url.replace(`/${serviceName}`, '') || '/';
       }
       

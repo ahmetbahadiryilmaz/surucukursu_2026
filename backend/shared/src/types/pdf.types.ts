@@ -5,9 +5,11 @@ export enum PdfGenerationMode {
 
 export interface PdfGenerationRequest {
   id: string;
+  type: string; // Job type: pdf_generation, single_simulation, etc.
   mode: PdfGenerationMode;
   userId: number;
   data: SinglePdfData | GroupPdfData;
+  simulationType?: string; // For simulation jobs: 'sesim' or 'ana_grup'
   socketId?: string; // For progress updates
 }
 

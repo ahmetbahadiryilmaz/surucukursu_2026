@@ -1,12 +1,23 @@
 // pages/DrivingSchool/DrivingSchoolHesabim.tsx
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useTheme } from "@/components/providers/ThemeProvider";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Settings, Sun, Moon, Monitor } from "lucide-react";
+import { drivingSchoolOwnerContext } from "@/components/contexts/DrivingSchoolManagerContext";
+
+// Simulation types from global enums
+export enum SimulationType {
+  SESIM = 'sesim',
+  ANA_GRUP = 'ana_grup'
+}
 
 export default function DrivingSchoolHesabim() {
   const { theme, setTheme } = useTheme();
+  const { activeDrivingSchool } = drivingSchoolOwnerContext();
+  
+  const [simulatorType, setSimulatorType] = useState<SimulationType | undefined>(undefined);
   const [preferences, setPreferences] = useState({
     studentNotifications: true,
     lessonReminders: true,
@@ -16,17 +27,68 @@ export default function DrivingSchoolHesabim() {
     autoScheduling: false,
   });
 
+  useEffect(() => {
+    // Load simulator type from driving school data
+    if (activeDrivingSchool?.simulator_type) {
+      setSimulatorType(activeDrivingSchool.simulator_type as SimulationType);
+    }
+  }, [activeDrivingSchool]);
+
+  const handleSimulatorTypeChange = (value: SimulationType) => {
+    setSimulatorType(value);
+    // TODO: Save to backend
+    console.log("Simulator type changed to:", value);
+  };
+
   return (
     <div className="min-h-screen w-full pb-16 pt-6 transition-colors duration-300">
       <div className="container mx-auto px-4">
         <header className="mb-10">
           <div>
-            <h1 className="text-3xl font-bold">Hesabım</h1>
+            <h1 className="text-3xl font-bold">Sürücü Kursu Ayarları</h1>
             <p className="text-muted-foreground mt-1">Sürücü kursu yönetici paneli ayarları</p>
           </div>
         </header>
 
         <div className="grid gap-6 lg:grid-cols-2">
+          <Card className="shadow-md">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Settings className="h-5 w-5" />
+                Simülatör Ayarları
+              </CardTitle>
+              <CardDescription>
+                Kurumunuzda kullanılan simülatör sistemini belirtin.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-4">
+                <div>
+                  <label className="text-sm font-medium mb-2 block">Simülatör Tipi</label>
+                  <Select
+                    value={simulatorType}
+                    onValueChange={handleSimulatorTypeChange}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Simülatör tipi seçiniz" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value={SimulationType.SESIM}>
+                        Sesim
+                      </SelectItem>
+                      <SelectItem value={SimulationType.ANA_GRUP}>
+                        Ana Grup
+                      </SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <p className="text-sm text-muted-foreground mt-2">
+                    Seçilen simülatör tipine göre raporlama ve takip sistemi ayarlanacaktır.
+                  </p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
           <Card className="shadow-md">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">

@@ -1,8 +1,15 @@
 import { Injectable, NotFoundException, Inject, forwardRef, OnModuleInit, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { DrivingSchoolEntity, JobEntity, JobStatus, JobType } from '@surucukursu/shared';
+import { DrivingSchoolEntity, JobEntity, JobStatus, JobType, SimulationType } from '@surucukursu/shared';
 import { GenerateSinglePdfDto, PdfGenerationResponseDto } from '../main/dto/pdf.dto';
+import {
+    GenerateSingleSimulationDto,
+    GenerateGroupSimulationDto,
+    GenerateSingleDireksiyonTakipDto,
+    GenerateGroupDireksiyonTakipDto,
+    JobResponseDto
+} from '../main/dto/simulation.dto';
 import * as amqp from 'amqplib';
 import { env } from '@surucukursu/shared';
 import { PdfGenerationMode, PdfGenerationRequest } from '@surucukursu/shared';
@@ -45,6 +52,11 @@ export class PdfService implements OnModuleInit {
     }
 
     async queueSinglePdfGeneration(code: string, dto: GenerateSinglePdfDto): Promise<PdfGenerationResponseDto> {
+        // Validate job type
+        if (!dto.jobType) {
+            throw new Error('Job type is required');
+        }
+
         // Get driving school info to get the owner/manager user ID
         const drivingSchool = await this.drivingSchoolRepository.findOne({
             where: { id: parseInt(code) }
@@ -61,13 +73,14 @@ export class PdfService implements OnModuleInit {
         const result = await this.jobRepository.query(
             `INSERT INTO jobs (type, status, school_id, progress_percentage, payload, created_at, updated_at) 
              VALUES (?, ?, ?, ?, '{}', UNIX_TIMESTAMP(), UNIX_TIMESTAMP())`,
-            [JobType.PDF_GENERATION, JobStatus.PENDING, drivingSchool.id, 0]
+            [dto.jobType, JobStatus.PENDING, drivingSchool.id, 0]
         );
 
         const jobId = result.insertId.toString();
 
         const request: PdfGenerationRequest = {
             id: jobId,
+            type: dto.jobType,
             mode: PdfGenerationMode.SINGLE,
             userId: userId,
             data: {
@@ -87,7 +100,12 @@ export class PdfService implements OnModuleInit {
         };
     }
 
-    async queueGroupPdfGeneration(code: string, dto: { studentIds: number[]; template?: string; data?: any[] }) {
+    async queueGroupPdfGeneration(code: string, dto: { jobType: JobType; studentIds: number[]; template?: string; data?: any[] }) {
+        // Validate job type
+        if (!dto.jobType) {
+            throw new Error('Job type is required');
+        }
+
         const drivingSchool = await this.drivingSchoolRepository.findOne({
             where: { id: parseInt(code) }
         });
@@ -105,13 +123,14 @@ export class PdfService implements OnModuleInit {
         const result = await this.jobRepository.query(
             `INSERT INTO jobs (type, status, school_id, progress_percentage, payload, created_at, updated_at) 
              VALUES (?, ?, ?, ?, '{}', UNIX_TIMESTAMP(), UNIX_TIMESTAMP())`,
-            [JobType.PDF_GENERATION, JobStatus.PENDING, drivingSchool.id, 0]
+            [dto.jobType, JobStatus.PENDING, drivingSchool.id, 0]
         );
 
         const jobId = result.insertId.toString();
 
         const request: PdfGenerationRequest = {
             id: jobId,
+            type: dto.jobType,
             mode: PdfGenerationMode.GROUP,
             userId: userId,
             data: {
@@ -128,6 +147,200 @@ export class PdfService implements OnModuleInit {
             jobId,
             message: 'Group PDF generation request queued successfully',
             estimatedTime: dto.studentIds.length * 30, // 30 seconds per PDF
+        };
+    }
+
+    async queueSingleSimulation(code: string, dto: GenerateSingleSimulationDto): Promise<JobResponseDto> {
+        // Validate job type
+        if (!dto.jobType || dto.jobType !== JobType.SINGLE_SIMULATION) {
+            throw new Error('Job type must be SINGLE_SIMULATION');
+        }
+
+        const drivingSchool = await this.drivingSchoolRepository.findOne({
+            where: { id: parseInt(code) }
+        });
+
+        if (!drivingSchool) {
+            throw new NotFoundException(`Driving school with code ${code} not found`);
+        }
+
+        const userId = drivingSchool.owner_id || drivingSchool.manager_id || 1;
+
+        // Create job in database
+        const result = await this.jobRepository.query(
+            `INSERT INTO jobs (type, status, school_id, progress_percentage, simulation_type, payload, created_at, updated_at) 
+             VALUES (?, ?, ?, ?, ?, '{}', UNIX_TIMESTAMP(), UNIX_TIMESTAMP())`,
+            [dto.jobType, JobStatus.PENDING, drivingSchool.id, 0, dto.simulationType]
+        );
+
+        const jobId = result.insertId.toString();
+
+        const request: PdfGenerationRequest = {
+            id: jobId,
+            type: dto.jobType,
+            mode: PdfGenerationMode.SINGLE,
+            userId: userId,
+            simulationType: dto.simulationType,
+            data: {
+                drivingSchoolId: code,
+                studentId: dto.studentId,
+                template: dto.template || 'simulation',
+                data: {},
+            },
+        };
+
+        await this.sendToQueue(request);
+
+        return {
+            jobId,
+            jobType: dto.jobType,
+            message: 'Single simulation job queued successfully',
+            estimatedTime: 60,
+        };
+    }
+
+    async queueGroupSimulation(code: string, dto: GenerateGroupSimulationDto): Promise<JobResponseDto> {
+        // Validate job type
+        if (!dto.jobType || dto.jobType !== JobType.GROUP_SIMULATION) {
+            throw new Error('Job type must be GROUP_SIMULATION');
+        }
+
+        const drivingSchool = await this.drivingSchoolRepository.findOne({
+            where: { id: parseInt(code) }
+        });
+
+        if (!drivingSchool) {
+            throw new NotFoundException(`Driving school with code ${code} not found`);
+        }
+
+        const userId = drivingSchool.owner_id || drivingSchool.manager_id || 1;
+
+        // Create job in database
+        const result = await this.jobRepository.query(
+            `INSERT INTO jobs (type, status, school_id, progress_percentage, simulation_type, payload, created_at, updated_at) 
+             VALUES (?, ?, ?, ?, ?, '{}', UNIX_TIMESTAMP(), UNIX_TIMESTAMP())`,
+            [dto.jobType, JobStatus.PENDING, drivingSchool.id, 0, dto.simulationType]
+        );
+
+        const jobId = result.insertId.toString();
+
+        const request: PdfGenerationRequest = {
+            id: jobId,
+            type: dto.jobType,
+            mode: PdfGenerationMode.GROUP,
+            userId: userId,
+            simulationType: dto.simulationType,
+            data: {
+                drivingSchoolId: code,
+                studentIds: dto.studentIds,
+                template: dto.template || 'simulation',
+                data: [],
+            },
+        };
+
+        await this.sendToQueue(request);
+
+        return {
+            jobId,
+            jobType: dto.jobType,
+            message: 'Group simulation job queued successfully',
+            estimatedTime: dto.studentIds.length * 60,
+        };
+    }
+
+    async queueSingleDireksiyonTakip(code: string, dto: GenerateSingleDireksiyonTakipDto): Promise<JobResponseDto> {
+        // Validate job type
+        if (!dto.jobType || dto.jobType !== JobType.SINGLE_DIREKSIYON_TAKIP) {
+            throw new Error('Job type must be SINGLE_DIREKSIYON_TAKIP');
+        }
+
+        const drivingSchool = await this.drivingSchoolRepository.findOne({
+            where: { id: parseInt(code) }
+        });
+
+        if (!drivingSchool) {
+            throw new NotFoundException(`Driving school with code ${code} not found`);
+        }
+
+        const userId = drivingSchool.owner_id || drivingSchool.manager_id || 1;
+
+        // Create job in database
+        const result = await this.jobRepository.query(
+            `INSERT INTO jobs (type, status, school_id, progress_percentage, payload, created_at, updated_at) 
+             VALUES (?, ?, ?, ?, '{}', UNIX_TIMESTAMP(), UNIX_TIMESTAMP())`,
+            [dto.jobType, JobStatus.PENDING, drivingSchool.id, 0]
+        );
+
+        const jobId = result.insertId.toString();
+
+        const request: PdfGenerationRequest = {
+            id: jobId,
+            type: dto.jobType,
+            mode: PdfGenerationMode.SINGLE,
+            userId: userId,
+            data: {
+                drivingSchoolId: code,
+                studentId: dto.studentId,
+                template: dto.template || 'direksiyon_takip',
+                data: {},
+            },
+        };
+
+        await this.sendToQueue(request);
+
+        return {
+            jobId,
+            jobType: dto.jobType,
+            message: 'Single direksiyon takip job queued successfully',
+            estimatedTime: 30,
+        };
+    }
+
+    async queueGroupDireksiyonTakip(code: string, dto: GenerateGroupDireksiyonTakipDto): Promise<JobResponseDto> {
+        // Validate job type
+        if (!dto.jobType || dto.jobType !== JobType.GROUP_DIREKSIYON_TAKIP) {
+            throw new Error('Job type must be GROUP_DIREKSIYON_TAKIP');
+        }
+
+        const drivingSchool = await this.drivingSchoolRepository.findOne({
+            where: { id: parseInt(code) }
+        });
+
+        if (!drivingSchool) {
+            throw new NotFoundException(`Driving school with code ${code} not found`);
+        }
+
+        const userId = drivingSchool.owner_id || drivingSchool.manager_id || 1;
+
+        // Create job in database
+        const result = await this.jobRepository.query(
+            `INSERT INTO jobs (type, status, school_id, progress_percentage, payload, created_at, updated_at) 
+             VALUES (?, ?, ?, ?, '{}', UNIX_TIMESTAMP(), UNIX_TIMESTAMP())`,
+            [dto.jobType, JobStatus.PENDING, drivingSchool.id, 0]
+        );
+
+        const jobId = result.insertId.toString();
+
+        const request: PdfGenerationRequest = {
+            id: jobId,
+            type: dto.jobType,
+            mode: PdfGenerationMode.GROUP,
+            userId: userId,
+            data: {
+                drivingSchoolId: code,
+                studentIds: dto.studentIds,
+                template: dto.template || 'direksiyon_takip',
+                data: [],
+            },
+        };
+
+        await this.sendToQueue(request);
+
+        return {
+            jobId,
+            jobType: dto.jobType,
+            message: 'Group direksiyon takip job queued successfully',
+            estimatedTime: dto.studentIds.length * 30,
         };
     }
 

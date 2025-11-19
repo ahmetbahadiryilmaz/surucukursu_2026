@@ -1,26 +1,23 @@
 import { Entity, Column, ManyToOne, JoinColumn } from 'typeorm';
 import { BaseEntity } from './base.entity';
 import { DrivingSchoolEntity } from './driving-school.entity';
-
-export enum JobStatus {
-  PENDING = 'pending',
-  PROCESSING = 'processing',
-  COMPLETED = 'completed',
-  FAILED = 'failed'
-}
-
-export enum JobType {
-  PDF_GENERATION = 'pdf_generation'
-}
+import { JobStatus, JobType, SimulationType } from '../types/job.types';
 
 @Entity('jobs')
 export class JobEntity extends BaseEntity {
   @Column({
     type: 'enum',
     enum: JobType,
-    default: JobType.PDF_GENERATION
+    default: null
   })
   type: JobType;
+
+  @Column({
+    type: 'enum',
+    enum: SimulationType,
+    nullable: true
+  })
+  simulation_type?: SimulationType;
 
   @Column({
     type: 'enum',

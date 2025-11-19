@@ -12,10 +12,17 @@ async function bootstrap() {
 
   const fastifyAdapter = new FastifyAdapter();
   
-  // Register static file serving plugin
+  // Register static file serving for storage (protected files)
   await fastifyAdapter.register(require('@fastify/static'), {
     root: path.resolve(__dirname, '../../../storage'),
     prefix: '/static/', // Static files will be available at /static/
+  });
+
+  // Register public folder for publicly accessible files (no auth required)
+  await fastifyAdapter.register(require('@fastify/static'), {
+    root: path.resolve(__dirname, '../public'),
+    prefix: '/public/',
+    decorateReply: false, // Don't override the first static registration
   });
 
   const app = await NestFactory.create<NestFastifyApplication>(
@@ -52,6 +59,7 @@ async function bootstrap() {
 
   console.log(`🚀 File Server is running on: http://localhost:${port}`);
   console.log(`📁 Static files served at: http://localhost:${port}/static/`);
+  console.log(`🌐 Public files served at: http://localhost:${port}/public/`);
   console.log(`📚 API Documentation: http://localhost:${port}/docs`);
 }
 

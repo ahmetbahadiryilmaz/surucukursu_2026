@@ -1,7 +1,12 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsNumber, IsObject, IsOptional, IsString } from 'class-validator';
+import { IsNumber, IsObject, IsOptional, IsString, IsEnum } from 'class-validator';
+import { JobType } from '@surucukursu/shared';
 
 export class GenerateSinglePdfDto {
+  @ApiProperty({ description: 'Job type', enum: JobType })
+  @IsEnum(JobType)
+  jobType: JobType;
+
   @ApiProperty({ description: 'Student ID' })
   @IsNumber()
   studentId: number;

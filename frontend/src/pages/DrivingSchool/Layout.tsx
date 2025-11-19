@@ -8,6 +8,7 @@ import { Sheet, SheetTrigger, SheetContent } from "@/components/ui/sheet";
 import KursBilgileriPage from "./Kurslar";
 import IslemlerTable from "./Islemler";
 import Kursum from "./Kursum";
+import SurucuKursuAyarlari from "./SurucuKursuAyarlari";
 import StudentsTable from "./Students";
 import AraclarTable from "./Cars/Araclar";
 import SimulasyonRaporlariTable from "./SimulasyonRaporlari"; 
@@ -310,7 +311,8 @@ console.log("User data cleared, theme preference preserved");
           <Routes>
             <Route path="kurs-bilgileri" element={<KursBilgileriPage />} />
             <Route path="islemler" element={<IslemlerTable />} />
-            <Route path="kursum" element={<Kursum />} />
+            <Route path="kursum" element={<DrivingSchoolHesabim />} />
+            <Route path="mebbis" element={<Kursum />} />
             <Route 
               path="students" 
               element={<StudentsTable onDownload={addDownload} onJobStart={addOngoingJob} />} 
@@ -318,7 +320,6 @@ console.log("User data cleared, theme preference preserved");
             <Route path="cars" element={<AraclarTable />} />
             <Route path="simulasyon-raporlari" element={<SimulasyonRaporlariTable />} />
             <Route path="dosyalarim" element={<DosyalarimPage />} />
-            <Route path="hesabim" element={<DrivingSchoolHesabim />} />
             <Route path="/" element={<DrivingSchoolDashboard />} />
           </Routes>
         </main>
