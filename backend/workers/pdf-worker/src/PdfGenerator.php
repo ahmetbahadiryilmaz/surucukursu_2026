@@ -4,8 +4,15 @@ namespace SurucuKursu;
 
 use Dompdf\Dompdf;
 use Dompdf\Options;
+use SurucuKursu\Tasks\DireksiyonTakipTask;
+use SurucuKursu\Tasks\SimulationTask;
+use SurucuKursu\Tasks\Ek4Task;
+
+// Set timezone to Turkey (UTC+3)
+date_default_timezone_set('Europe/Istanbul');
+
 // Include simple_html_dom parser to normalize/clean HTML templates before PDF rendering
-require_once __DIR__ . '/../simple_html_dom.php';
+require_once __DIR__ . '/Lib/simple_html_dom.php';
 
 class PdfGenerator {
     
@@ -145,8 +152,70 @@ class PdfGenerator {
         file_put_contents($pdfFilePath, $output);
         
         echo "✅ Combined PDF saved to: {$pdfFilePath}\n";
-        
+
         return base64_encode($output);
+    }
+    
+    /**
+     * Generate Direksiyon Takip Form PDF
+     * Uses templates from data/templates/direksiyon-takip/
+     * 
+     * @param array $data Contains studentInfo, lessonRecords, period, companyName, drivingSchoolId
+     * @return array Result with status and path
+     */
+    public function createDireksiyonTakipPdf($data) {
+        if (!isset($data['drivingSchoolId'])) {
+            throw new \Exception("drivingSchoolId is required for PDF generation");
+        }
+        
+        $task = new DireksiyonTakipTask(
+            $data['drivingSchoolId'],
+            $data['companyName'] ?? ''
+        );
+        
+        return $task->generate($data);
+    }
+    
+    /**
+     * Generate Simulation Report PDF
+     * Uses templates based on simulator type setting (sesim or anagrup)
+     * 
+     * @param array $data Contains studentInfo, simulatorRecords, period, companyName, drivingSchoolId, simulatorType
+     * @return array Result with status and files
+     */
+    public function createSimulationPdf($data) {
+        if (!isset($data['drivingSchoolId'])) {
+            throw new \Exception("drivingSchoolId is required for PDF generation");
+        }
+        
+        $simulatorType = $data['simulatorType'] ?? SimulationTask::SIMULATOR_SESIM;
+        
+        $task = new SimulationTask(
+            $data['drivingSchoolId'],
+            $data['companyName'] ?? '',
+            $simulatorType
+        );
+        
+        return $task->generate($data);
+    }
+    
+    /**
+     * Generate EK-4 (Sınav Sonuç Raporu) PDF
+     * 
+     * @param array $data Contains studentName, plateNumber, instructorName, examDate, period, companyName, drivingSchoolId
+     * @return array Result with status and path
+     */
+    public function createEk4Pdf($data) {
+        if (!isset($data['drivingSchoolId'])) {
+            throw new \Exception("drivingSchoolId is required for PDF generation");
+        }
+        
+        $task = new Ek4Task(
+            $data['drivingSchoolId'],
+            $data['companyName'] ?? ''
+        );
+        
+        return $task->generate($data);
     }
     
     /**

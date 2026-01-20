@@ -54,6 +54,14 @@ class EnvLoader {
                 $_SERVER[$key] = $value;
             }
         }
+        
+        // Set timezone if TZ is defined
+        $tz = getenv('TZ');
+        if ($tz) {
+            date_default_timezone_set($tz);
+            echo "Timezone set to: $tz\n";
+        }
+        
         echo "Environment variables loaded successfully\n";
     }
 }

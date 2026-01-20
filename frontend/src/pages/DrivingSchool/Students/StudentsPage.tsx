@@ -125,6 +125,7 @@ const StudentsTable: React.FC<StudentsProps> = ({ onDownload, onJobStart }) => {
 
       // Call PDF generation API with school code
       const response = await apiService.pdf.generateSingle(schoolCode, {
+        jobType: type === 'simulasyon' ? 'single_simulation' : 'single_direksiyon_takip',
         studentId: student.id,
         template: 'certificate',
         data: randomData
@@ -196,8 +197,8 @@ const StudentsTable: React.FC<StudentsProps> = ({ onDownload, onJobStart }) => {
       window.addEventListener('pdf-completed', handleCompleted);
       window.addEventListener('pdf-error', handleError);
 
-      // Show initial message
-      toast.info('PDF oluşturuluyor...');
+      // Show initial message - display for 100ms
+      toast.info('PDF oluşturuluyor...', { duration: 100 });
 
     } catch (error) {
       console.error('PDF generation failed:', error);

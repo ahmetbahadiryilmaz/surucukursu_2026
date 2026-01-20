@@ -4,8 +4,10 @@ import { useTheme } from "@/components/providers/ThemeProvider";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Settings, Sun, Moon, Monitor } from "lucide-react";
+import { Settings, Sun, Moon, Monitor, Save, CheckCircle } from "lucide-react";
 import { drivingSchoolOwnerContext } from "@/components/contexts/DrivingSchoolManagerContext";
+import { useToast } from "@/hooks/use-toast";
+import { apiService } from "@/services/api-service";
 
 // Simulation types from global enums
 export enum SimulationType {
@@ -16,6 +18,7 @@ export enum SimulationType {
 export default function DrivingSchoolHesabim() {
   const { theme, setTheme } = useTheme();
   const { activeDrivingSchool } = drivingSchoolOwnerContext();
+  const { toast } = useToast();
   
   const [simulatorType, setSimulatorType] = useState<SimulationType | undefined>(undefined);
   const [preferences, setPreferences] = useState({
@@ -26,18 +29,74 @@ export default function DrivingSchoolHesabim() {
     systemUpdates: true,
     autoScheduling: false,
   });
+  const [isLoading, setIsLoading] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
 
+  // Load settings from backend
   useEffect(() => {
-    // Load simulator type from driving school data
-    if (activeDrivingSchool?.simulator_type) {
-      setSimulatorType(activeDrivingSchool.simulator_type as SimulationType);
-    }
-  }, [activeDrivingSchool]);
+    const loadSettings = async () => {
+      if (!activeDrivingSchool?.id) return;
 
-  const handleSimulatorTypeChange = (value: SimulationType) => {
-    setSimulatorType(value);
-    // TODO: Save to backend
-    console.log("Simulator type changed to:", value);
+      try {
+        setIsLoading(true);
+        const settings = await apiService.drivingSchool.getSettings(String(activeDrivingSchool.id));
+        if (settings.simulator_type) {
+          setSimulatorType(settings.simulator_type as SimulationType);
+        }
+        
+        setPreferences({
+          studentNotifications: settings.student_notifications ?? true,
+          lessonReminders: settings.lesson_reminders ?? true,
+          examAlerts: settings.exam_alerts ?? true,
+          marketingEmails: settings.marketing_emails ?? false,
+          systemUpdates: settings.system_updates ?? true,
+          autoScheduling: settings.auto_scheduling ?? false,
+        });
+      } catch (error) {
+        console.error("Error loading settings:", error);
+        toast({
+          title: "Hata",
+          description: "Ayarlar yüklenirken bir hata oluştu.",
+          variant: "destructive",
+        });
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    loadSettings();
+  }, [activeDrivingSchool?.id, toast]);
+
+  // Save all settings to backend
+  const handleSaveSettings = async () => {
+    if (!activeDrivingSchool?.id) return;
+
+    try {
+      setIsSaving(true);
+      await apiService.drivingSchool.updateSettings(String(activeDrivingSchool.id), {
+        simulator_type: simulatorType,
+        student_notifications: preferences.studentNotifications,
+        lesson_reminders: preferences.lessonReminders,
+        exam_alerts: preferences.examAlerts,
+        marketing_emails: preferences.marketingEmails,
+        system_updates: preferences.systemUpdates,
+        auto_scheduling: preferences.autoScheduling,
+      });
+
+      toast({
+        title: "Başarılı",
+        description: "Ayarlar başarıyla kaydedildi.",
+      });
+    } catch (error) {
+      console.error("Error saving settings:", error);
+      toast({
+        title: "Hata",
+        description: "Ayarlar kaydedilirken bir hata oluştu.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   return (
@@ -67,7 +126,8 @@ export default function DrivingSchoolHesabim() {
                   <label className="text-sm font-medium mb-2 block">Simülatör Tipi</label>
                   <Select
                     value={simulatorType}
-                    onValueChange={handleSimulatorTypeChange}
+                    onValueChange={(value) => setSimulatorType(value as SimulationType)}
+                    disabled={isLoading}
                   >
                     <SelectTrigger>
                       <SelectValue placeholder="Simülatör tipi seçiniz" />
@@ -175,6 +235,7 @@ export default function DrivingSchoolHesabim() {
                     checked={preferences.studentNotifications}
                     onChange={(e) => setPreferences({...preferences, studentNotifications: e.target.checked})}
                     className="h-4 w-4 rounded border-gray-300"
+                    disabled={isLoading}
                   />
                   <label htmlFor="studentNotifications" className="text-sm font-medium">
                     Öğrenci bildirimleri
@@ -188,6 +249,7 @@ export default function DrivingSchoolHesabim() {
                     checked={preferences.lessonReminders}
                     onChange={(e) => setPreferences({...preferences, lessonReminders: e.target.checked})}
                     className="h-4 w-4 rounded border-gray-300"
+                    disabled={isLoading}
                   />
                   <label htmlFor="lessonReminders" className="text-sm font-medium">
                     Ders hatırlatmaları
@@ -201,6 +263,7 @@ export default function DrivingSchoolHesabim() {
                     checked={preferences.examAlerts}
                     onChange={(e) => setPreferences({...preferences, examAlerts: e.target.checked})}
                     className="h-4 w-4 rounded border-gray-300"
+                    disabled={isLoading}
                   />
                   <label htmlFor="examAlerts" className="text-sm font-medium">
                     Sınav uyarıları
@@ -214,6 +277,7 @@ export default function DrivingSchoolHesabim() {
                     checked={preferences.systemUpdates}
                     onChange={(e) => setPreferences({...preferences, systemUpdates: e.target.checked})}
                     className="h-4 w-4 rounded border-gray-300"
+                    disabled={isLoading}
                   />
                   <label htmlFor="systemUpdates" className="text-sm font-medium">
                     Sistem güncellemeleri
@@ -227,11 +291,32 @@ export default function DrivingSchoolHesabim() {
                     checked={preferences.autoScheduling}
                     onChange={(e) => setPreferences({...preferences, autoScheduling: e.target.checked})}
                     className="h-4 w-4 rounded border-gray-300"
+                    disabled={isLoading}
                   />
                   <label htmlFor="autoScheduling" className="text-sm font-medium">
                     Otomatik program oluşturma
                   </label>
                 </div>
+              </div>
+
+              <div className="pt-4 border-t">
+                <Button 
+                  onClick={handleSaveSettings} 
+                  disabled={isSaving || isLoading || !activeDrivingSchool?.id}
+                  className="w-full"
+                >
+                  {isSaving ? (
+                    <>
+                      <Save className="mr-2 h-4 w-4 animate-spin" />
+                      Kaydediliyor...
+                    </>
+                  ) : (
+                    <>
+                      <CheckCircle className="mr-2 h-4 w-4" />
+                      Ayarları Kaydet
+                    </>
+                  )}
+                </Button>
               </div>
             </CardContent>
           </Card>

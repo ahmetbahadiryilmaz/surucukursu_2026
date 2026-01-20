@@ -1,4 +1,4 @@
-import { Controller, Get, Param, Res, NotFoundException, Logger, HttpStatus, Header, Query } from '@nestjs/common';
+import { Controller, Get, Param, Res, NotFoundException, Logger, HttpStatus, Header, Query, Delete } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiParam, ApiResponse } from '@nestjs/swagger';
 import { FastifyReply } from 'fastify';
 import { DrivingSchoolFilesService } from './driving-school-files.service';
@@ -142,6 +142,96 @@ export class DrivingSchoolFilesController {
       reply.status(HttpStatus.INTERNAL_SERVER_ERROR).send({
         message: 'Internal server error while viewing PDF',
       });
+    }
+  }
+
+  /**
+   * Get storage information for a driving school
+   */
+  @Get('storage')
+  @ApiOperation({ summary: 'Get storage usage information for a driving school' })
+  @ApiParam({ name: 'code', description: 'Driving school code' })
+  @ApiResponse({ status: 200, description: 'Storage information retrieved successfully' })
+  async getStorageInfo(@Param('code') code: string) {
+    try {
+      console.log(`\n💾 STORAGE INFO REQUEST: DS${code}`);
+      this.logger.log(`Getting storage info for driving school: ${code}`);
+      
+      const storageInfo = await this.filesService.getStorageInfo(code);
+      
+      return {
+        success: true,
+        drivingSchoolId: code,
+        storage: storageInfo,
+      };
+    } catch (error) {
+      this.logger.error(`Error getting storage info for ${code}:`, error.message);
+      throw new NotFoundException(`Failed to get storage information: ${code}`);
+    }
+  }
+
+  /**
+   * Delete a specific file from a driving school
+   */
+  @Delete('delete/:filename')
+  @ApiOperation({ summary: 'Delete a file from driving school storage' })
+  @ApiParam({ name: 'code', description: 'Driving school code' })
+  @ApiParam({ name: 'filename', description: 'Name of the file to delete' })
+  @ApiResponse({ status: 200, description: 'File deleted successfully' })
+  @ApiResponse({ status: 404, description: 'File not found' })
+  async deleteFile(
+    @Param('code') code: string,
+    @Param('filename') filename: string,
+  ) {
+    try {
+      console.log(`\n🗑️ DELETE FILE REQUEST: DS${code}/${filename}`);
+      this.logger.log(`Deleting file for driving school ${code}: ${filename}`);
+      
+      const deleted = await this.filesService.deleteFile(code, filename);
+      
+      if (!deleted) {
+        throw new NotFoundException('File not found');
+      }
+
+      return {
+        success: true,
+        message: 'File deleted successfully',
+        filename,
+      };
+    } catch (error) {
+      this.logger.error(`Error deleting file ${code}/${filename}:`, error.message);
+      
+      if (error instanceof NotFoundException) {
+        throw error;
+      }
+      
+      throw new NotFoundException('File not found or could not be deleted');
+    }
+  }
+
+  /**
+   * Delete all files from a driving school
+   */
+  @Delete('delete-all')
+  @ApiOperation({ summary: 'Delete all files from driving school storage' })
+  @ApiParam({ name: 'code', description: 'Driving school code' })
+  @ApiResponse({ status: 200, description: 'Files deleted successfully' })
+  async deleteAllFiles(@Param('code') code: string) {
+    try {
+      console.log(`\n🗑️ DELETE ALL FILES REQUEST: DS${code}`);
+      this.logger.log(`Deleting all files for driving school: ${code}`);
+      
+      const result = await this.filesService.deleteAllFiles(code);
+      
+      return {
+        success: true,
+        message: `Deleted ${result.deletedCount} file(s)`,
+        deletedCount: result.deletedCount,
+        errors: result.errors,
+      };
+    } catch (error) {
+      this.logger.error(`Error deleting all files for ${code}:`, error.message);
+      throw new NotFoundException(`Failed to delete files: ${code}`);
     }
   }
 }

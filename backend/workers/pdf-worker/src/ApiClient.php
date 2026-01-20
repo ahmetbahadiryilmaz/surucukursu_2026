@@ -24,7 +24,8 @@ class ApiClient {
                 'json' => [
                     'jobId' => $jobId,
                     'progress' => $status === 'completed' ? 100 : ($status === 'failed' ? -1 : 50),
-                    'status' => $status
+                    'status' => $status,
+                    'message' => $message // Include error message
                 ],
                 'timeout' => 10,
                 'connect_timeout' => 5

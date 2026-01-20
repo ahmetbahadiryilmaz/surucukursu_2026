@@ -8,6 +8,7 @@ import { ChildrenProps } from "@/shared/types";
 
 import { APP_NAME } from "@/shared/consts/";
 import SocketDisconnectModal from "@/components/SocketDisconnectModal";
+import { Toaster } from "@/components/ui/toaster";
 
 function providers({ children }: ChildrenProps) {
   return (
@@ -17,6 +18,7 @@ function providers({ children }: ChildrenProps) {
           <SocketProvider>
             {children}
             <SocketDisconnectModal />
+            <Toaster />
           </SocketProvider>
         </DrivingSchoolManagerProvider>
       </ThemeProvider>

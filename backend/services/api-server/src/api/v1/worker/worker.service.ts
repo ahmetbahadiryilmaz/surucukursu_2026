@@ -41,7 +41,7 @@ export class WorkerService {
     }
 
     if (updates.status === JobStatus.COMPLETED && !job.completed_at) {
-      updates.completed_at = new Date(); // Use Date object for timestamp column
+      updates.completed_at = Math.floor(Date.now() / 1000); // Unix timestamp in seconds
     }
 
     if (updates.status === JobStatus.FAILED && message) {

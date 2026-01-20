@@ -3,18 +3,19 @@
   "private": true,
   "packageManager": "pnpm@9.0.0",
   "devDependencies": {
+    "@swc/helpers": "^0.5.17",
     "cross-env": "^10.1.0",
     "turbo": "^2.6.1"
   },
   "scripts": {
     "postinstall": "node -e \"try { require('fs').rmSync('node_modules/rxjs', { recursive: true, force: true }); } catch (e) {}\"",
     "build": "turbo build --output-logs=hash-only",
-    "dev": "turbo dev --output-logs=new-only",
+    "dev": "turbo dev --filter=@surucukursu/api-gateway --filter=@surucukursu/api-server --filter=* --output-logs=new-only",
     "watch": "turbo watch",
     "dev:file-server": "turbo dev --filter=@surucukursu/file-server --output-logs=new-only",
     "pdf-worker": "turbo run pdf-worker --output-logs=new-only",
     "php-worker": "turbo run php-worker --output-logs=new-only",
-    "migrate:fresh": "pnpm --filter=@surucukursu/database migrate:fresh",
+    "migrate:fresh": "pnpm --filter=@surucukursu/database-service migrate:fresh",
     "lint": "turbo lint"
   }
 }

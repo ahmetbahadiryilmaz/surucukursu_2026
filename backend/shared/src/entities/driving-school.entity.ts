@@ -4,6 +4,7 @@ import { DrivingSchoolStudentEntity } from './driving-school-student.entity';
 import { DrivingSchoolCarEntity } from './driving-school-car.entity';
 import { DrivingSchoolManagerEntity } from './driving-school-manager.entity';
 import { DrivingSchoolOwnerEntity } from './driving-school-owner.entity';
+import { DrivingSchoolSettingsEntity } from './driving-school-settings.entity';
 import { CityEntity } from './city.entity';
 import { DistrictEntity } from './district.entity';
 import { SubscriptionEntity } from './subscription.entity';
@@ -61,6 +62,9 @@ export class DrivingSchoolEntity extends BaseEntity {
   @ManyToOne(() => DistrictEntity)
   @JoinColumn({ name: 'district_id' })
   district: DistrictEntity;
+
+  @OneToOne(() => DrivingSchoolSettingsEntity, (settings) => settings.driving_school, { nullable: true })
+  settings: DrivingSchoolSettingsEntity;
 
   @OneToOne(() => SubscriptionEntity, subscription => subscription.driving_school_id)
   subscription: SubscriptionEntity;

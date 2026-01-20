@@ -112,15 +112,15 @@ export const logger = winston.createLogger({
     // Error log file (always enabled)
     new winston.transports.File({
       filename: path.join(process.cwd(), 'logs', 'error.log'),
-      level: 'error',
+      level: 'error' as const,
       format: logFormat
-    }),
+    } as any),
 
     // Combined log file
     new winston.transports.File({
       filename: path.join(process.cwd(), 'logs', 'combined.log'),
       format: logFormat
-    })
+    } as any)
   ]
 });
 
@@ -128,7 +128,7 @@ export const logger = winston.createLogger({
 if (getLoggingConfig().enableConsole) {
   logger.add(new winston.transports.Console({
     format: consoleFormat
-  }));
+  } as any));
 }
 
 // Custom TypeORM logger

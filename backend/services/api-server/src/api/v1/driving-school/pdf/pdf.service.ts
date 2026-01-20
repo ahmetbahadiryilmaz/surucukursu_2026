@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, Inject, forwardRef, OnModuleInit, Logger } from '@nestjs/common';
+import { Injectable, NotFoundException, Inject, forwardRef, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { DrivingSchoolEntity, JobEntity, JobStatus, JobType, SimulationType } from '@surucukursu/shared';
@@ -10,15 +10,13 @@ import {
     GenerateGroupDireksiyonTakipDto,
     JobResponseDto
 } from '../main/dto/simulation.dto';
-import * as amqp from 'amqplib';
 import { env } from '@surucukursu/shared';
 import { PdfGenerationMode, PdfGenerationRequest } from '@surucukursu/shared';
 import { SocketGateway } from '../../../../utils/socket/socket.gateway';
+import { RabbitMQService } from '../../../../utils/rabbitmq';
 
 @Injectable()
-export class PdfService implements OnModuleInit {
-    private connection: any;
-    private channel: any;
+export class PdfService {
     private readonly queueName = env.rabbitmq.queueName;
     private readonly logger = new Logger(PdfService.name);
 
@@ -29,27 +27,8 @@ export class PdfService implements OnModuleInit {
       private readonly jobRepository: Repository<JobEntity>,
       @Inject(forwardRef(() => SocketGateway))
       private socketGateway: SocketGateway,
+      private readonly rabbitMQService: RabbitMQService,
     ) {}
-
-    async onModuleInit() {
-        await this.connectToRabbitMQ();
-    }
-
-    private async connectToRabbitMQ() {
-        try {
-            const { host, port, user, password } = env.rabbitmq;
-            const connectionString = `amqp://${user}:${password}@${host}:${port}`;
-
-            this.connection = await amqp.connect(connectionString);
-            this.channel = await this.connection.createChannel();
-
-            // Ensure queue exists
-            await this.channel.assertQueue(this.queueName, { durable: true });
-        } catch (error) {
-            console.error('Failed to connect to RabbitMQ:', error);
-            throw error;
-        }
-    }
 
     async queueSinglePdfGeneration(code: string, dto: GenerateSinglePdfDto): Promise<PdfGenerationResponseDto> {
         // Validate job type
@@ -69,10 +48,9 @@ export class PdfService implements OnModuleInit {
         const userId = drivingSchool.owner_id || drivingSchool.manager_id || 1;
 
         // Create job in database first to get auto-generated ID
-        // Use raw SQL to insert with payload field that the DB schema expects
         const result = await this.jobRepository.query(
-            `INSERT INTO jobs (type, status, school_id, progress_percentage, payload, created_at, updated_at) 
-             VALUES (?, ?, ?, ?, '{}', UNIX_TIMESTAMP(), UNIX_TIMESTAMP())`,
+            `INSERT INTO jobs (type, status, school_id, progress_percentage, created_at, updated_at) 
+             VALUES (?, ?, ?, ?, UNIX_TIMESTAMP(), UNIX_TIMESTAMP())`,
             [dto.jobType, JobStatus.PENDING, drivingSchool.id, 0]
         );
 
@@ -119,10 +97,9 @@ export class PdfService implements OnModuleInit {
         const userId = 1; // TODO: Get from request context
 
         // Create job in database first to get auto-generated ID
-        // Use raw SQL to insert with payload field that the DB schema expects
         const result = await this.jobRepository.query(
-            `INSERT INTO jobs (type, status, school_id, progress_percentage, payload, created_at, updated_at) 
-             VALUES (?, ?, ?, ?, '{}', UNIX_TIMESTAMP(), UNIX_TIMESTAMP())`,
+            `INSERT INTO jobs (type, status, school_id, progress_percentage, created_at, updated_at) 
+             VALUES (?, ?, ?, ?, UNIX_TIMESTAMP(), UNIX_TIMESTAMP())`,
             [dto.jobType, JobStatus.PENDING, drivingSchool.id, 0]
         );
 
@@ -168,8 +145,8 @@ export class PdfService implements OnModuleInit {
 
         // Create job in database
         const result = await this.jobRepository.query(
-            `INSERT INTO jobs (type, status, school_id, progress_percentage, simulation_type, payload, created_at, updated_at) 
-             VALUES (?, ?, ?, ?, ?, '{}', UNIX_TIMESTAMP(), UNIX_TIMESTAMP())`,
+            `INSERT INTO jobs (type, status, school_id, progress_percentage, simulation_type, created_at, updated_at) 
+             VALUES (?, ?, ?, ?, ?, UNIX_TIMESTAMP(), UNIX_TIMESTAMP())`,
             [dto.jobType, JobStatus.PENDING, drivingSchool.id, 0, dto.simulationType]
         );
 
@@ -217,8 +194,8 @@ export class PdfService implements OnModuleInit {
 
         // Create job in database
         const result = await this.jobRepository.query(
-            `INSERT INTO jobs (type, status, school_id, progress_percentage, simulation_type, payload, created_at, updated_at) 
-             VALUES (?, ?, ?, ?, ?, '{}', UNIX_TIMESTAMP(), UNIX_TIMESTAMP())`,
+            `INSERT INTO jobs (type, status, school_id, progress_percentage, simulation_type, created_at, updated_at) 
+             VALUES (?, ?, ?, ?, ?, UNIX_TIMESTAMP(), UNIX_TIMESTAMP())`,
             [dto.jobType, JobStatus.PENDING, drivingSchool.id, 0, dto.simulationType]
         );
 
@@ -266,8 +243,8 @@ export class PdfService implements OnModuleInit {
 
         // Create job in database
         const result = await this.jobRepository.query(
-            `INSERT INTO jobs (type, status, school_id, progress_percentage, payload, created_at, updated_at) 
-             VALUES (?, ?, ?, ?, '{}', UNIX_TIMESTAMP(), UNIX_TIMESTAMP())`,
+            `INSERT INTO jobs (type, status, school_id, progress_percentage, created_at, updated_at) 
+             VALUES (?, ?, ?, ?, UNIX_TIMESTAMP(), UNIX_TIMESTAMP())`,
             [dto.jobType, JobStatus.PENDING, drivingSchool.id, 0]
         );
 
@@ -314,8 +291,8 @@ export class PdfService implements OnModuleInit {
 
         // Create job in database
         const result = await this.jobRepository.query(
-            `INSERT INTO jobs (type, status, school_id, progress_percentage, payload, created_at, updated_at) 
-             VALUES (?, ?, ?, ?, '{}', UNIX_TIMESTAMP(), UNIX_TIMESTAMP())`,
+            `INSERT INTO jobs (type, status, school_id, progress_percentage, created_at, updated_at) 
+             VALUES (?, ?, ?, ?, UNIX_TIMESTAMP(), UNIX_TIMESTAMP())`,
             [dto.jobType, JobStatus.PENDING, drivingSchool.id, 0]
         );
 
@@ -345,14 +322,7 @@ export class PdfService implements OnModuleInit {
     }
 
     private async sendToQueue(request: PdfGenerationRequest): Promise<void> {
-        if (!this.channel) {
-            throw new Error('RabbitMQ channel not available');
-        }
-
-        const message = JSON.stringify(request);
-        await this.channel.sendToQueue(this.queueName, Buffer.from(message), {
-            persistent: true,
-        });
+        await this.rabbitMQService.sendMessage(this.queueName, request);
     }
 
     async handlePdfProgressUpdate(payload: {
@@ -403,9 +373,18 @@ export class PdfService implements OnModuleInit {
             if (progress === 100 && pdfData) {
                 // PDF completed successfully
                 this.logger.log(`PDF completed for job ${jobId}`);
+                
+                // Generate filename based on job type
+                let filePrefix = 'certificate';
+                if (job.type === 'single_direksiyon_takip' || job.type === 'group_direksiyon_takip') {
+                    filePrefix = 'direksiyon';
+                } else if (job.type === 'single_simulation' || job.type === 'group_simulation') {
+                    filePrefix = 'simulasyon';
+                }
+                
                 this.socketGateway.emitPdfCompleted(jobId, {
                     pdfData,
-                    fileName: `certificate_${jobId}.pdf`,
+                    fileName: `${filePrefix}_${jobId}.pdf`,
                 });
             } else if (progress < 0) {
                 // PDF failed

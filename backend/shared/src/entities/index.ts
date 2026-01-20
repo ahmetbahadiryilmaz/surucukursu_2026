@@ -5,6 +5,7 @@ export * from './subscription.entity';
 export * from './driving-school.entity';
 export * from './driving-school-manager.entity';
 export * from './driving-school-owner.entity';
+export * from './driving-school-settings.entity';
 export * from './driving-school-student-integration-info.entity';
 export * from './driving-school-student.entity';
 export * from './driving-school-car.entity';

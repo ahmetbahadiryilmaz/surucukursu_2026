@@ -38,6 +38,8 @@ import type {
  * - drivingSchool.getCredentials(code)
  * - drivingSchool.updateCredentials(code, data)
  * - drivingSchool.getDashboard(code)
+ * - drivingSchool.getSettings(id)
+ * - drivingSchool.updateSettings(id, data)
  * 
  * ADMIN OPERATIONS:
  * - admin.getAdmins(), createAdmin(data), getAdminById(id), updateAdmin(id, data), deleteAdmin(id)
@@ -256,19 +258,31 @@ class ApiService {
     getDashboard: async (code: string): Promise<any> => {
       const response = await this.axiosService.get(`/driving-school/${code}/dashboard`);
       return response.data;
+    },
+
+    // Get driving school settings
+    getSettings: async (id: string): Promise<any> => {
+      const response = await this.axiosService.get(`/driving-school/${id}/settings`);
+      return response.data;
+    },
+
+    // Update driving school settings
+    updateSettings: async (id: string, data: any): Promise<any> => {
+      const response = await this.axiosService.put(`/driving-school/${id}/settings`, data);
+      return response.data;
     }
   };
 
   // PDF methods
   pdf = {
     // Generate single PDF
-    generateSingle: async (code: string, data: { studentId: number; template?: string; data?: any }): Promise<any> => {
+    generateSingle: async (code: string, data: { jobType: string; studentId: number; template?: string; data?: any }): Promise<any> => {
       const response = await this.axiosService.post(`/driving-school/${code}/pdf/generate/single`, data);
       return response.data;
     },
 
     // Generate group PDF
-    generateGroup: async (code: string, data: { studentIds: number[]; template?: string; data?: any[] }): Promise<any> => {
+    generateGroup: async (code: string, data: { jobType: string; studentIds: number[]; template?: string; data?: any[] }): Promise<any> => {
       const response = await this.axiosService.post(`/driving-school/${code}/pdf/generate/group`, data);
       return response.data;
     }
@@ -315,7 +329,25 @@ class ApiService {
       // Use file axios service (no /api/v1 prefix)
       const response = await this.fileAxiosService.get(`/files/driving-school/${code}/info/${filename}`);
       return response.data;
-    }
+    },
+
+    // Get storage information
+    getStorageInfo: async (code: string): Promise<any> => {
+      const response = await this.fileAxiosService.get(`/files/driving-school/${code}/storage`);
+      return response.data;
+    },
+
+    // Delete a single file
+    deleteFile: async (code: string, filename: string): Promise<any> => {
+      const response = await this.fileAxiosService.delete(`/files/driving-school/${code}/delete/${filename}`);
+      return response.data;
+    },
+
+    // Delete all files
+    deleteAllFiles: async (code: string): Promise<any> => {
+      const response = await this.fileAxiosService.delete(`/files/driving-school/${code}/delete-all`);
+      return response.data;
+    },
   };
 
   // Admin methods

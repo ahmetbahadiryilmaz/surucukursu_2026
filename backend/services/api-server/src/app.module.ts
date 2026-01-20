@@ -11,7 +11,7 @@ import { DrivingSchoolGuard } from './common/guards/driving-school.guard';
 import { SocketModule } from './utils/socket/socket.module';
 import { SessionEntity, DrivingSchoolEntity } from '@surucukursu/shared';
 import { DataSource } from 'typeorm';
-import { CustomTypeORMLogger } from '@surucukursu/shared';
+import { CustomTypeORMLogger, DrivingSchoolSettingsEntity } from '@surucukursu/shared';
  
 
 @Module({
@@ -51,7 +51,7 @@ import { CustomTypeORMLogger } from '@surucukursu/shared';
         return getApiServerDatabaseConfig();
       },
     }),
-    TypeOrmModule.forFeature([SessionEntity, DrivingSchoolEntity]),
+    TypeOrmModule.forFeature([SessionEntity, DrivingSchoolEntity, DrivingSchoolSettingsEntity]),
     JwtModule.register({
       global: true,
       secret: env.jwt.secret,

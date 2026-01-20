@@ -6,28 +6,18 @@ import { CustomTypeORMLogger } from './logging.config';
 export const baseDatabaseConfig: Partial<DataSourceOptions> = {
   type: 'mysql',
   ...env.database,
-  synchronize: false,
+  synchronize: false, // Enable synchronize to auto-create tables from entities
   // Connection Pool Configuration
   poolSize: 10,
-  acquireTimeout: 60000,
   // Connection Timeout Settings
   connectTimeout: 30000,
   // Additional MySQL-specific options for connection management
   extra: {
     connectionLimit: 10,
-    acquireTimeout: 60000,
-    timeout: 60000,
-    reconnect: true,
-    idleTimeout: 300000, // 5 minutes
-    acquireTimeoutMillis: 60000,
+    idleTimeoutMillis: 300000, // 5 minutes
     // Keep connections alive
     keepAliveInitialDelay: 0,
     enableKeepAlive: true,
-    // Retry logic
-    retryDelay: 1000,
-    maxReconnects: 3,
-    // Handle connection drops
-    handleDisconnects: true,
     // Additional MySQL2 specific options
     charset: 'utf8mb4_unicode_ci',
     timezone: 'Z'
@@ -67,8 +57,7 @@ export const getProductionConfig = (): Partial<DataSourceOptions> => ({
   extra: {
     ...baseDatabaseConfig.extra,
     connectionLimit: 20, // Higher connection limit for production
-    acquireTimeout: 30000, // Shorter timeout for production
-    idleTimeout: 600000, // 10 minutes for production
+    idleTimeoutMillis: 600000, // 10 minutes for production
     debug: false
   }
 });
