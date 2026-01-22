@@ -1,0 +1,426 @@
+
+<!doctype html public "-//w3c//dtd html 4.0 transitional//en" >
+<html xmlns:o>
+<head>
+    <title>MEBBİS -- Özel MTSK Modülü</title>
+    <meta name="GENERATOR" content="Microsoft Visual Studio 7.0">
+    <meta name="CODE_LANGUAGE" content="C#">
+    <meta name="vs_defaultClientScript" content="JavaScript">
+
+    <link rel="stylesheet" type="text/css" href="/Styles/style.css">
+    <script language="javascript" charset="ISO-8859-9" src="/scripts/kabartma.js"></script>
+    <script language="javascript" charset="ISO-8859-9" src="/scripts/alankontrol.js"></script>
+    <script language="javascript">
+
+
+        function AlanKontrolveKayit() {
+            var UyariMesaji = "";
+            var frm;
+
+            frm = document.getElementById("FRM_SKT01002");
+
+            if (frm.dropTurSecim.value == "1") {
+
+                if (frm.cmbPlakaIlKodu.value == "-1" || frm.cmbPlakaIlKodu.value == "") {
+                    UyariMesaji = UyariMesaji + "Araç Plaka İl Kodu Seçilmiş Olmalıdır.\n";
+                }
+                UyariMesaji = UyariMesaji + TextAlan(frm.txtPlakaNumarasi.value, "Araç Plakası", 7, false);
+
+                if (frm.cmbEhliyetSinifi.value == "-1" || frm.cmbEhliyetSinifi.value == "") {
+                    UyariMesaji = UyariMesaji + "Araç Ehliyet Sınıfı Seçilmiş Olmalıdır.\n";
+                }
+
+                UyariMesaji = UyariMesaji + TextAlan(frm.txtAracinMarkasi.value, "Araç Markası", 100, false);
+                UyariMesaji = UyariMesaji + TextAlan(frm.txtAracinModeli.value, "Araç Modeli", 100, false);
+
+                if (frm.cmbAracModelYili.value == "-1" || frm.cmbAracModelYili.value == "") {
+                    UyariMesaji = UyariMesaji + "Araç Model Yılı Seçilmiş Olmalıdır.\n";
+                }
+                //Araç Model Yılı Alanı Mevzuatta Kaç Görünüyorsa İlgili Alana Göre Düzenlenecek.
+                UyariMesaji = UyariMesaji + TarihAlan(frm.Us_tarih1_txtTarihGiris.value, "Araç İmal Tarihi", false);
+                UyariMesaji = UyariMesaji + TarihAlan(frm.Us_tarih2_txtTarihGiris.value, "Araç Hizmete Başlama Tarihi", false);
+                UyariMesaji = UyariMesaji + TarihAlan(frm.Us_tarih3_txtTarihGiris.value, "Araç Muayene Geçerlilik Tarihi", false);
+                if (frm.cmbSahiplikDurumu.value == "-1" || frm.cmbSahiplikDurumu.value == "") {
+                    UyariMesaji = UyariMesaji + "Araç Sahiplik Durumu Seçilmiş Olmalıdır.\n";
+                }
+
+                if (frm.cmbSahiplikDurumu.value == "2") {
+                    UyariMesaji = UyariMesaji + TarihAlan(frm.Us_tarih4_txtTarihGiris.value, "Kira Başlama Tarihi", false);
+                    UyariMesaji = UyariMesaji + TarihAlan(frm.Us_tarih5_txtTarihGiris.value, "Kira Bitiş Tarihi", false);
+                }
+                else if (frm.cmbSahiplikDurumu.value == "1") {
+                    if (frm.Us_tarih4_txtTarihGiris.value != "" || frm.Us_tarih5_txtTarihGiris.value != "") {
+                        UyariMesaji = UyariMesaji + " Kuruma Ait Bir Araç İçin Kira Başlangıç ve Bitiş Tarihi Girilmemelidir.\n";
+                    }
+                }
+
+                UyariMesaji = UyariMesaji + TextAlan(frm.txtSaseNumarasi.value, "Araç Şase Numarası", 17, false);
+                UyariMesaji = UyariMesaji + TextAlan(frm.txtAracMotorNumarasi.value, "Araç Motor Numarası Numarası", 20, false);
+                UyariMesaji = UyariMesaji + TarihAlan(frm.Us_tarih6_txtTarihGiris.value, "Trafik Sigortası Belge Tarihi", false);
+                UyariMesaji = UyariMesaji + TextAlan(frm.txtTrafikSigortaBelgeNo.value, "Trafik Sigorta Belge No", 12, false);
+                ////UyariMesaji = UyariMesaji + NumAlan(frm.Gv_kod1_txtGuvenlikKod.value, "Güvenlik Kodu", 9999, 0, false);
+
+
+                if (frm.cmbKurumOnayDurumu.value == "-1" || frm.cmbKurumOnayDurumu.value == "") {
+                    UyariMesaji = UyariMesaji + "Kurum Onay Durumu Seçilmiş Olmalıdır.\n";
+                }
+
+
+
+            }
+
+            else if (frm.dropTurSecim.value == "2") {
+                UyariMesaji = UyariMesaji + TextAlan(frm.txtSicilNumarasi.value, "Cihazın Sicil Numarası", 20, false);
+                UyariMesaji = UyariMesaji + TextAlan(frm.txtAlinmaTarihi.value, "Cihazın Alınma Tarihi", 10, false);
+
+                if (frm.cmbOnayDurumu.value == "-1" || frm.cmbOnayDurumu.value == "") {
+                    UyariMesaji = UyariMesaji + "Kurum Onay Durumu Seçilmiş Olmalıdır.\n";
+                }
+            }
+
+            if (UyariMesaji != "") {
+                alert(UyariMesaji);
+                return false;
+            }
+            else {
+                if (Beklet(13)) {
+                    frm.hiddenKaydet.value = "Kaydet";
+                    frm.submit();
+                    return true;
+                }
+            }
+
+        }
+
+
+
+        function fnIslemSecSilme(KayitNo) {
+            var frm;
+            frm = document.getElementById("FRM_SKT01002");
+
+            var onay = confirm("Seçmiş Olduğunuz Araç Bilgisi Silinecek,  Silmek İstediğinize Emin misiniz?");
+            /* Question icon, Yes/No button. */
+            /* 0 = error, 1 = OK, 2 = Cancel, 3 = No, 4 = Yes */
+
+            if (onay) {
+                if (Beklet(13)) {
+                    frm.hdnKayitNoSilmeIcin.value = KayitNo;
+                    frm.submit();
+                    return true;
+                }
+            }
+            else {
+                return false;
+            }
+        }
+
+        function fnIslemSecSilme1(KayitNo) {
+            var frm;
+            frm = document.getElementById("FRM_SKT01002");
+
+            var onay = confirm("Seçmiş Olduğunuz Simülatör Bilgisi Silinecek,  Silmek İstediğinize Emin misiniz?");
+            /* Question icon, Yes/No button. */
+            /* 0 = error, 1 = OK, 2 = Cancel, 3 = No, 4 = Yes */
+
+            if (onay) {
+                if (Beklet(13)) {
+                    frm.hdnKayitNoSilmeIcin1.value = KayitNo;
+                    frm.submit();
+                    return true;
+                }
+            }
+            else {
+                return false;
+            }
+        }
+
+        function fnIslemSec(KayitNo) {
+            var frm;
+            frm = document.getElementById("FRM_SKT01002");
+            if (Beklet(13)) {
+                frm.hdnKayitSec.value = KayitNo;
+                frm.submit();
+                return true;
+            }
+        }
+
+        function fnIslemSec1(KayitNo) {
+            var frm;
+            frm = document.getElementById("FRM_SKT01002");
+            if (Beklet(13)) {
+                frm.hdnKayitSec1.value = KayitNo;
+                frm.submit();
+                return true;
+            }
+        }
+
+
+
+        function YeniKayit() {
+            var frm;
+            frm = document.getElementById("frm_ook06002");
+
+            if (Beklet(13)) {
+                frm.pageMode.value = "yeniKayit";
+                frm.bosalt.value = "BOSALT";
+                frm.submit();
+                return true;
+            }
+        }
+
+    </script>
+</head>
+<body >
+    <form method="post" action="./skt01002.aspx" id="FRM_SKT01002">
+<div class="aspNetHidden">
+<input type="hidden" name="__EVENTTARGET" id="__EVENTTARGET" value="" />
+<input type="hidden" name="__EVENTARGUMENT" id="__EVENTARGUMENT" value="" />
+<input type="hidden" name="__LASTFOCUS" id="__LASTFOCUS" value="" />
+<input type="hidden" name="__VIEWSTATEFIELDCOUNT" id="__VIEWSTATEFIELDCOUNT" value="7" />
+<input type="hidden" name="__VIEWSTATE" id="__VIEWSTATE" value="wnNlG6NqtSwf5ibudoMWHyaGWKXbNpGgzOXGCl7tgQyJCMdr00oc8gSJOapMJQKufbaHGjR6qaps1Pwaa/Bu7ieX87a4zx5/ei+Ru7qUVvBjhv9ZMSiKARN6hSRza30EjLdJnpuOSEVN8Z+k2gDwMArjO/gjsbA/viQLr4ohut9t4NRw9lUfrfLiIcYfGi1lkzfXn9ODQboLYgJdZ1b2Fb5Q+RgarWEFlKR0tdBniTa7U7vCqNg90Jvwyqk0cJBXlCN3apfKznC2Z2sXPOlYsWgauqV/jK3LLWr1Xv1cxzoHTrRmY0aEVqpFbMaQMVf9G9wjSUQjyVjkmMvg3kHJYEp/zAuKeOpGCRQXRLOKwBy2jw0uJjkvRFgoWzvvPEhm2TiYBJzdom9c1i/41kmAW01/TX80jKFoxs79HkuznqfVPg/PuiYKdAbmJ+xYMumGOH5LYCLAo5Ds11U4Q65SbcVswFHkO8I62h0C77waVbHjkZf3NBWRJ9oDQ8O0WfWpjiwCqcf/CN1tPQepIMxXT6ByyX8UoeOfKl4unEvoC0sPfAvUg0R4aBuKQJWazBeTSNw1S4It+dyslfqe38d4FUHTuzNKFMO3AmH9pNyC7Bi6sRNdwVeaPXkV/XArN3ztVo8TnSAnPBP4F8ffUsUlfpg++1C2lOtzjpx5tAXIC/xYD4/uwDNgoQwQmdbbUZlt7bLZ8zGVZaDju30mPBS97BBwNPmeRmAcVs1dwXkzVvKwvgSPKbQIMotkOHCLyqFNVRWoqLUsYr2ipfYGwaDG0wIn5EGHgnXGuRDG72qPCKj6fPD/tAhzVyOKHaOVccv4efVBF32DKOMoCHgiDoJZ7wVl0DplglbU2DQad7/JLgISo4+5N6QOGCH2hwisaOlCC2T0YdbkYCWAyKlIbwB8Q/XMWVJQv0/nARrwDHNI6oW4sxp/bY4o7bl/V0gnvo/KmCwIR5NZ3PEJNED5xUskUX83/SN//pEo4asQ/hC8o7jcd8A5d4WFZS5y0UfkN/+o" />
+<input type="hidden" name="__VIEWSTATE1" id="__VIEWSTATE1" value="WgR1zyJrMPSfnzCZ/KGriP6vJTeTg4HB5B9Gzs3YszrwqDkQR6DdHCKGOnIcxfLnC1sj2Eh4+VkBY81bsXwcoiLVBKqrPARhCCv49s0MJiiA130bB0C17vlm5vmJyW2fuSBK+j9rhcIzYR164KXYHncrqUH2SWxk7Jzw/intKGDcUjf3YcqhbIsXhIkUAFF+IULnXkI7Wh2HpDh3O/Q44pZEB3zYJNuDB05Qrasr/ecJoHUlUcpUEaqd1exTtsKhGCtTe4Yg0EyABwOF0ED/80se7LHqYd89P3pItzlyFjHM+oFkTrbva0dL/WGoPFrKDwUCZOh+zN5kB4ZTrWzg8gEnWq+pr7RLtiGA/hc+azxc/IOitebSzIt6qqpGvsln1nTTc7N3QBwwhtJRGBdzFK3DfLzRc2LQnQ4oPNQeILPF+BTnECOn70Wa7Aq+uaQseL3dbAVK26wpVhPWsvsQ97hbLg/Uf6NK17BgwVfB0ru6E0KxyRCaxgPWrWBGwM2fh3VDbJaZJvtnFq6DVXPWwN2OKSjjHA6vkbpaGALQQXk8/Xh2GjfnljNPnKb+LXGJUj9Ums3uhk0lBykmAUvSlpg4zhrvNN0P+04wEndLJYb8qaF1N/JGcG1eX8HDquy75yBIzRjJE79mhQ9qRP23mE3oWMVdy3D6B2wjQp5rHv6yRCsbiLs3fJ5jYBKBveFL5jzB38+Rs0eUshKWPblkMkuXA1aMVyhG6ca2BBLqjv0FSGQ0CtRKs2jDhXdDGxVo0gYy1pi+vC+zZa+0cE5ADs9p1huGE0nSHZ6411Z24cLd4FnQWUKsnUuLrSDGsAZ8oUwp9DaDSNY84osFrtOEzqyall6k3XeA806w+AFUZjSgpH3A9A6Me2oVRFDI9zqU7nCI+zLi8CTPST8t8IbozMKrJIWLIRBrs3aW3OuDao8SCw/V88AQJCFE+1dr3XpZpaIITREq3+P2wgHh7NxRWrzDIm3CNAsd6h8u6E8lKHsMXfPgzolQDcMde7whAGHp" />
+<input type="hidden" name="__VIEWSTATE2" id="__VIEWSTATE2" value="1qO7VGnnrXC71JfyddM/E1kgYDxR/zzvJdd88sLaqtL5U6L4xDgGXRperIqmjV145vRrFUzU9D31q/CUF/UmLK438jwZGPQudHkUWa2WJudIFl95JvNROcLMXzs2VGdVLhky6agXDgC5/KDy2oUuSm8aIk7QeebwnVKM2OsA4iWtGtWoE9rIILZfd0N+8/jU59wB7wsehKZCEr0JQ051ohuYfgHNh7++Hh5hyoqk9VSup0FebT/UMev4Kdb7s9ZUWvNux7lArg12inFTwD4yuFaFcGo+EP5y8v1ptIOOZUEmFzNc0B4Y7K8kpBc5wht3eodAbAeG149yrXMwx52/M9xq332pEH+N4GK2TKmxhvQXqidWPrthLf0CwHyc6adXzMkfFytVNHHYtApvE1OMIJ0W2gS+RTk424P2PQMtD5FmzJp6C8zmKe1IcMIlxg2rVddMcaoA9L4CQbyMRLyDrzUs6jbm5GTYEcf/iAUOXhOlMJpS7KyQ4q31HIk9BlpkCKzwAXCP184FgVUTSVeaROu4XDFzCYWQlwzeQPQ2yjZPQ6/UIvz0BsX0iUuu2XU7EL3n0RQfUNVpJh0I7FsqgLO6b9CqoBTNGtnYuNp2+rqG28C3Kq7SVAF9qXkFRmglNlmr5s84iM1DxfPpxgONGtUyqNPYlwmGCPnIYOiFEm+wfAbNQpnbh74A7Yb3QTWX4Zk85bYrYnEjYcISESW06+4ZY6Dea+YQsv5HLDdWgHGj0yexcqeRIhGR2ihLsfOcYABHZ/NHd3DBqBgISEmParCc7fm/iRKavbdQ0n/cVVJoK+hWyQ7cLNtXYikfBxslyf50kYR0keSpANLK8nWMVeaO0+RCVmvLWDoXl6nWo76VAlLSCfLgh/o9BjlJsJXg3VIxxYaHS2zqrN6VTEYdp7p0+wjMPB4r/nxS1EObTg5kFiDOk/LJsih2i7ov0566twEyHje9H75fmSGEWT+akZdlfc36WW1F0Ctxc5lmTYRhxWZmGiSnwOQLpV3Oc3nz" />
+<input type="hidden" name="__VIEWSTATE3" id="__VIEWSTATE3" value="gUz6Xeub+cQsCZebFHl4gbr4NDiV9J8KpW8P33vdHrDr2FRGHFaz1H3HbTmJ4WbfN02c0/B/9HMQOOoHcSBla1ABZJesZyqk+GuhBj37obSGiG5d1niufIWCgni1teFWVjBsWCbbDWXky1dKMgwcm6oqm0eMQUMI4WVqVw7U+7b0j8mzhRQIe4Uh2/0gtIfL8reQWW8E0CGDgk/CgtL9F+EGUQxPG52aX2dVeACCtwJlQDl1YfqJNTc36cdmN05Y/LFjg2m3T4dN8yhy/QoEV6zCu9SeBYHGC6rFxfLo3V0nnTVC6ZS3YomHg6cJwTtOKbIQDV3g68mSXPJsBWIJED+HfdiWM2VPO4P+mCbQzPNA5qhvmFiqNe2AbZJkx7zgZxWICCvKqxYADERCgmckEkE+wZqBglv305B24VS3DAWRLGixxynFjA2BSAlPHVc+My78sU1NCemFFdU2GdLXUP5n2DFFT2NM/dP0VqShCUTCSBgK+v2tnMtbc9ylMZ8P5BnBBOQRRFY4pWlwrKTYlX0AoDpK8OqJQaieqsHJVpSNCNGe1lvZoYGrLBkGGqh5qZsoGZmMiVaxH7PKPjDzU9O82D4/ekFs3rxhJHNWWS7QbIkWD67dKeQVDnvLxKzMYafE1aTjSckZwk3bGL26kJRh9f72zLeP1EXKEv0vAKwa82SiIhr9RjeOHxf0hWf1ZCeOHrE8YpdgYJfoqZ1p2RQVtzvv/4t9MowLnKudip9Cz+cMD/H8/XbTAm4MLx+vAHJtDlbTm+c7wGsq5hz6YESM/vyu9yF36pAB3FdZmXa/iPAz+sghuslU4Bt/FNF9EutnAN1RdGWIy5kp/mDiOvQe6BTCpNM6kEbhfKVv7+96IJGwhMIaqaasDLmWAdgDbbTuJ9F+C4q9Gliy7CkGk8+gxTn1eKku5OaMjtR5YtAp+plSUk1OsCl4DWsxBwoZR+DEj9HU0YgYbGxiG8asoj29nuiFGyKt8OZdQcmVYc5BZIziQFvE+y+PGMkEB7YF" />
+<input type="hidden" name="__VIEWSTATE4" id="__VIEWSTATE4" value="ITIe8zJFkYACfD21JABbdmIhBnYE/njLX5KNIf+d37p1tMQNJHyi0/HAXloXDXCp6uBEtYDW4SUViluLxnxns0xqErTUgrg5eEtB7eC2gbi90NKlrfpokEZcJum3K5fI2zdPGS/1/qvkDZR/0aaff+iEzniMDoTSMrlQd75s3vAfxRY9QcE3c6hZfW1zfZBgu0WmDG+k53TbWAe/q4b65rbp2+b83LVWIqXy+BaETMHazToN1zFAQN27VeBxO5BHEHCDNhNoA3Erkcioyp+ZZXrMtMeb+Kahrx6mUgd6gf/6DNfehC/Yv/i7HfZRS/94VqYc4Bf+bf1Tzcy6s7wMq+DeYsj/0iNZZzDS3l2+QZN3t0FfiPi7BchIuAocJVpHh44/QqmtXUPTUSPoT1lcFJAU+01+wHPSqG84fRhZ16Pm4ixEphhBxakSNh1trdVwfhtbcFhAc0rxsHh3vddodjos0c85j/VDqAghMt+SLlHuYuZVkLxzFkbGW9HyDA0o8gZq/SXxfSMz41Btiy69yyVGMHbsBPpksgtum90YBlsLZSMXr9d5bpyD/vUU9ZK4EJRWmr1ITXkj672QvH0bZp2NJ0zzvr6f2OpsVSnr6opzBw3UilcA6VDUBryMLBwfrCMLlXxh6Ht2A6JTwcLyXR4MPbtddWw/l1s9u8EWe+MzgSNl4nwlKaRA5U51SN5MD6+evR9LpJm4MV8kj6Lof/7vLR+9Hi7kLrv0k6ZLHhOukXJKk8c070U5MBaA2nGqH4ZuX37z+YD8DY7glb21EgdACbE+K7RJ1nhvj1V2gIscM3diqke2spCZvAMoDRfNBEQt1qGq6zRqvgXuIfhQRCZxfL4PxPp9zZi62QdO6wVUOrSs7BE36kfTn6fhO+vckPy3RxlgYsX6hYOZoE5sAGheeJzCPfvdoaRjkVH5RMUXhs0zSZlL4tOQAYagESnuf56/oe5ciplJjoTaZYwVei4AIEydUdY4CvwjBC9Xmu7loT+3YF7SfA2lxwyTRa8o" />
+<input type="hidden" name="__VIEWSTATE5" id="__VIEWSTATE5" value="vn1zpUkh6Fy3cvRPMlV3xVP31Un4tVIuxPJo5/pb5BxqoMMY8j9Q/CaiOJKp6HHsdzSFImV7ctrVVtmBZQcODPTHUV7KEVAK/yUomCSIuDVgqr4hMgSjWdekczF/JVgKtLAV0xmRneZgSr028MiGo1ylWSQc4hjrbe2oSaHeWgqXZu7CEUiV3op7+askiHSoSq2hBeH3Aw+sgbyFWffv61kCsIAh2B18iz7PidY9f63aFJXtCqvFEHtvX4YPAx0ij5OX0G9P9F8y1xWItjRE3wQgqIEwFIPqEUPYp4C8/Eg7nnYPiedPybNtSW8M58FWDOwb0G/lQH7G+2zLscJ1siBW3TrJkgsGoF7+PmU9vMPT6DL3Aq/vpUOWxMNYgyC/nO7t+cmQUASqORF+g66h5mpIytR0bHpmA+KP2VYaq65RgsDVI7jZHSzKgiLz8R0Z4Pp+Kktv9ahgtMhD105NLjx1eVI+EBYzhJhiu+/RS+lDKzcHbf765YV6NxyQ3IFAUvRY0dWpKYdN4AXHqyX1kKm3+8Onl7V2xEnfjBtXCzHEsmQzFivSt4FP/2JJfVG4iViXGtckS+FH38T4xG8V9N/EGZTzoyJLZp4VzHECDCeA1sb+TgHF6xeTUQ7mfLJObBQQixVjkRsOMSGSb/1yHhLFm1Ge2tSU5oe96dOce+x1e6jnEWcB4iAL5a0SZEidCsS2SMDW8kxkzUzs4LLhATiWb+WvoAC1mBT32XqTwrU3d4k+ELZly0s5NsUHGBYPUmKmrwsO7t99S69xFYfNW3I9Y7YO3ZQ5TyK9cKdoeIJqaXO/PPDDy8NbeCZmbQAYGaV0o6UhPNvarW3r3BZkpQvW1moRK5lPXrqj6x/+Vl0XIHVmmTDtHnFl5EBCcBgfG8e8eW73RtUoisSEWVEBckZo2u8+H6f/s+Ro3nhfTASahMZ+RlpNFLk+Nf6dvuTIzHFtNLx631Q/w4ak5FtccgCNsLaTmE3YcrnnWwCH97JsjaxnNmKt3rWldVbFLQYM" />
+<input type="hidden" name="__VIEWSTATE6" id="__VIEWSTATE6" value="hALIDu99JdYSNhv3WX0ckiTeoujXFsmScpLygTKv6sJH9NoaZDBKeEI7b8KC+FCG0HyYLcHlkpk6ZQZ6gpEanx8viAnbmgUB+/hQagztrl7IwW5Qv27FKSQInjsuuaHEilwyh0xRBo+chfO6JLbpWWFvgOh1oGZRKJySCNXJ/sctsRPF5TiQj5QkXCsMzpuLqscpjl8uX4UQiKMXU+1l4xRBND6V9uA8TG4Q6gq86Vo0uwxBoV57nd1YuKrVf3n4XOj9NmGl0IZHxFG1c6NZy7FlKpZA5107bb2YlqwUlYHSf6u4cdss8hKW+EiLqIzm6Ts6IHYkDG42SP1WoNuW9R01ICcMqMfkmI53CpofpciQBNfoMVzoT8uHVT6EN1RehfBq7J0jA+l/nUFD/wR320KhXxZ62PcYPv9hUquWnxUX57Qt3xMSeMIjeJRaehb3EZ23WK9y1nuYS21iw/iMLQOZDjx8XTN8WNTGQSwCiAnqEPmoERNqCxKDD3UANYPpRJNDMI/01P2F+axP6msfDAW8Lewsm9DWZC1YNSagJsabC6O9PhGO22x2q7Kg3BrJoGF/ZPVjVlI0tZj+jDbx+MrF9t5dFySgrI8kdJbbn704T0q/aPYoL+WoqE9ODlt01azE7q8aqm+7s5THRM4HDJyH240kOWmxGV45Pr6TijTO2vLJtC0sa1T9FmAxueoStQ9R0c8TAkXlHU6RwuO4GpbIxc+14aVK0an2xqBF5O0+WT8tXyqNj98SLcIHfaN9DFMGI0shh4ujOPKns0iUl+Mm1s5KQ/PhmyYaZUkE10Krxm3hkCTL6xS89Qf0j+ee07rGubESMPJvPbNRneD41TsAjJKQeQQsf5OLe+Kg7QDaxxUL9un1PBmJVvmQXfRXAArH9n+/EeXccPNy4IK1+ViUu+N3kAdwCpJwF+hhxrU=" />
+</div>
+
+<script type="text/javascript">
+//<![CDATA[
+var theForm = document.forms['FRM_SKT01002'];
+if (!theForm) {
+    theForm = document.FRM_SKT01002;
+}
+function __doPostBack(eventTarget, eventArgument) {
+    if (!theForm.onsubmit || (theForm.onsubmit() != false)) {
+        theForm.__EVENTTARGET.value = eventTarget;
+        theForm.__EVENTARGUMENT.value = eventArgument;
+        theForm.submit();
+    }
+}
+//]]>
+</script>
+
+
+<div class="aspNetHidden">
+
+	<input type="hidden" name="__VIEWSTATEGENERATOR" id="__VIEWSTATEGENERATOR" value="0F813771" />
+	<input type="hidden" name="__EVENTVALIDATION" id="__EVENTVALIDATION" value="6QtFdNgqf3wBHGwOiA6csPR2t6ODR30+X09PLthGBOueFCDpTUZc41G6W0M0jYlo54st70gOH14QsliqwXgoZLac6uvCKJ1XZQj37g0vks3bEn1Su0iEZ+MAUe3m4yicDy9fbKtFT4jYIu224Kc9ZAwijUcpmruerKxq2zMLBraUvDxRJLS/emgeNK6ON4klBsksY/P8BlKwViwi5Blaz6q6x3dImGTlPfSY2dLc9pDdFO3gsV27YTOnBw4d0MfBiT6X8FypYL9FWSNbn34ls5ZXw1hbfeg285+38bKSoIE=" />
+</div>
+        <table cellspacing="0" cellpadding="0" width="100%" border="0">
+            <tr>
+                <td height="30">
+                    
+<script language="javascript" src="/scripts/header.js" charset="ISO-8859-9"></script>
+<table class="solidBorderTable" id="Table1" height="40" cellspacing="0" cellpadding="0"
+	width="100%">
+	<tr>
+		<td class="kabartmaBorder">
+			<table id="Table2" cellspacing="0" cellpadding="0" width="100%" border="0">
+				<tr>
+					<td class="header1" rowspan="2"><img src="/images/mebbis.png">
+					</td>
+					<td class="header1" align="left" width="16" rowspan="2"></td>
+					<td class="header3" valign="bottom" align="left">MEBBİS -&nbsp;Özel MTSK Modülü</td>
+					<td class="header3" valign="top" align="left" width="200" rowspan="2">
+						<div id="Beklet" style="Z-INDEX: 101; VISIBILITY: hidden; WIDTH: 200px; POSITION: absolute; HEIGHT: 20px; BACKGROUND-COLOR: #ffffff; layer-background-color: #FFFFFF">
+							<table class="solidBorderTable" id="Table3" height="100%" cellspacing="0" width="100%"
+								border="0">
+								<tr>
+									<td class="header3" align="center" width="30"><img height="20" src="/images/bekle.gif" width="20" border="0">
+									</td>
+									<td class="header3">Lütfen Bekleyiniz..</td>
+								</tr>
+							</table>
+						</div>
+						
+						<div id="IslemSonucuBulunamadi" style="Z-INDEX: 1; VISIBILITY: hidden; WIDTH: 200px; POSITION: absolute; HEIGHT: 20px; BACKGROUND-COLOR: #ffffff; layer-background-color: #FFFFFF"></div>
+						<div id="IslemSonucuIPTAL" style="Z-INDEX: 103; VISIBILITY: hidden; WIDTH: 200px; POSITION: absolute; HEIGHT: 20px; BACKGROUND-COLOR: #ffffff; layer-background-color: #FFFFFF">
+							<table class="solidBorderTable" id="Table7" height="100%" cellspacing="0" width="100%"
+								border="0">
+								<tr>
+									<td class="header3" align="center" width="30" rowspan="2"><img height="20" src="/images/info.gif" width="15" border="0">
+									</td>
+									<td class="header3">İşleminiz İptal Edilmiştir.</td>
+								</tr>
+							</table>
+						</div>
+					</td>
+					<td class="header3" valign="bottom" align="right"><span id="SktPageHeader1_lblKullaniciAdi">16585174838</span></td>
+					<td valign="top" align="right" width="10" rowspan="2"></td>
+				</tr>
+				<tr>
+					<td class="header2" valign="bottom" align="left"><span id="SktPageHeader1_lblKurumKodu">99956925,ÖZEL PAYAS ERGUVAN MOTORLU TAŞIT SÜRÜCÜLERİ KURSU</span></td>
+					<td class="header3" valign="bottom" align="right">Aktif Kullanıcı:<span id="SktPageHeader1_lblAktifKullaniciSayisi"></span></td>
+				</tr>
+				<tr>
+					<td></td>
+				</tr>
+			</table>
+		</td>
+	</tr>
+</table>
+
+                </td>
+            </tr>
+            <tr>
+                <td valign="top" width="100%">
+                    <table id="Table2" cellspacing="0" cellpadding="0" width="100%" border="0">
+                        <tr>
+                            <td valign="top" width="130" align="left">
+                                
+                                
+<link href="/Styles/style.css" type="text/css" rel="stylesheet">
+ <script language="javascript" charset="ISO-8859-9" src="/scripts/submit.js"></script>
+<script language="javascript" charset="ISO-8859-9" src="/scripts/menu.js"></script>
+<table id="Table1" cellspacing="0" cellpadding="0" width="120" border="0">
+	<tr>
+		<td>
+			
+			<table class="solidBorderTable" id="KurumAramaLink" cellspacing="0" cellpadding="0" width="120">
+				<tr>
+					<td id="SktMenu1_TD_KurumArama_2" onmouseover="javascript:kabartmaOvr(this)" onclick="if (Beklet(13) != false) window.location.href=&#39;skt00001.aspx&#39;;" onmouseout="javascript:kabartmaOut(this)" width="102" height="20" class="kabartma">Ana 
+						Sayfa
+					</td>
+
+				</tr>
+			</table>
+			<table height="5" width="125">
+				<tr>
+					<td></td>
+				</tr>
+			</table>
+			<table id="SktMenu1_TB_AnaMenu" class="solidBorderTable" cellspacing="0" cellpadding="0" style="width:118px;border-collapse:collapse;">
+	<tr>
+		<td><table width="118"	cellpadding="0" cellspacing="0"><tr><td colspan="2" title="Kurum İşlemleri" class="kabartmaActive"	onmouseout="javascript:kabartmaOut(this)"	onmouseover="javascript:kabartmaOvr(this)" height="20" onclick="GosterSakla('SKT01000')"> <img src="/images/current_kucuk_asagi.gif"><img src="/images/imgSpacer.gif" width="3">Kurum İşlemleri</td></tr></table><table width="118"	cellpadding="0" cellspacing="0"	id="SKT01000"><tr><td width="5" rowspan="5"	class="kabartma"><img	src="/images/imgSpacer.gif"></td><td title="Kurum Bilgileri"	onmouseout="javascript:kabartmaOut(this)"	onmouseover="javascript:kabartmaOvr(this)" height="20" 	onclick="if (Beklet(13) !=	false)	window.location.href='/SKT/skt01001.aspx';" class="kabartma">Kurum Bilgileri</td></tr><tr><td title="Kurum Araç Giriş / Görüntüleme"	onmouseout="javascript:kabartmaOut(this)"	onmouseover="javascript:kabartmaOvr(this)" height="20" 	onclick="if (Beklet(13) !=	false)	window.location.href='/SKT/skt01002.aspx';" class="kabartmaActive">Kurum Araç Giriş / Görüntüleme</td></tr><tr><td title="Kurum Derslik Giriş / Görüntüleme"	onmouseout="javascript:kabartmaOut(this)"	onmouseover="javascript:kabartmaOvr(this)" height="20" 	onclick="if (Beklet(13) !=	false)	window.location.href='/SKT/skt01003.aspx';" class="kabartma">Kurum Derslik Giriş / Görüntüleme</td></tr><tr><td title="Kurum Randevu Tanımlama Ekranı"	onmouseout="javascript:kabartmaOut(this)"	onmouseover="javascript:kabartmaOvr(this)" height="20" 	onclick="if (Beklet(13) !=	false)	window.location.href='/SKT/skt01005.aspx';" class="kabartma">Kurum Randevu Tanımlama Ekranı</td></tr><tr><td title="Kurum Uygulama Sınav Onay İşlemleri"	onmouseout="javascript:kabartmaOut(this)"	onmouseover="javascript:kabartmaOvr(this)" height="20" 	onclick="if (Beklet(13) !=	false)	window.location.href='/SKT/skt01006.aspx';" class="kabartma">Kurum Uygulama Sınav Onay İşlemleri</td></tr></table></td>
+	</tr><tr>
+		<td><table width="118"	cellpadding="0" cellspacing="0"><tr><td colspan="2" title="Kurum Aday Kayıt İşlemleri" class="kabartma" onmouseout="javascript:kabartmaOut(this)" onmouseover="javascript:kabartmaOvr(this)" height="20" onclick="GosterSakla('SKT02000')">	<img src="/images/current_kucuk_yan.gif"><img src="/images/imgSpacer.gif" width="3">Kurum Aday Kayıt İşlemleri</td></tr></table><table width="118"	cellpadding="0" cellspacing="0"	id="SKT02000" style="visibility:hidden;position:absolute;"><tr><td width="5" rowspan="13"	class="kabartma"><img	src="/images/imgSpacer.gif"></td><td title="Aday Dönem Kayıt İşlemleri"	onmouseout="javascript:kabartmaOut(this)"	onmouseover="javascript:kabartmaOvr(this)" height="20" 	onclick="if (Beklet(13) !=	false)	window.location.href='/SKT/skt02001.aspx';" class="kabartma">Aday Dönem Kayıt İşlemleri</td></tr><tr><td title="Aday Fotograf Kayıt"	onmouseout="javascript:kabartmaOut(this)"	onmouseover="javascript:kabartmaOvr(this)" height="20" 	onclick="if (Beklet(13) !=	false)	window.location.href='/SKT/skt02002.aspx';" class="kabartma">Aday Fotograf Kayıt</td></tr><tr><td title="Aday Öğrenim Bilgisi Kayıt"	onmouseout="javascript:kabartmaOut(this)"	onmouseover="javascript:kabartmaOvr(this)" height="20" 	onclick="if (Beklet(13) !=	false)	window.location.href='/SKT/skt02003.aspx';" class="kabartma">Aday Öğrenim Bilgisi Kayıt</td></tr><tr><td title="Aday Sağlık Raporu Kayıt"	onmouseout="javascript:kabartmaOut(this)"	onmouseover="javascript:kabartmaOvr(this)" height="20" 	onclick="if (Beklet(13) !=	false)	window.location.href='/SKT/skt02004.aspx';" class="kabartma">Aday Sağlık Raporu Kayıt</td></tr><tr><td title="Aday Sabıka Kayıt"	onmouseout="javascript:kabartmaOut(this)"	onmouseover="javascript:kabartmaOvr(this)" height="20" 	onclick="if (Beklet(13) !=	false)	window.location.href='/SKT/skt02005.aspx';" class="kabartma">Aday Sabıka Kayıt</td></tr><tr><td title="Aday İmza Kayıt"	onmouseout="javascript:kabartmaOut(this)"	onmouseover="javascript:kabartmaOvr(this)" height="20" 	onclick="if (Beklet(13) !=	false)	window.location.href='/SKT/SKT02010.aspx';" class="kabartma">Aday İmza Kayıt</td></tr><tr><td title="Dönem Adaylarını Onaylama / Görüntüleme"	onmouseout="javascript:kabartmaOut(this)"	onmouseover="javascript:kabartmaOvr(this)" height="20" 	onclick="if (Beklet(13) !=	false)	window.location.href='/SKT/skt02006.aspx';" class="kabartma">Dönem Adaylarını Onaylama</td></tr><tr><td title="e-Sınav Başvuru İşlemleri"	onmouseout="javascript:kabartmaOut(this)"	onmouseover="javascript:kabartmaOvr(this)" height="20" 	onclick="if (Beklet(13) !=	false)	window.location.href='/SKT/skt02007.aspx';" class="kabartma">e-Sınav Başvuru İşlemleri</td></tr><tr><td title="Sınav Sonuç Listeleme"	onmouseout="javascript:kabartmaOut(this)"	onmouseover="javascript:kabartmaOvr(this)" height="20" 	onclick="if (Beklet(13) !=	false)	window.location.href='/SKT/skt02008.aspx';" class="kabartma">Sınav Sonuç Listeleme</td></tr><tr><td title="Aday Durum Görüntüleme"	onmouseout="javascript:kabartmaOut(this)"	onmouseover="javascript:kabartmaOvr(this)" height="20" 	onclick="if (Beklet(13) !=	false)	window.location.href='/SKT/skt02009.aspx';" class="kabartma">Aday Durum Görüntüleme</td></tr><tr><td title="Aday Sözleşme Bilgisi Kayıt İşlemleri"	onmouseout="javascript:kabartmaOut(this)"	onmouseover="javascript:kabartmaOvr(this)" height="20" 	onclick="if (Beklet(13) !=	false)	window.location.href='/SKT/skt02011.aspx';" class="kabartma">Aday Sözleşme Bilgisi Kayıt</td></tr><tr><td title="Aday Adres Beyan"	onmouseout="javascript:kabartmaOut(this)"	onmouseover="javascript:kabartmaOvr(this)" height="20" 	onclick="if (Beklet(13) !=	false)	window.location.href='/SKT/SKT02012.aspx';" class="kabartma">Aday Adres Beyan</td></tr><tr><td title="Aday Fatura Kayıt İşlemleri"	onmouseout="javascript:kabartmaOut(this)"	onmouseover="javascript:kabartmaOvr(this)" height="20" 	onclick="if (Beklet(13) !=	false)	window.location.href='/SKT/skt02013.aspx';" class="kabartma">Aday Fatura Kayıt</td></tr></table></td>
+	</tr><tr>
+		<td><table width="118"	cellpadding="0" cellspacing="0"><tr><td colspan="2" title="Kurum Dönem Açılış İşlemleri" class="kabartma" onmouseout="javascript:kabartmaOut(this)" onmouseover="javascript:kabartmaOvr(this)" height="20" onclick="GosterSakla('SKT03000')">	<img src="/images/current_kucuk_yan.gif"><img src="/images/imgSpacer.gif" width="3">Kurum Dönem Açılış İşlemleri</td></tr></table><table width="118"	cellpadding="0" cellspacing="0"	id="SKT03000" style="visibility:hidden;position:absolute;"><tr><td width="5" rowspan="4"	class="kabartma"><img	src="/images/imgSpacer.gif"></td><td title="Dönem Grup Açılış Tarihi Giriş"	onmouseout="javascript:kabartmaOut(this)"	onmouseover="javascript:kabartmaOvr(this)" height="20" 	onclick="if (Beklet(13) !=	false)	window.location.href='/SKT/skt03001.aspx';" class="kabartma">Dönem Grup Açılış Tarihi Giriş</td></tr><tr><td title="Grup Şube Tanımlama"	onmouseout="javascript:kabartmaOut(this)"	onmouseover="javascript:kabartmaOvr(this)" height="20" 	onclick="if (Beklet(13) !=	false)	window.location.href='/SKT/skt03002.aspx';" class="kabartma">Grup Şube Tanımlama</td></tr><tr><td title="Teorik Ders Programı Giriş"	onmouseout="javascript:kabartmaOut(this)"	onmouseover="javascript:kabartmaOvr(this)" height="20" 	onclick="if (Beklet(13) !=	false)	window.location.href='/SKT/skt03003.aspx';" class="kabartma">Teorik Ders Programı Giriş</td></tr><tr><td title="Direksiyon Eğitimi Ders Programı Giriş"	onmouseout="javascript:kabartmaOut(this)"	onmouseover="javascript:kabartmaOvr(this)" height="20" 	onclick="if (Beklet(13) !=	false)	window.location.href='/SKT/skt03004.aspx';" class="kabartma">Direksiyon Eğitimi Ders Programı Giriş</td></tr></table></td>
+	</tr><tr>
+		<td><table width="118"	cellpadding="0" cellspacing="0"><tr><td colspan="2" title="Listeleme İşlemleri" class="kabartma" onmouseout="javascript:kabartmaOut(this)" onmouseover="javascript:kabartmaOvr(this)" height="20" onclick="GosterSakla('SKT04000')">	<img src="/images/current_kucuk_yan.gif"><img src="/images/imgSpacer.gif" width="3">Listeleme İşlemleri</td></tr></table><table width="118"	cellpadding="0" cellspacing="0"	id="SKT04000" style="visibility:hidden;position:absolute;"><tr><td width="5" rowspan="3"	class="kabartma"><img	src="/images/imgSpacer.gif"></td><td title="Teorik Ders Programı Görüntüleme"	onmouseout="javascript:kabartmaOut(this)"	onmouseover="javascript:kabartmaOvr(this)" height="20" 	onclick="if (Beklet(13) !=	false)	window.location.href='/SKT/skt04001.aspx';" class="kabartma">Teorik Ders Programı Görüntüleme</td></tr><tr><td title="Direksiyon Ders Programı Görüntüleme"	onmouseout="javascript:kabartmaOut(this)"	onmouseover="javascript:kabartmaOvr(this)" height="20" 	onclick="if (Beklet(13) !=	false)	window.location.href='/SKT/skt04002.aspx';" class="kabartma">Direksiyon Ders Programı Görüntüleme</td></tr><tr><td title="Sınav Bilgileri Görüntüleme"	onmouseout="javascript:kabartmaOut(this)"	onmouseover="javascript:kabartmaOvr(this)" height="20" 	onclick="if (Beklet(13) !=	false)	window.location.href='/SKT/skt04003.aspx';" class="kabartma">Sınav Bilgileri Görüntüleme</td></tr></table></td>
+	</tr>
+</table>
+			<table height="10" width="125">
+				<tr>
+					<td></td>
+				</tr>
+			</table>
+		</td>
+	</tr>
+</table>
+
+                            </td>
+                            <td valign="top" width="5000" align="left">
+                                <input name="hdnKayitSec" type="hidden" id="hdnKayitSec" designtimedragdrop="768" /><input name="hiddenKaydet" type="hidden" id="hiddenKaydet" />
+                                <input name="hdnKayitNoSilmeIcin" type="hidden" id="hdnKayitNoSilmeIcin" />
+                                <input name="hdnKayitNoSilmeIcin1" type="hidden" id="hdnKayitNoSilmeIcin1" style="z-index: 0" />
+                                <input name="hdnKayitSec1" type="hidden" id="hdnKayitSec1" style="z-index: 0" designtimedragdrop="768" />
+                                <table class="frmDis" cellspacing="0" cellpadding="0" width="100%" align="center" border="0">
+                                    <tbody>
+                                        <tr>
+                                            <td colspan="3">
+                                                <table class="frmBaslik" cellspacing="0" cellpadding="2" width="100%" border="0">
+                                                    <tr>
+                                                        <td>Özel MTSK Modülü</td>
+                                                        <td></td>
+                                                        <td align="right">SKT01002</td>
+                                                    </tr>
+                                                </table>
+                                            </td>
+                                        </tr>
+                                        <tr>
+                                            <td class="frmDisToolbar" height="10" colspan="3">
+                                                
+<table width="100%" border="0" cellspacing="0" cellpadding="1" >
+	<tr>
+		<td width="100%">
+			<table border="0" cellspacing="0" cellpadding="0" >
+				<tr>
+					<td id="IncToolbarActive1_yeniKayit_b" width="25"><img border="0" src="/images/toolimages/new_d.jpg" alt="Yeni Kayıt" /></td>
+
+					<td id="IncToolbarActive1_silme_b" width="25"><img border="0" src="/images/toolimages/delete_d.jpg" alt="Sil" /></td>
+
+					<td><img border="0" src="/images/toolimages/seperator.jpg"></td>
+					<td id="IncToolbarActive1_kaydet_b" width="25"><img border="0" src="/images/toolimages/save.jpg" style="cursor:hand;" alt="Kaydet"  onmouseover="this.src='/images/toolimages/save_a.jpg'" onmouseout="this.src='/images/toolimages/save.jpg'" onclick="return AlanKontrolveKayit();"/></td>
+
+					<td id="IncToolbarActive1_cancel_b" width="25"><img border="0" src="/images/toolimages/cancel_d.jpg" alt="Kaydet" /> </td>
+
+					<td><img border="0" src="/images/toolimages/seperator.jpg"></td>
+					<td id="IncToolbarActive1_find_b" width="25"><img border="0" src="/images/toolimages/search_d.jpg" alt="Ara" /></td>
+
+					<td id="IncToolbarActive1_print_b" width="25"><img border="0" src="/images/toolimages/print_d.jpg" alt="Yazdır"/></td>
+
+					<td><img border="0" src="/images/toolimages/seperator.jpg"></td>
+					<td id="IncToolbarActive1_refresh_b" width="25"><a href="skt01002.aspx"><img border="0" src="/images/toolimages/refresh.jpg" alt="Yenile" onmouseover="this.src='/images/toolimages/refresh_a.jpg'" onmouseout="this.src='/images/toolimages/refresh.jpg'"/></a></td>
+
+				</tr>
+			</table>
+		</td>
+		<td>
+			<table width="100%" border="0" cellspacing="0" cellpadding="0">
+				<tr>
+					<td width="25">
+						<img src="/images/toolimages/hata.gif" id="IncToolbarActive1_imgHataBildirim" border="0" style="CURSOR:hand" onmouseover="this.src =&#39;/images/toolimages/hata_over.gif&#39;;" onmouseout="this.src =&#39;/images/toolimages/hata.gif&#39;;" alt="Hata Bildirimi" onclick="SubmitHata(&#39;SKT&#39;,&#39;SKT01002&#39;,5816520)" />
+					</td>
+					<td id="IncToolbarActive1_help_b" width="25"><img border="0" src="/images/toolimages/help_2_d.jpg" alt="Yardım"/></td>
+
+					<td id="IncToolbarActive1_exit_b" width="25"><a href="../main.aspx"><img border="0" src="/images/toolimages/exit.jpg" alt="Çıkış" onmouseover="this.src='/images/toolimages/exit_a.jpg'" onmouseout="this.src='/images/toolimages/exit.jpg'"/></a></td>
+
+				</tr>
+			</table>
+		</td>
+	</tr>
+</table>
+
+                                            </td>
+                                        </tr>
+                                        <tr>
+                                            <td colspan="3">
+                                                
+                                                
+                                            </td>
+                                        </tr>
+                                        <tr>
+                                            <td height="10" width="2%"></td>
+                                        </tr>
+                                        <tr>
+                                            <td><strong></strong></td>
+                                            <td class="frmDis">
+                                                <p align="left">
+                                                    <strong>Direksiyon Eğitim Türü</strong>&nbsp;<select name="dropTurSecim" onchange="javascript:setTimeout(&#39;__doPostBack(\&#39;dropTurSecim\&#39;,\&#39;\&#39;)&#39;, 0)" id="dropTurSecim" class="frmInput2" style="z-index: 0">
+	<option selected="selected" value="0">Se&#231;iniz</option>
+	<option value="1">Eğitim Aracı</option>
+	<option value="2">Sim&#252;lat&#246;r</option>
+
+</select>
+                                                </p>
+                                            </td>
+                                            <td></td>
+                                        </tr>
+                                        <tr>
+                                            <td colspan="3">
+                                                
+                                                
+                                            </td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </td>
+                        </tr>
+                    </table>
+                </td>
+            </tr>
+            <tr>
+                <td valign="bottom" width="100%" align="center">
+                    
+<div class="frmFooter">Tüm hakları Milli Eğitim Bakanlığına aittir.</div>
+
+                </td>
+            </tr>
+        </table>
+       
+    </form>
+</body>
+</html>

@@ -7,10 +7,17 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { AlertCircle, CheckCircle } from "lucide-react";
 import { apiService } from "@/services/api-service";
 import { drivingSchoolOwnerContext } from "@/components/contexts/DrivingSchoolManagerContext";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 
 interface MebbisCredentials {
   mebbis_username: string;
   mebbis_password?: string;
+  mebbis_credentials_locked?: boolean;
   [key: string]: any;
 }
 
@@ -248,7 +255,10 @@ const KursumTable = () => {
               <Label className="font-medium">Şifre:</Label>
               <p className="mt-1">*****</p>
             </div>
-            <Button onClick={handleEdit} className="mt-4">
+            <Button 
+              onClick={handleEdit} 
+              className="mt-4"
+            >
               Düzenle
             </Button>
           </CardContent>
@@ -261,41 +271,55 @@ const KursumTable = () => {
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <form onSubmit={handleSubmit} className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="mebbis_username">MEBBIS Kullanıcı Adı</Label>
-                <Input
-                  id="mebbis_username"
-                  name="mebbis_username"
-                  value={formData.mebbis_username}
-                  onChange={handleInputChange}
-                  required
-                />
-              </div>
+            <TooltipProvider>
+              <form onSubmit={handleSubmit} className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="mebbis_username">MEBBIS Kullanıcı Adı</Label>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Input
+                        id="mebbis_username"
+                        name="mebbis_username"
+                        value={formData.mebbis_username}
+                        onChange={handleInputChange}
+                        disabled={savedData?.mebbis_credentials_locked}
+                        required
+                      />
+                    </TooltipTrigger>
+                    {savedData?.mebbis_credentials_locked && (
+                      <TooltipContent>
+                        Kullanıcı adı değiştirilemez.
+                      </TooltipContent>
+                    )}
+                  </Tooltip>
+                </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="mebbis_password">MEBBIS Şifre</Label>
-                <Input
-                  id="mebbis_password"
-                  type="password"
-                  name="mebbis_password"
-                  value={formData.mebbis_password}
-                  onChange={handleInputChange}
-                  required
-                />
-              </div>
+                <div className="space-y-2">
+                  <Label htmlFor="mebbis_password">MEBBIS Şifre</Label>
+                  <Input
+                    id="mebbis_password"
+                    type="password"
+                    name="mebbis_password"
+                    value={formData.mebbis_password}
+                    onChange={handleInputChange}
+                    required
+                  />
+                </div>
 
-              <div className="flex gap-2 pt-2">
-                <Button type="submit">
-                  Kaydet
-                </Button>
-                {editing && (
-                  <Button type="button" variant="outline" onClick={handleCancel}>
-                    İptal
+                <div className="flex gap-2 pt-2">
+                  <Button 
+                    type="submit"
+                  >
+                    Kaydet
                   </Button>
-                )}
-              </div>
-            </form>
+                  {editing && (
+                    <Button type="button" variant="outline" onClick={handleCancel}>
+                      İptal
+                    </Button>
+                  )}
+                </div>
+              </form>
+            </TooltipProvider>
           </CardContent>
         </Card>
       )}

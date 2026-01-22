@@ -5,9 +5,11 @@ import * as cheerio from 'cheerio';
 @Injectable()
 export class IsLoggedInService {
   private axiosService: AxiosService;
+  private tbMebbisId: number;
 
-  constructor(cookieName: string) {
-    this.axiosService = new AxiosService(cookieName);
+  constructor(tbMebbisId: number) {
+    this.tbMebbisId = tbMebbisId;
+    this.axiosService = new AxiosService(tbMebbisId);
   }
 
   async isLoggedIn(): Promise<{

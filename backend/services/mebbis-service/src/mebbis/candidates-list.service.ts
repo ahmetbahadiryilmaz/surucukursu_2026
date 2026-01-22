@@ -6,12 +6,14 @@ import { parse } from 'node-html-parser';
 @Injectable()
 export class CandidatesListService {
   private axiosService: AxiosService;
+  private tbMebbisId: number;
 
-  constructor(cookieName: string) {
-    this.axiosService = new AxiosService(cookieName);
+  constructor(tbMebbisId: number) {
+    this.tbMebbisId = tbMebbisId;
+    this.axiosService = new AxiosService(tbMebbisId);
   }
 
-  async getCandidates(cookieName: string): Promise<{
+  async getCandidates(): Promise<{
     success: boolean;
     status: number;
     data: any[] | string;
@@ -19,13 +21,13 @@ export class CandidatesListService {
     try {
       // Fetch the first page
       await FetchService.get('https://mebbisyd.meb.gov.tr/SKT/skt00001.aspx', {
-        cookieName,
+        tbMebbisId: this.tbMebbisId,
       });
 
       // Fetch the second page
       const r2 = await FetchService.get(
         'https://mebbisyd.meb.gov.tr/SKT/skt02006.aspx',
-        { cookieName },
+        { tbMebbisId: this.tbMebbisId },
       );
 
       const r2Html = r2.data;
@@ -74,7 +76,7 @@ export class CandidatesListService {
           const r3 = await FetchService.post(
             'https://mebbisyd.meb.gov.tr/SKT/skt02006.aspx',
             formData,
-            { cookieName },
+            { tbMebbisId: this.tbMebbisId },
           );
           const r3Data = r3.data;
           const r3Root = parse(r3Data);

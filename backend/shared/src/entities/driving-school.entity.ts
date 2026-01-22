@@ -26,6 +26,11 @@ export class DrivingSchoolEntity extends BaseEntity {
   @Column({ nullable: true })
   mebbis_password?: string;
 
+ 
+
+  @Column({ type: 'boolean', default: false })
+  mebbis_credentials_locked: boolean;
+
   @Column()
   manager_id: number;
 

@@ -1,16 +1,12 @@
 import { Controller, Get, Param } from '@nestjs/common';
-
-declare const global: any;
+import { ResponseService } from '../response.service';
 
 @Controller('response')
 export class ResponseController {
+  constructor(private responseService: ResponseService) {}
+
   @Get(':id')
   getResponse(@Param('id') id: string) {
-    const response = global.responseStore && global.responseStore[id];
-    if (response) {
-      return response.html;
-    } else {
-      return '<h1>Response not found</h1>';
-    }
+    return this.responseService.getResponse(id);
   }
 }

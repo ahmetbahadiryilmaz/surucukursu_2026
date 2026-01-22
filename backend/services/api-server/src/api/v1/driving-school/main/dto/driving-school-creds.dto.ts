@@ -6,5 +6,16 @@ export class DrivingSchoolCredsDto {
         example: 'username123'
     })
     mebbis_username: string;
+
+    @ApiProperty({
+        description: 'Name of the driving school',
+        example: 'School Name'
+    })
     name: string;
+
+    @ApiProperty({
+        description: 'Whether MEBBIS credentials are locked',
+        example: false
+    })
+    mebbis_credentials_locked?: boolean;
 }

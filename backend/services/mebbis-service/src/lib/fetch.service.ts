@@ -1,16 +1,28 @@
-import * as fs from 'fs';
-import * as path from 'path';
 import * as https from 'https';
 import * as http from 'http';
 
 export class FetchService {
   private baseUrl = 'https://mebbisyd.meb.gov.tr';
-  private cookies: string | false = false;
+  private cookieData: string = '';
+  private tbMebbisId: number | null = null;
+  private onCookieUpdate: ((cookies: string) => Promise<void>) | null = null;
 
-  constructor(cookies: string | false = false) {
-    this.cookies = cookies
-      ? path.join(__dirname, '../../../storage/cookies/', cookies)
-      : false;
+  constructor(tbMebbisId?: number) {
+    if (tbMebbisId) {
+      this.tbMebbisId = tbMebbisId;
+    }
+  }
+
+  setTbMebbisId(tbMebbisId: number) {
+    this.tbMebbisId = tbMebbisId;
+  }
+
+  setCookieData(cookies: string) {
+    this.cookieData = cookies;
+  }
+
+  setOnCookieUpdate(callback: (cookies: string) => Promise<void>) {
+    this.onCookieUpdate = callback;
   }
 
   static agentSelector(_parsedURL: any) {
@@ -21,17 +33,9 @@ export class FetchService {
     }
   }
 
-  setCookieName(cookieName: string) {
-    this.cookies = path.join(
-      __dirname,
-      '../../../storage/cookies/',
-      cookieName,
-    );
-  }
-
   createHeaders(config: any = {}) {
     const headers = config.headers || {};
-    if (this.cookies) headers.Cookie = this.loadCookies();
+    if (this.cookieData) headers.Cookie = this.cookieData;
     return headers;
   }
 
@@ -42,7 +46,9 @@ export class FetchService {
     config: any = {},
   ) {
     await new Promise((resolve) => setTimeout(resolve, 0));
-    const fetchInstance = new FetchService(config.cookieName);
+    const fetchInstance = new FetchService(config.tbMebbisId);
+    fetchInstance.setCookieData(config.cookieData || '');
+    fetchInstance.setOnCookieUpdate(config.onCookieUpdate);
 
     // Request logging
     console.info(
@@ -66,8 +72,9 @@ export class FetchService {
 
     const response = await fetch(url, options);
 
-    if (response.headers.get('set-cookie')) {
-      fetchInstance.saveCookies(response.headers.get('set-cookie'));
+    const setCookies = response.headers.get('set-cookie');
+    if (setCookies) {
+      await fetchInstance.handleCookieUpdate(setCookies);
     }
 
     const responseData = await response.text();
@@ -97,33 +104,15 @@ export class FetchService {
     return FetchService.request('post', endpoint, data, config);
   }
 
-  saveCookies(cookies: any) {
-    if (this.cookies) {
+  private async handleCookieUpdate(cookies: string) {
+    this.cookieData = cookies;
+    if (this.onCookieUpdate) {
       try {
-        const writableStream = fs.createWriteStream(this.cookies as string, {
-          encoding: 'utf8',
-        });
-        const cookieString = cookies.join('; ');
-        writableStream.write(cookieString);
-        writableStream.end();
-        writableStream.on('finish', () => {
-          console.log('Cookies saved successfully');
-        });
-        writableStream.on('error', (err) => {
-          console.error('Error saving cookies:', err);
-        });
+        await this.onCookieUpdate(cookies);
+        console.log('Cookies updated in database successfully');
       } catch (error) {
-        console.error('Error saving cookies:', error);
+        console.error('Error updating cookies in database:', error);
       }
-    } else {
-      console.error('Cookie path not defined');
     }
-  }
-
-  loadCookies() {
-    if (this.cookies && fs.existsSync(this.cookies as string)) {
-      return fs.readFileSync(this.cookies as string, 'utf8');
-    }
-    return '';
   }
 }

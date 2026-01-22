@@ -9,6 +9,7 @@ export * from './driving-school-settings.entity';
 export * from './driving-school-student-integration-info.entity';
 export * from './driving-school-student.entity';
 export * from './driving-school-car.entity';
+export * from './driving-school-cookie.entity';
 export * from './system-logs.entity';
 export * from './city.entity';
 export * from './district.entity';

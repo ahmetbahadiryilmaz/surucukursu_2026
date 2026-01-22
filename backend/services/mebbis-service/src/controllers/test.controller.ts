@@ -1,12 +1,13 @@
 import { Controller, Post, Body } from '@nestjs/common';
+import { TestService } from '../test.service';
 
 @Controller('api/test')
 export class TestController {
+  constructor(private testService: TestService) {}
+
   @Post('socket')
   async socket(@Body() body: { tbMebbisId: number }) {
     const { tbMebbisId } = body;
-    // Note: Socket.io integration would need to be implemented
-    // For now, just return the tbMebbisId
-    return tbMebbisId;
+    return this.testService.testSocket(tbMebbisId);
   }
 }

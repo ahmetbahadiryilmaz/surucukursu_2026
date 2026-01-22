@@ -1,18 +1,33 @@
 import { Injectable } from '@nestjs/common';
 import * as cheerio from 'cheerio';
-import FormData from 'form-data';
 import { AxiosService } from '../lib/axios.service';
 
 @Injectable()
 export class PreloginService {
   private baseUrl: string;
-  private cookieName: string;
+  private tbMebbisId: number;
   private axiosService: AxiosService;
+  private onCookieUpdate: ((cookies: string) => Promise<void>) | null = null;
 
-  constructor(baseUrl: string, cookieName: string) {
+  constructor(baseUrl: string, tbMebbisId: number) {
     this.baseUrl = baseUrl;
-    this.cookieName = cookieName;
-    this.axiosService = new AxiosService(cookieName);
+    this.tbMebbisId = tbMebbisId;
+    this.axiosService = new AxiosService(tbMebbisId);
+  }
+
+  /**
+   * Set callback to save cookies to database
+   */
+  setOnCookieUpdate(callback: (cookies: string) => Promise<void>) {
+    this.onCookieUpdate = callback;
+    this.axiosService.setOnCookieUpdate(callback);
+  }
+
+  /**
+   * Set initial cookies from database
+   */
+  setInitialCookies(cookies: string) {
+    this.axiosService.setCookieData(cookies);
   }
 
   async getInputNamesAndValues(html: string) {
@@ -43,12 +58,14 @@ export class PreloginService {
       const formData = await this.getInputNamesAndValues(response.data);
       formData.txtKullaniciAd = username;
       formData.txtSifre = password;
-      const formDataObj = new FormData();
+      
+      // Convert form data to URL encoded string instead of using FormData
+      const params = new URLSearchParams();
       for (const key in formData) {
-        formDataObj.append(key, formData[key]);
+        params.append(key, formData[key]);
       }
 
-      const postResponse = await this.axiosService.post(url, formDataObj, {
+      const postResponse = await this.axiosService.post(url, params.toString(), {
         headers: {
           Accept:
             'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',

@@ -1,5 +1,10 @@
 # Sürücü Kursu Project Copilot Instructions
 
+##AI-docs Directory Overview
+The `ai-docs` directory contains markdown files that document various services and components of the Sürücü Kursu project. Each file provides detailed information about specific services, including database integration, WebSocket gateways, and page references.and for new ai documentation files should put in this directory.
+
+
+
 ## User Types & Authentication
 
 ### User Type System
@@ -10,7 +15,7 @@ The application has **4 distinct user types** defined in `backend/services/api-s
 3. **DRIVING_SCHOOL_OWNER** (`2`) - Owns driving schools
 4. **DRIVING_SCHOOL_MANAGER** (`3`) - Manages driving schools
 
-### User Entities
+### Entities
 Corresponding entity files in `backend/shared/src/entities/`:
 - `admin.entity.ts` - Admin users (SUPER_ADMIN, ADMIN)
 - `driving-school-owner.entity.ts` - Driving school owners

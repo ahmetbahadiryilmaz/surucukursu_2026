@@ -12,6 +12,7 @@ const path = require('path');
 const fs = require('fs');
 const readline = require('readline');
 const { exec } = require('child_process');
+const { fetchVehiclesAndSimulators } = require('./functions/fetchVehiclesSimulators');
 
 // Menu links for MEBBIS
 const menuLinks = [
@@ -207,33 +208,66 @@ function extractFormFields(html) {
 // Extract dropdowns from HTML
 function extractDropdowns(html) {
   const dropdowns = [];
-  const selectRegex = /<select[^>]*name=["']([^"']+)["'][^>]*id=["']([^"']+)["'][^>]*>([\s\S]*?)<\/select>/gi;
+  
+  // Find all select elements first
+  const selectRegex = /<select[^>]*>([\s\S]*?)<\/select>/gi;
   
   let match;
   while ((match = selectRegex.exec(html)) !== null) {
-    const name = match[1];
-    const id = match[2];
-    const optionsHtml = match[3];
+    const selectTag = match[0];
+    const optionsHtml = match[1];
+    
+    // Extract name attribute from select tag
+    const nameMatch = selectTag.match(/name\s*=\s*["']([^"']+)["']/i);
+    const idMatch = selectTag.match(/id\s*=\s*["']([^"']+)["']/i);
+    
+    if (!nameMatch || !idMatch) continue;
+    
+    const name = nameMatch[1];
+    const id = idMatch[1];
     
     const options = [];
-    const optionRegex = /<option[^>]*value=["']([^"']*)["'][^>]*>([^<]*)<\/option>/gi;
+    // Extract all option elements
+    const optionRegex = /<option[^>]*>([\s\S]*?)<\/option>/gi;
     let optMatch;
+    
     while ((optMatch = optionRegex.exec(optionsHtml)) !== null) {
-      options.push({
-        value: optMatch[1],
-        text: optMatch[2].replace(/&#(\d+);/g, (m, code) => String.fromCharCode(code))
-      });
+      const optionTag = optMatch[0];
+      const valueMatch = optionTag.match(/value\s*=\s*["']([^"']*)["']/i);
+      let text = optMatch[1];
+      
+      if (!valueMatch) continue;
+      
+      const value = valueMatch[1];
+      
+      // Decode HTML entities
+      text = text
+        .replace(/&#(\d+);/g, (m, code) => String.fromCharCode(parseInt(code)))
+        .replace(/&#x([0-9a-f]+);/gi, (m, code) => String.fromCharCode(parseInt(code, 16)))
+        .replace(/&quot;/g, '"')
+        .replace(/&apos;/g, "'")
+        .replace(/&amp;/g, '&')
+        .replace(/&lt;/g, '<')
+        .replace(/&gt;/g, '>')
+        .replace(/&nbsp;/g, ' ')
+        .trim();
+      
+      if (text || value) {
+        options.push({ value, text });
+      }
     }
     
     // Check for selected option
-    const selectedMatch = optionsHtml.match(/<option[^>]*selected[^>]*value=["']([^"']*)["']/i);
+    const selectedMatch = optionsHtml.match(/<option[^>]*selected[^>]*value\s*=\s*["']([^"']*)["']/i);
     
-    dropdowns.push({
-      name,
-      id,
-      options,
-      selectedValue: selectedMatch ? selectedMatch[1] : (options[0]?.value || '')
-    });
+    if (options.length > 0) {
+      dropdowns.push({
+        name,
+        id,
+        options,
+        selectedValue: selectedMatch ? selectedMatch[1] : (options[0]?.value || '')
+      });
+    }
   }
   
   return dropdowns;
@@ -264,6 +298,133 @@ async function checkUserSession(user) {
   } catch (error) {
     return { ...user, online: false, reason: `Error: ${error.message}` };
   }
+}
+
+// Keep session alive continuously (no browser interaction)
+async function runKeepAliveMode(session, rl) {
+  let requestCount = 0;
+  let failureCount = 0;
+  let pageIndex = 0;
+  const maxFailures = 5;
+
+  console.log(`=== KEEP-ALIVE MODE ===`);
+  console.log(`Session: ${session.tbmebbisadi || session.mail}`);
+  console.log(`Refreshing every 30 seconds...`);
+  console.log(`Press Ctrl+C or type 'stop' to exit\n`);
+
+  // Create a promise that resolves when user types 'stop'
+  let stopRequested = false;
+  
+  // Listen for input in the background
+  const inputListener = () => {
+    process.stdin.once('data', async (data) => {
+      if (data.toString().trim().toLowerCase() === 'stop') {
+        stopRequested = true;
+      } else {
+        inputListener(); // Listen for more input
+      }
+    });
+  };
+  
+  inputListener();
+
+  const keepAliveInterval = setInterval(async () => {
+    if (stopRequested) {
+      clearInterval(keepAliveInterval);
+      console.log('\n\n✓ Keep-alive stopped. Exiting...\n');
+      return;
+    }
+
+    requestCount++;
+    
+    try {
+      const currentPage = menuLinks[pageIndex % menuLinks.length].url;
+      pageIndex++;
+
+      const response = await fetchPage(session.cookie, currentPage);
+      const headerInfo = extractHeaderInfo(response.body);
+
+      if (headerInfo.found && response.statusCode === 200) {
+        failureCount = 0;
+        const now = new Date().toLocaleTimeString('tr-TR');
+        console.log(`[${now}] Request #${requestCount} ✅ ${currentPage}`);
+      } else {
+        failureCount++;
+        const now = new Date().toLocaleTimeString('tr-TR');
+        console.log(`[${now}] Request #${requestCount} ❌ ${currentPage} (Failure ${failureCount}/${maxFailures})`);
+        
+        if (failureCount >= maxFailures) {
+          clearInterval(keepAliveInterval);
+          console.log(`\n⚠️  Keep-Alive stopped: Max failures reached. Session may be expired.`);
+          await delay(2000);
+          return;
+        }
+      }
+    } catch (error) {
+      failureCount++;
+      const now = new Date().toLocaleTimeString('tr-TR');
+      console.log(`[${now}] Request #${requestCount} ❌ Error: ${error.message}`);
+      
+      if (failureCount >= maxFailures) {
+        clearInterval(keepAliveInterval);
+        console.log(`\n⚠️  Keep-Alive stopped: Too many errors.`);
+        await delay(2000);
+        return;
+      }
+    }
+  }, 30000); // 30 seconds
+  
+  // Wait until stopped or interval clears
+  while (!stopRequested && keepAliveInterval._destroyed !== true) {
+    await delay(1000);
+  }
+}
+
+// Keep session alive by cycling through pages
+function startKeepAlive(session) {
+  let requestCount = 0;
+  let failureCount = 0;
+  let pageIndex = 0;
+  const maxFailures = 5;
+
+  const keepAliveInterval = setInterval(async () => {
+    requestCount++;
+    
+    try {
+      const currentPage = menuLinks[pageIndex % menuLinks.length].url;
+      pageIndex++;
+
+      const response = await fetchPage(session.cookie, currentPage);
+      const headerInfo = extractHeaderInfo(response.body);
+
+      if (headerInfo.found && response.statusCode === 200) {
+        failureCount = 0;
+        const now = new Date().toLocaleTimeString('tr-TR');
+        console.log(`[${now}] Keep-Alive #${requestCount} ✅ ${currentPage}`);
+      } else {
+        failureCount++;
+        const now = new Date().toLocaleTimeString('tr-TR');
+        console.log(`[${now}] Keep-Alive #${requestCount} ❌ ${currentPage} (Failure ${failureCount}/${maxFailures})`);
+        
+        if (failureCount >= maxFailures) {
+          console.log(`\n⚠️  Keep-Alive stopped: Max failures reached. Session may be expired.`);
+          clearInterval(keepAliveInterval);
+        }
+      }
+    } catch (error) {
+      failureCount++;
+      const now = new Date().toLocaleTimeString('tr-TR');
+      console.log(`[${now}] Keep-Alive #${requestCount} ❌ Error: ${error.message}`);
+      
+      if (failureCount >= maxFailures) {
+        console.log(`\n⚠️  Keep-Alive stopped: Too many errors.`);
+        clearInterval(keepAliveInterval);
+      }
+    }
+  }, 30000); // 30 seconds
+  
+  // Store interval ID for cleanup if needed
+  session._keepAliveInterval = keepAliveInterval;
 }
 
 // Add delay between requests
@@ -301,13 +462,27 @@ async function getOnlineUsers() {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     
-    const [todayUsers] = await connection.query(`
+    let [todayUsers] = await connection.query(`
       SELECT * FROM tb_mebbis_view 
       WHERE lastLoginH >= ? AND cookie IS NOT NULL AND cookie != ''
       ORDER BY lastLogin DESC
     `, [today]);
 
-    console.log(`Found ${todayUsers.length} users logged in today. Checking sessions...\n`);
+    // If no sessions found today, check last 20 sessions regardless of date
+    if (todayUsers.length === 0) {
+      console.log('No sessions found today. Checking last 20 sessions...\n');
+      
+      [todayUsers] = await connection.query(`
+        SELECT * FROM tb_mebbis_view 
+        WHERE cookie IS NOT NULL AND cookie != ''
+        ORDER BY lastLogin DESC
+        LIMIT 20
+      `);
+      
+      console.log(`Found ${todayUsers.length} sessions. Checking sessions...\n`);
+    } else {
+      console.log(`Found ${todayUsers.length} users logged in today. Checking sessions...\n`);
+    }
 
     for (let i = 0; i < todayUsers.length; i++) {
       const user = todayUsers[i];
@@ -374,6 +549,7 @@ function displayPageMenu(selectedSession) {
   console.log('\n' + '-'.repeat(100));
   console.log(' 0. ← Switch session / Back to session picker');
   console.log(' r. ↻ Refresh online sessions');
+  console.log(' a. 🚗 Auto-fetch vehicles & simulators');
   console.log('\n' + '='.repeat(100));
 }
 
@@ -420,12 +596,35 @@ async function main() {
 
         selectedSession = onlineUsers[sessionNum - 1];
         console.log(`\n✓ Selected: ${selectedSession.tbmebbisadi || selectedSession.mail}`);
+        
+        // Ask what to do with the session
+        console.log('\nOptions:');
+        console.log('  1. Keep session alive (refresh every 30s, no browser)');
+        console.log('  2. Continue with automation (browse pages)');
+        
+        const modeChoice = await question('\nSelect option (1 or 2): ');
+        
+        if (modeChoice === '1') {
+          // Keep-alive only mode
+          console.log('\n🔄 Starting keep-alive mode...\n');
+          await runKeepAliveMode(selectedSession, rl);
+          selectedSession = null; // Reset to pick another session
+          continue;
+        } else if (modeChoice === '2') {
+          // Continue with normal browser mode
+          console.log('\nStarting browser mode...');
+          // Fall through to page browser
+        } else {
+          console.log('\n❌ Invalid option.');
+          selectedSession = null;
+          continue;
+        }
       }
 
       // Page browser loop
       displayPageMenu(selectedSession);
       
-      const pageInput = await question('\nEnter page number (1-24), 0 to switch session, or r to refresh: ');
+      const pageInput = await question('\nEnter page number (1-24), 0 to switch session, r to refresh, or a for auto-fetch vehicles/simulators: ');
 
       if (pageInput === '0') {
         selectedSession = null;
@@ -438,6 +637,163 @@ async function main() {
         onlineUsers.length = 0;
         onlineUsers.push(...refreshedUsers);
         selectedSession = null;
+        continue;
+      }
+
+      if (pageInput.toLowerCase() === 'a') {
+        // Auto-fetch vehicles and simulators
+        console.log('\n⏳ Auto-fetching vehicles and simulators...\n');
+        
+        try {
+          // Fetch page 2 (skt01002.aspx) first to get form
+          const initialResponse = await fetchPage(selectedSession.cookie, '/SKT/skt01002.aspx');
+          
+          if (initialResponse.statusCode !== 200) {
+            console.log(`❌ Failed to fetch initial page. Status: ${initialResponse.statusCode}`);
+            await delay(2000);
+            continue;
+          }
+          
+          // Extract hidden inputs
+          const hiddenInputs = extractFormFields(initialResponse.body);
+          
+          // Helper function to parse tables
+          const parseTable = (html, tableId) => {
+            const tableRegex = new RegExp(`<table[^>]*id="${tableId}"[^>]*>([\\s\\S]*?)<\\/table>`, 'i');
+            const tableMatch = html.match(tableRegex);
+            
+            if (!tableMatch) return [];
+            
+            const tableHtml = tableMatch[1];
+            const rows = [];
+            
+            // Find header row (first tr with th tags)
+            const headerRowRegex = /<tr[^>]*>([\s\S]*?)<\/tr>/i;
+            const headerRowMatch = tableHtml.match(headerRowRegex);
+            let headers = [];
+            
+            if (headerRowMatch) {
+              const cellRegex = /<t[hd][^>]*>([\s\S]*?)<\/t[hd]>/gi;
+              let cellMatch;
+              
+              while ((cellMatch = cellRegex.exec(headerRowMatch[1])) !== null) {
+                let cellText = cellMatch[1]
+                  .replace(/<[^>]*>/g, '')
+                  .replace(/&nbsp;/g, ' ')
+                  .replace(/&#231;/g, 'ç')
+                  .replace(/&#252;/g, 'ü')
+                  .replace(/&#246;/g, 'ö')
+                  .replace(/&#220;/g, 'Ü')
+                  .replace(/&#199;/g, 'Ç')
+                  .replace(/&#214;/g, 'Ö')
+                  .replace(/&amp;/g, '&')
+                  .replace(/&quot;/g, '"')
+                  .replace(/&lt;/g, '<')
+                  .replace(/&gt;/g, '>')
+                  .trim();
+                
+                if (cellText) headers.push(cellText);
+              }
+            }
+            
+            // Find all data rows
+            const rowRegex = /<tr[^>]*>([\s\S]*?)<\/tr>/gi;
+            let rowMatch;
+            let firstRow = true;
+            
+            while ((rowMatch = rowRegex.exec(tableHtml)) !== null) {
+              if (firstRow) {
+                firstRow = false;
+                continue;
+              }
+              
+              const rowContent = rowMatch[1];
+              const cellRegex = /<t[hd][^>]*>([\s\S]*?)<\/t[hd]>/gi;
+              const cells = [];
+              let cellMatch;
+              
+              while ((cellMatch = cellRegex.exec(rowContent)) !== null) {
+                let cellText = cellMatch[1]
+                  .replace(/<[^>]*>/g, '')
+                  .replace(/&nbsp;/g, ' ')
+                  .replace(/&#231;/g, 'ç')
+                  .replace(/&#252;/g, 'ü')
+                  .replace(/&#246;/g, 'ö')
+                  .replace(/&#220;/g, 'Ü')
+                  .replace(/&#199;/g, 'Ç')
+                  .replace(/&#214;/g, 'Ö')
+                  .replace(/&amp;/g, '&')
+                  .replace(/&quot;/g, '"')
+                  .replace(/&lt;/g, '<')
+                  .replace(/&gt;/g, '>')
+                  .trim();
+                cells.push(cellText);
+              }
+              
+              if (cells.length > 0 && cells.some(c => c.length > 0)) {
+                const rowObj = {};
+                headers.forEach((header, idx) => {
+                  rowObj[header] = cells[idx] || '';
+                });
+                rows.push(rowObj);
+              }
+            }
+            
+            return rows;
+          };
+          
+          // Fetch vehicles (dropTurSecim = 1)
+          console.log('📡 Fetching VEHICLES (dropTurSecim=1)...');
+          const vehicleData = {
+            ...hiddenInputs,
+            '__EVENTTARGET': 'dropTurSecim',
+            '__EVENTARGUMENT': '',
+            'dropTurSecim': '1'
+          };
+          
+          const vehicleResponse = await postPage(selectedSession.cookie, '/SKT/skt01002.aspx', vehicleData);
+          
+          if (vehicleResponse.statusCode !== 200) {
+            console.log(`❌ Vehicle fetch failed. Status: ${vehicleResponse.statusCode}`);
+          } else {
+            const vehicles = parseTable(vehicleResponse.body, 'dgAracBilgileri');
+            console.log(`✓ Found ${vehicles.length} vehicles\n`);
+            
+            if (vehicles.length > 0) {
+              console.log('🚗 VEHICLES:');
+              console.log(JSON.stringify(vehicles, null, 2));
+            }
+          }
+          
+          // Fetch simulators (dropTurSecim = 2)
+          console.log('\n📡 Fetching SIMULATORS (dropTurSecim=2)...');
+          const simulatorData = {
+            ...hiddenInputs,
+            '__EVENTTARGET': 'dropTurSecim',
+            '__EVENTARGUMENT': '',
+            'dropTurSecim': '2'
+          };
+          
+          const simulatorResponse = await postPage(selectedSession.cookie, '/SKT/skt01002.aspx', simulatorData);
+          
+          if (simulatorResponse.statusCode !== 200) {
+            console.log(`❌ Simulator fetch failed. Status: ${simulatorResponse.statusCode}`);
+          } else {
+            const simulators = parseTable(simulatorResponse.body, 'dgSimulatorBilgileri');
+            console.log(`✓ Found ${simulators.length} simulators\n`);
+            
+            if (simulators.length > 0) {
+              console.log('🎮 SIMULATORS:');
+              console.log(JSON.stringify(simulators, null, 2));
+            }
+          }
+          
+          console.log('\n✅ Auto-fetch complete!');
+          await question('\nPress Enter to continue...');
+        } catch (error) {
+          console.log(`\n❌ Error during auto-fetch: ${error.message}`);
+          await question('\nPress Enter to continue...');
+        }
         continue;
       }
 
@@ -477,9 +833,33 @@ async function main() {
 
         console.log('='.repeat(80));
 
-        // Save response
+        // Define sessionName early for use in auto-fetch
         const pageName = selectedPage.url.split('/').pop();
         const sessionName = (selectedSession?.adi || 'unknown').replace(/[^a-zA-Z0-9]/g, '_');
+
+        // Auto-fetch vehicles and simulators if page 2 is selected
+        if (pageNum === 2 && selectedPage.url === '/SKT/skt01002.aspx') {
+          console.log('\n⏳ Auto-fetching vehicles and simulators from page 2...\n');
+          
+          try {
+            // Call the dedicated function from functions folder
+            const combinedData = await fetchVehiclesAndSimulators(
+              selectedSession,
+              response.body,
+              responsesDir
+            );
+            
+            // Skip dropdown selection since we already fetched all data
+            await question('\nPress Enter to continue...');
+            continue;
+          } catch (error) {
+            console.log(`\n❌ Error during auto-fetch: ${error.message}`);
+            await question('\nPress Enter to continue...');
+            continue;
+          }
+        }
+
+        // Save response
         let fileName = `${sessionName}_${pageName}.html`;
         let outputPath = path.join(responsesDir, fileName);
         fs.writeFileSync(outputPath, response.body);

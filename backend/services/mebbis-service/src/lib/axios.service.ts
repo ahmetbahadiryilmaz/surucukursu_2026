@@ -1,37 +1,43 @@
 import { Injectable } from '@nestjs/common';
 import axios, { AxiosInstance, AxiosResponse } from 'axios';
-import * as fs from 'fs';
-import * as path from 'path';
 import { randomUUID } from 'crypto';
 
 @Injectable()
 export class AxiosService {
   private baseUrl = 'https://mebbisyd.meb.gov.tr';
-  private cookiesPath: string | null = null;
+  private tbMebbisId: number | null = null;
+  private onCookieUpdate: ((cookies: string) => Promise<void>) | null = null;
+  private cookieData: string = '';
 
-  constructor(cookieName?: string) {
-    if (cookieName) {
-      this.cookiesPath = path.join(
-        __dirname,
-        '../../../storage/cookies/',
-        cookieName,
-      );
+  constructor(tbMebbisId?: number) {
+    if (tbMebbisId) {
+      this.tbMebbisId = tbMebbisId;
     }
   }
 
-  setCookieName(cookieName: string) {
-    this.cookiesPath = path.join(
-      __dirname,
-      '../../../storage/cookies/',
-      cookieName,
-    );
+  setTbMebbisId(tbMebbisId: number) {
+    this.tbMebbisId = tbMebbisId;
+  }
+
+  /**
+   * Set callback function to handle cookie updates (for database storage)
+   */
+  setOnCookieUpdate(callback: (cookies: string) => Promise<void>) {
+    this.onCookieUpdate = callback;
+  }
+
+  /**
+   * Set initial cookie data from database
+   */
+  setCookieData(cookies: string) {
+    this.cookieData = cookies;
   }
 
   createInstance(config: any = {}): AxiosInstance {
     const headers = config.headers || {};
     config.timeout = 120000;
-    if (this.cookiesPath) {
-      headers.Cookie = this.loadCookies();
+    if (this.cookieData) {
+      headers.Cookie = this.cookieData;
     }
 
     const instance = axios.create({
@@ -103,9 +109,16 @@ export class AxiosService {
       ...config,
     });
 
+    // Handle cookie updates from response
     const setCookies = response.headers['set-cookie'];
-    if (setCookies && this.cookiesPath) {
-      this.saveCookies(setCookies);
+    if (setCookies && setCookies.length > 0) {
+      const cookieString = setCookies.join('; ');
+      this.cookieData = cookieString;
+      
+      // Call callback to save to database
+      if (this.onCookieUpdate) {
+        await this.onCookieUpdate(cookieString);
+      }
     }
 
     return response;
@@ -125,40 +138,5 @@ export class AxiosService {
     config: any = {},
   ): Promise<AxiosResponse> {
     return this.request('delete', endpoint, data, config);
-  }
-
-  private saveCookies(cookies: string[]): Promise<void> {
-    return new Promise((resolve, reject) => {
-      if (this.cookiesPath) {
-        try {
-          const writableStream = fs.createWriteStream(this.cookiesPath!, {
-            encoding: 'utf8',
-          });
-          const cookieString = cookies.join('; ');
-
-          writableStream.write(cookieString);
-          writableStream.end();
-
-          writableStream.on('finish', () => {
-            resolve();
-          });
-
-          writableStream.on('error', (err) => {
-            reject(err);
-          });
-        } catch (error) {
-          reject(error);
-        }
-      } else {
-        reject(new Error('Cookie path not defined'));
-      }
-    });
-  }
-
-  private loadCookies(): string {
-    if (this.cookiesPath && fs.existsSync(this.cookiesPath)) {
-      return fs.readFileSync(this.cookiesPath, 'utf8');
-    }
-    return '';
   }
 }
