@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from "@/components/ui/table";
+import { Button } from "@/components/ui/button";
 import { apiService } from "@/services/api-service";
 import { drivingSchoolOwnerContext } from "@/components/contexts/DrivingSchoolManagerContext";
 /**
@@ -16,7 +17,9 @@ interface Arac {
 const AraclarTable = (): JSX.Element => {
   const [araclar, setAraclar] = useState<Arac[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
+  const [syncing, setSyncing] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
+  const [syncMessage, setSyncMessage] = useState<string | null>(null);
 
   const { activeDrivingSchool } = drivingSchoolOwnerContext();
 
@@ -77,6 +80,37 @@ const AraclarTable = (): JSX.Element => {
       setLoading(false);
     }
   }, []);
+
+  const handleSync = useCallback(async (): Promise<void> => {
+    if (!activeDrivingSchool?.id) {
+      setSyncMessage("Aktif sürücü kursu seçilmedi");
+      return;
+    }
+
+    try {
+      setSyncing(true);
+      setSyncMessage("Senkronize ediliyor...");
+      console.log("🔄 Syncing cars for school:", activeDrivingSchool.id);
+      
+      const response = await apiService.drivingSchool.syncCars(activeDrivingSchool.id.toString());
+      console.log("✅ Sync response:", response);
+      
+      setSyncMessage("Senkronize başarılı! Araçlar güncelleniyor...");
+      
+      // Refresh cars after sync
+      await fetchAraclar(activeDrivingSchool.id.toString());
+      
+      setSyncMessage("✅ Senkronize başarıyla tamamlandı!");
+      setTimeout(() => setSyncMessage(null), 3000);
+    } catch (err) {
+      console.error("❌ Error syncing cars:", err);
+      const errorMessage = err instanceof Error ? err.message : "Senkronize sırasında bir hata oluştu";
+      setSyncMessage(`❌ Hata: ${errorMessage}`);
+      setTimeout(() => setSyncMessage(null), 5000);
+    } finally {
+      setSyncing(false);
+    }
+  }, [activeDrivingSchool?.id, fetchAraclar]);
  
 
   useEffect(() => {
@@ -106,7 +140,23 @@ const AraclarTable = (): JSX.Element => {
   
   return (
     <div className="p-6 rounded-lg shadow-lg bg-white dark:bg-black">
-      <h2 className="text-2xl font-bold mb-4 text-gray-900 dark:text-gray-100">Araçlar</h2>
+      <div className="flex justify-between items-center mb-4">
+        <h2 className="text-2xl font-bold text-gray-900 dark:text-gray-100">Araçlar</h2>
+        <Button 
+          onClick={handleSync}
+          disabled={syncing}
+          className="bg-blue-600 hover:bg-blue-700 text-white"
+        >
+          {syncing ? "Senkronize ediliyor..." : "Senkronize Et"}
+        </Button>
+      </div>
+      
+      {/* Sync message */}
+      {syncMessage && (
+        <div className="mb-4 p-4 bg-blue-100 dark:bg-blue-900 border border-blue-400 rounded text-sm text-blue-800 dark:text-blue-200">
+          {syncMessage}
+        </div>
+      )}
       
       {/* Debug info */}
       <div className="mb-4 p-4 bg-gray-100 dark:bg-gray-800 rounded text-sm">
