@@ -11,10 +11,12 @@ import { LoginController } from './controllers/auth.controller';
 import { SyncController } from './controllers/sync.controller';
 import { TestController } from './controllers/test.controller';
 import { ResponseController } from './controllers/response.controller';
+import { VehiclesController } from './controllers/vehicles.controller';
 import { TbMebbis } from './entities/tb-mebbis.entity';
 import { MebbisCookie } from '@surucukursu/shared';
 import { MebbisGateway } from './mebbis.gateway';
 import { RequestLoggingMiddleware } from './utils/request-logging.middleware';
+import { VehiclesSimulatorsService } from './mebbis/vehicles-simulators.service';
 
 @Module({
   imports: [
@@ -37,6 +39,7 @@ import { RequestLoggingMiddleware } from './utils/request-logging.middleware';
     SyncController,
     TestController,
     ResponseController,
+    VehiclesController,
   ],
   providers: [
     AppService,
@@ -45,6 +48,7 @@ import { RequestLoggingMiddleware } from './utils/request-logging.middleware';
     ResponseService,
     TestService,
     MebbisGateway,
+    VehiclesSimulatorsService,
   ],
 })
 export class AppModule implements NestModule {
@@ -52,3 +56,4 @@ export class AppModule implements NestModule {
     consumer.apply(RequestLoggingMiddleware).forRoutes('*');
   }
 }
+

@@ -2,6 +2,17 @@ import { Injectable, HttpException, HttpStatus, Logger } from '@nestjs/common';
 import { HttpService } from '@nestjs/axios';
 import { firstValueFrom } from 'rxjs';
 
+export interface VehiclesAndSimulatorsResponse {
+  session: {
+    id: string;
+    name: string;
+    userId: string;
+  };
+  vehicles: Array<Record<string, string>>;
+  simulators: Array<Record<string, string>>;
+  fetchedAt: string;
+}
+
 @Injectable()
 export class MebbisClientService {
   private readonly logger = new Logger(MebbisClientService.name);
@@ -80,6 +91,63 @@ export class MebbisClientService {
       throw new HttpException(
         'Error validating credentials with MEBBIS service',
         HttpStatus.INTERNAL_SERVER_ERROR
+      );
+    }
+  }
+
+  /**
+   * Fetch vehicles and simulators from MEBBIS
+   * @param cookieString Session cookie from MEBBIS
+   * @param initialPageBody Initial page HTML response
+   * @param session Session information
+   * @returns Vehicles and simulators data
+   */
+  async fetchVehiclesAndSimulators(
+    cookieString: string,
+    initialPageBody: string,
+    session: { tbmebbis_id: string; adi: string; tbmebbisadi: string }
+  ): Promise<VehiclesAndSimulatorsResponse> {
+    try {
+      const url = `${this.mebbisServiceUrl}/api/mebbis/vehicles/fetch`;
+      this.logger.log(`[START] Fetching vehicles and simulators from MEBBIS service: ${url}`);
+
+      const response = await firstValueFrom(
+        this.httpService.post(
+          url,
+          {
+            cookieString,
+            initialPageBody,
+            session,
+          },
+          {
+            timeout: 60000, // 60 second timeout for this operation
+          }
+        )
+      );
+
+      this.logger.log(`[SUCCESS] Vehicles and simulators fetched successfully`);
+      this.logger.debug(`Vehicles: ${response.data.vehicles.length}, Simulators: ${response.data.simulators.length}`);
+
+      return response.data as VehiclesAndSimulatorsResponse;
+    } catch (error) {
+      this.logger.error(
+        `[ERROR] Error fetching vehicles and simulators`,
+        error?.message
+      );
+      this.logger.error(`Error details:`, error);
+
+      // Handle network errors
+      if (error.code === 'ECONNREFUSED' || error.code === 'ECONNRESET' || error.code === 'ETIMEDOUT') {
+        this.logger.error(`MEBBIS service at ${this.mebbisServiceUrl} is not reachable (${error.code})`);
+        throw new HttpException(
+          'MEBBIS service is temporarily unavailable',
+          HttpStatus.SERVICE_UNAVAILABLE
+        );
+      }
+
+      throw new HttpException(
+        error.response?.data?.message || 'Error fetching vehicles and simulators from MEBBIS service',
+        error.response?.status || HttpStatus.INTERNAL_SERVER_ERROR
       );
     }
   }
