@@ -243,8 +243,10 @@ class ApiService {
     },
 
     // Araçları MEBBIS'ten senkronize et
-    syncCars: async (code: string): Promise<any> => {
-      const response = await this.axiosService.post(`/driving-school/${code}/cars/sync`);
+    syncCars: async (code: string, options?: { ajandasKodu?: string }): Promise<any> => {
+      const response = await this.axiosService.post(`/driving-school/${code}/cars/sync`, {
+        ajandasKodu: options?.ajandasKodu,
+      });
       return response.data;
     },
 
@@ -257,6 +259,15 @@ class ApiService {
     // Kimlik bilgilerini güncelle
     updateCredentials: async (code: string, data: any): Promise<any> => {
       const response = await this.axiosService.post(`/driving-school/${code}/creds`, data);
+      return response.data;
+    },
+
+    // MEBBIS kimlik bilgilerini güncelle
+    updateMebbisCredentials: async (code: string, username: string, password: string): Promise<any> => {
+      const response = await this.axiosService.post(`/driving-school/${code}/creds`, {
+        mebbis_username: username,
+        mebbis_password: password,
+      });
       return response.data;
     },
 

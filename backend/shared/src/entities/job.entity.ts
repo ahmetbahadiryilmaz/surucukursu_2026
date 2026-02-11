@@ -1,14 +1,14 @@
 import { Entity, Column, ManyToOne, JoinColumn } from 'typeorm';
 import { BaseEntity } from './base.entity';
 import { DrivingSchoolEntity } from './driving-school.entity';
-import { JobStatus, JobType, SimulationType } from '../types/job.types';
+import { JobStatus, JobType, SimulationType, SyncCarsStage } from '../types/job.types';
 
 @Entity('jobs')
 export class JobEntity extends BaseEntity {
   @Column({
     type: 'enum',
     enum: JobType,
-    default: null
+    default: JobType.SINGLE_SIMULATION
   })
   type: JobType;
 
@@ -18,6 +18,13 @@ export class JobEntity extends BaseEntity {
     nullable: true
   })
   simulation_type?: SimulationType;
+
+  @Column({
+    type: 'enum',
+    enum: SyncCarsStage,
+    nullable: true
+  })
+  sync_stage?: SyncCarsStage;
 
   @Column({
     type: 'enum',

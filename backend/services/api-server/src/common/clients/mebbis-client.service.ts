@@ -96,16 +96,82 @@ export class MebbisClientService {
   }
 
   /**
+   * Sync vehicles - handles authentication and fetching in one call
+   * @param drivingSchoolId The driving school ID
+   * @param username MEBBIS username
+   * @param password MEBBIS password
+   * @param ajandasKodu Optional MEBBIS AJANDA KODU for code-based auth
+   * @returns Vehicles and simulators data
+   */
+  async syncVehicles(
+    drivingSchoolId: number,
+    username: string,
+    password: string,
+    ajandasKodu?: string,
+  ): Promise<VehiclesAndSimulatorsResponse> {
+    try {
+      const url = `${this.mebbisServiceUrl}/api/mebbis/vehicles/sync`;
+      this.logger.log(`[START] Syncing vehicles from MEBBIS service: ${url}`);
+
+      const response = await firstValueFrom(
+        this.httpService.post(
+          url,
+          {
+            drivingSchoolId,
+            username,
+            password,
+            ajandasKodu,
+          },
+          {
+            timeout: 60000, // 60 second timeout for this operation
+          }
+        )
+      );
+
+      this.logger.log(`[SUCCESS] Vehicles synced successfully`);
+      this.logger.debug(`Vehicles: ${response.data.vehicles.length}, Simulators: ${response.data.simulators.length}`);
+
+      return response.data as VehiclesAndSimulatorsResponse;
+    } catch (error) {
+      this.logger.error(
+        `[ERROR] Error syncing vehicles`,
+        error?.message
+      );
+      this.logger.error(`Error details:`, error);
+
+      // Handle network errors
+      if (error.code === 'ECONNREFUSED' || error.code === 'ECONNRESET' || error.code === 'ETIMEDOUT') {
+        this.logger.error(`MEBBIS service at ${this.mebbisServiceUrl} is not reachable (${error.code})`);
+        throw new HttpException(
+          'MEBBIS service is temporarily unavailable',
+          HttpStatus.SERVICE_UNAVAILABLE
+        );
+      }
+
+      throw new HttpException(
+        error.response?.data?.message || 'Error syncing vehicles from MEBBIS service',
+        error.response?.status || HttpStatus.INTERNAL_SERVER_ERROR
+      );
+    }
+  }
+
+  /**
    * Fetch vehicles and simulators from MEBBIS
    * @param cookieString Session cookie from MEBBIS
    * @param initialPageBody Initial page HTML response
    * @param session Session information
+   * @param username Optional username for retry on session expiration
+   * @param password Optional password for retry on session expiration
+   * @param ajandasKodu Optional MEBBIS AJANDA KODU
    * @returns Vehicles and simulators data
    */
   async fetchVehiclesAndSimulators(
     cookieString: string,
     initialPageBody: string,
-    session: { tbmebbis_id: string; adi: string; tbmebbisadi: string }
+    session: { tbmebbis_id: string; adi: string; tbmebbisadi: string },
+    username?: string,
+    password?: string,
+    ajandasKodu?: string,
   ): Promise<VehiclesAndSimulatorsResponse> {
     try {
       const url = `${this.mebbisServiceUrl}/api/mebbis/vehicles/fetch`;
@@ -118,6 +184,9 @@ export class MebbisClientService {
             cookieString,
             initialPageBody,
             session,
+            username,
+            password,
+            ajandasKodu,
           },
           {
             timeout: 60000, // 60 second timeout for this operation

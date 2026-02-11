@@ -103,9 +103,12 @@ export class DrivingSchoolService {
             throw new NotFoundException(`Driving school with code ${code} not found`);
         }
 
+        // Decrypt stored username for comparison
+        const decryptedStoredUsername = school.mebbis_username ? TextEncryptor.mebbisUsernameDecrypt(school.mebbis_username) : null;
+
         // Check if credentials are locked and username is being changed
-        if (school.mebbis_credentials_locked && dto.mebbis_username) {
-            this.logToFile(`[updateCreds] Credentials are locked for school: ${code}`);
+        if (school.mebbis_credentials_locked && dto.mebbis_username && dto.mebbis_username !== decryptedStoredUsername) {
+            this.logToFile(`[updateCreds] Credentials are locked for school: ${code}, attempted to change username from ${decryptedStoredUsername} to ${dto.mebbis_username}`);
             throw new BadRequestException(`MEBBIS credentials are locked. Username cannot be changed.`);
         }
 
@@ -127,9 +130,7 @@ export class DrivingSchoolService {
           if (!validationResult.success) {
               this.logToFile(`[updateCreds] [FAILED] Credentials validation failed for school: ${code}, message: ${validationResult.message}`);
               this.logger.warn(`[FAILED] MEBBIS credential validation failed for school: ${code}, message: ${validationResult.message}`);
-              throw new BadRequestException(
-                  `Invalid MEBBIS credentials: ${validationResult.message}`
-              );
+              throw new BadRequestException(validationResult.message);
           }
 
           this.logToFile(`[updateCreds] [SUCCESS] MEBBIS credentials validated successfully for school: ${code}`);

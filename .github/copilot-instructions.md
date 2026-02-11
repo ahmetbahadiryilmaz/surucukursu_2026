@@ -4,7 +4,8 @@
 The `ai-docs` directory contains markdown files that document various services and components of the Sürücü Kursu project. Each file provides detailed information about specific services, including database integration, WebSocket gateways, and page references.and for new ai documentation files should put in this directory.
 
 
-
+## mebbis
+all third party request should be implemented to mebbis-service and used from mebbis service. 
 ## User Types & Authentication
 
 ### User Type System

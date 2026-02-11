@@ -1,6 +1,7 @@
 import { Injectable, Logger, BadRequestException } from '@nestjs/common';
 import * as https from 'https';
 import * as querystring from 'querystring';
+import { validateMebbisResponse, MebbisSessionExpiredError, checkMebbisInvalidCredentials } from '../utils/mebbis-response.handler';
 
 interface Vehicle {
   Plaka: string;
@@ -74,7 +75,7 @@ export class VehiclesSimulatorsService {
     cookieString: string,
     pagePath: string,
     formData: Record<string, string>,
-  ): Promise<{ statusCode: number; body: string }> {
+  ): Promise<{ statusCode: number; body: string; headers: Record<string, any> }> {
     return new Promise((resolve, reject) => {
       const postData = querystring.stringify(formData);
 
@@ -102,6 +103,7 @@ export class VehiclesSimulatorsService {
           resolve({
             statusCode: res.statusCode || 500,
             body: data,
+            headers: res.headers as Record<string, any>,
           });
         });
       });
@@ -216,15 +218,31 @@ export class VehiclesSimulatorsService {
    * @param cookieString Session cookie from MEBBIS
    * @param initialPageBody Initial page HTML response
    * @param session Session data
+   * @param username Optional username for retry on session expiration
+   * @param password Optional password for retry on session expiration
+   * @param ajandasKodu Optional MEBBIS AJANDA KODU for code-based auth
    * @returns Combined vehicles and simulators data
    */
   async fetchVehiclesAndSimulators(
     cookieString: string,
     initialPageBody: string,
     session: { tbmebbis_id: string; adi: string; tbmebbisadi: string },
+    username?: string,
+    password?: string,
+    ajandasKodu?: string,
   ): Promise<VehiclesAndSimulatorsResponse> {
     try {
       this.logger.log('🚀 Starting to fetch vehicles and simulators from MEBBIS');
+
+      // Validate credentials first by checking if initial page contains login form or error
+      // This detects if credentials were invalid before we proceed
+      try {
+        checkMebbisInvalidCredentials(200, initialPageBody);
+        this.logger.log('✓ Credentials validated');
+      } catch (credentialError) {
+        this.logger.error('❌ Invalid credentials detected');
+        throw credentialError;
+      }
 
       // Extract hidden inputs from initial response
       const hiddenInputs = this.extractFormFields(initialPageBody);
@@ -246,17 +264,45 @@ export class VehiclesSimulatorsService {
       );
 
       let vehicles: Vehicle[] = [];
-      if (vehicleResponse.statusCode === 200) {
-        const tableData = this.parseTable(
+      try {
+        validateMebbisResponse(
+          vehicleResponse.statusCode,
           vehicleResponse.body,
-          'dgAracBilgileri',
+          vehicleResponse.headers
         );
-        vehicles = tableData as Vehicle[];
-        this.logger.log(`✓ Found ${vehicles.length} vehicles`);
-      } else {
-        this.logger.warn(
-          `❌ Vehicle fetch failed. Status: ${vehicleResponse.statusCode}`,
-        );
+        
+        if (vehicleResponse.statusCode === 200) {
+          const tableData = this.parseTable(
+            vehicleResponse.body,
+            'dgAracBilgileri',
+          );
+          vehicles = tableData as Vehicle[];
+          this.logger.log(`✓ Found ${vehicles.length} vehicles`);
+        }
+      } catch (error) {
+        // If session expired and we have credentials, retry
+        if (error instanceof MebbisSessionExpiredError && username && password) {
+          this.logger.log('🔄 Session expired, attempting to re-authenticate and retry...');
+          return await this.retryWithNewSession(
+            username,
+            password,
+            session,
+            ajandasKodu
+          );
+        }
+
+        // If session expired but no credentials, ask for code
+        if (error instanceof MebbisSessionExpiredError && !username && !password) {
+          this.logger.log('⚠️ Session expired and no credentials provided. User must enter AJANDA KODU.');
+          const err = new BadRequestException(
+            'MEBBIS oturumunuz süresi dolmuş. MEBBIS AJANDA KODUNU giriniz.'
+          );
+          (err as any).requiresAjandasKodu = true;
+          throw err;
+        }
+
+        this.logger.error(`❌ Vehicle fetch validation failed:`, error);
+        throw error;
       }
 
       // Fetch simulators (dropTurSecim = 2)
@@ -275,17 +321,45 @@ export class VehiclesSimulatorsService {
       );
 
       let simulators: Simulator[] = [];
-      if (simulatorResponse.statusCode === 200) {
-        const tableData = this.parseTable(
+      try {
+        validateMebbisResponse(
+          simulatorResponse.statusCode,
           simulatorResponse.body,
-          'dgSimulatorBilgileri',
+          simulatorResponse.headers
         );
-        simulators = tableData as Simulator[];
-        this.logger.log(`✓ Found ${simulators.length} simulators`);
-      } else {
-        this.logger.warn(
-          `❌ Simulator fetch failed. Status: ${simulatorResponse.statusCode}`,
-        );
+        
+        if (simulatorResponse.statusCode === 200) {
+          const tableData = this.parseTable(
+            simulatorResponse.body,
+            'dgSimulatorBilgileri',
+          );
+          simulators = tableData as Simulator[];
+          this.logger.log(`✓ Found ${simulators.length} simulators`);
+        }
+      } catch (error) {
+        // If session expired and we have credentials, retry
+        if (error instanceof MebbisSessionExpiredError && username && password) {
+          this.logger.log('🔄 Session expired during simulator fetch, attempting to re-authenticate and retry...');
+          return await this.retryWithNewSession(
+            username,
+            password,
+            session,
+            ajandasKodu
+          );
+        }
+
+        // If session expired but no credentials, ask for code
+        if (error instanceof MebbisSessionExpiredError && !username && !password) {
+          this.logger.log('⚠️ Session expired and no credentials provided. User must enter AJANDA KODU.');
+          const err = new BadRequestException(
+            'MEBBIS oturumunuz süresi dolmuş. MEBBIS AJANDA KODUNU giriniz.'
+          );
+          (err as any).requiresAjandasKodu = true;
+          throw err;
+        }
+
+        this.logger.error(`❌ Simulator fetch validation failed:`, error);
+        throw error;
       }
 
       // Create combined response
@@ -311,9 +385,42 @@ export class VehiclesSimulatorsService {
       this.logger.error(
         `❌ Error fetching vehicles and simulators: ${errorMessage}`,
       );
-      throw new BadRequestException(
-        `Failed to fetch vehicles and simulators: ${errorMessage}`,
-      );
+      throw error instanceof BadRequestException 
+        ? error 
+        : new BadRequestException(
+          `Failed to fetch vehicles and simulators: ${errorMessage}`,
+        );
     }
+  }
+
+  /**
+   * Retry fetching vehicles and simulators with a new session (after re-login)
+   */
+  private async retryWithNewSession(
+    username: string,
+    password: string,
+    session: { tbmebbis_id: string; adi: string; tbmebbisadi: string },
+    ajandasKodu?: string,
+  ): Promise<VehiclesAndSimulatorsResponse> {
+    this.logger.log(`🔑 Re-authenticating with username: ${username}`);
+    
+    // Note: Actual re-login logic would be implemented here
+    // For now, we'll indicate that code is needed
+    if (!ajandasKodu) {
+      this.logger.warn('⚠️ Re-authentication requires MEBBIS AJANDA KODU');
+      const err = new BadRequestException(
+        'MEBBIS AJANDA KODUNU giriniz.'
+      );
+      (err as any).requiresAjandasKodu = true;
+      throw err;
+    }
+
+    this.logger.log(`✅ Using provided AJANDA KODU for re-authentication`);
+    
+    // After entering code, would retry the fetch
+    // This is a placeholder for the code submission flow
+    throw new BadRequestException(
+      'Lütfen AJANDA KODUNU giriş sayfasında kullanarak tekrar deneyin.'
+    );
   }
 }

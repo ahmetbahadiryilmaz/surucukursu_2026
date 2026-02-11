@@ -3,6 +3,9 @@ import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from "@
 import { Button } from "@/components/ui/button";
 import { apiService } from "@/services/api-service";
 import { drivingSchoolOwnerContext } from "@/components/contexts/DrivingSchoolManagerContext";
+import { MebbisCodeModal } from "@/components/Modals/MebbisCodeModal";
+import { MebbisCredentialsModal } from "@/components/MebbisCredentialsModal";
+
 /**
  * Araç bilgisi arayüzü
  */
@@ -20,8 +23,16 @@ const AraclarTable = (): JSX.Element => {
   const [syncing, setSyncing] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   const [syncMessage, setSyncMessage] = useState<string | null>(null);
+  const [showCodeModal, setShowCodeModal] = useState<boolean>(false);
+  const [showCredentialsModal, setShowCredentialsModal] = useState<boolean>(false);
+  const [credentialsError, setCredentialsError] = useState<string>("");
 
   const { activeDrivingSchool } = drivingSchoolOwnerContext();
+
+  // Debug: log modal state changes
+  useEffect(() => {
+    console.log("📋 Modal state changed - showCodeModal:", showCodeModal);
+  }, [showCodeModal]);
 
   const fetchAraclar = useCallback(async (schoolId: string): Promise<void> => {
     console.log("🔍 fetchAraclar called with schoolId:", schoolId);
@@ -104,14 +115,135 @@ const AraclarTable = (): JSX.Element => {
       setTimeout(() => setSyncMessage(null), 3000);
     } catch (err) {
       console.error("❌ Error syncing cars:", err);
-      const errorMessage = err instanceof Error ? err.message : "Senkronize sırasında bir hata oluştu";
-      setSyncMessage(`❌ Hata: ${errorMessage}`);
-      setTimeout(() => setSyncMessage(null), 5000);
+      console.error("Error type:", typeof err);
+      console.error("Error keys:", Object.keys(err || {}));
+      
+      let errorMessage = "Senkronize sırasında bir hata oluştu";
+      
+      // Try different ways to extract error message
+      // For AxiosError, check response data first (server message)
+      if ((err as any)?.response?.data?.message) {
+        errorMessage = (err as any).response.data.message;
+      } else if (err instanceof Error) {
+        errorMessage = err.message;
+      } else if (typeof err === 'string') {
+        errorMessage = err;
+      } else if (typeof err === 'object' && err !== null) {
+        // Check various properties where error message might be
+        errorMessage = (err as any).message || (err as any).data?.message || JSON.stringify(err);
+      }
+      
+      console.log("Final error message:", errorMessage);
+      
+      // Check if error message indicates AJANDA KODU is needed (check this FIRST)
+      if (errorMessage && (
+        errorMessage.toLowerCase().includes('ajanda kodu') ||
+        errorMessage.toLowerCase().includes('ajanda') ||
+        errorMessage.toLowerCase().includes('2fa') ||
+        errorMessage.toLowerCase().includes('doğrulama kodu')
+      )) {
+        console.log("🎯 AJANDA KODU needed - showing modal");
+        setSyncMessage(null);
+        setShowCodeModal(true);
+      }
+      // Check if error indicates invalid credentials
+      else if (
+        errorMessage && 
+        (errorMessage.toLowerCase().includes('kullanıcı adı') ||
+         errorMessage.toLowerCase().includes('şifre') ||
+         errorMessage.toLowerCase().includes('kimlik') ||
+         errorMessage.toLowerCase().includes('hatalı') ||
+         errorMessage.toLowerCase().includes('başarısız'))
+      ) {
+        console.log("🔑 Invalid credentials - showing credentials modal");
+        setSyncMessage(null);
+        setCredentialsError(errorMessage);
+        setShowCredentialsModal(true);
+      } else {
+        setSyncMessage(`❌ Hata: ${errorMessage}`);
+        setTimeout(() => setSyncMessage(null), 10000);
+      }
     } finally {
       setSyncing(false);
     }
   }, [activeDrivingSchool?.id, fetchAraclar]);
- 
+
+  const handleCredentialsSaved = async (username: string, password: string): Promise<void> => {
+    console.log("💾 Credentials saved, updating school...");
+    
+    try {
+      // Update the school credentials via API
+      await apiService.drivingSchool.updateMebbisCredentials(
+        activeDrivingSchool?.id.toString() || "",
+        username,
+        password
+      );
+
+      console.log("✅ Credentials updated successfully");
+      setShowCredentialsModal(false);
+      setCredentialsError("");
+
+      // Retry sync with updated credentials
+      console.log("🔄 Retrying sync with updated credentials...");
+      setSyncMessage("Güncellenmiş kimlik bilgileri ile senkronize ediliyor...");
+      await handleSync();
+    } catch (error) {
+      console.error("❌ Error updating credentials:", error);
+      
+      // Extract the proper error message from AxiosError
+      let errorMessage = "Kimlik doğrulama başarısız oldu";
+      
+      if ((error as any)?.response?.data?.message) {
+        errorMessage = (error as any).response.data.message;
+      } else if (error instanceof Error) {
+        errorMessage = error.message;
+      }
+      
+      console.log("Final error message:", errorMessage);
+      
+      // Re-throw with the proper error message
+      throw new Error(errorMessage);
+    }
+  };
+
+  const handleCodeSubmitted = async (code: string): Promise<void> => {
+    console.log("📝 Code submitted, retrying sync...");
+    
+    try {
+      setShowCodeModal(false);
+      setSyncMessage("AJANDA KODU ile senkronize ediliyor...");
+      
+      // Retry sync with AJANDA KODU
+      if (!activeDrivingSchool?.id) {
+        setSyncMessage("Aktif sürücü kursu seçilmedi");
+        return;
+      }
+
+      const response = await apiService.drivingSchool.syncCars(
+        activeDrivingSchool.id.toString(),
+        { ajandasKodu: code }
+      );
+      
+      console.log("✅ Sync with code response:", response);
+      setSyncMessage("✅ Senkronize başarıyla tamamlandı!");
+      
+      // Refresh cars
+      await fetchAraclar(activeDrivingSchool.id.toString());
+      setTimeout(() => setSyncMessage(null), 3000);
+    } catch (error) {
+      console.error("❌ Error during code sync:", error);
+      let errorMessage = "Senkronize sırasında bir hata oluştu";
+      
+      if ((error as any)?.response?.data?.message) {
+        errorMessage = (error as any).response.data.message;
+      } else if (error instanceof Error) {
+        errorMessage = error.message;
+      }
+      
+      setSyncMessage(`❌ Hata: ${errorMessage}`);
+      setTimeout(() => setSyncMessage(null), 10000);
+    }
+  };
 
   useEffect(() => {
     console.log("🏫 Active driving school changed:", activeDrivingSchool);
@@ -192,6 +324,29 @@ const AraclarTable = (): JSX.Element => {
           )}
         </TableBody>
       </Table>
+
+      {/* MEBBIS Credentials Modal */}
+      <MebbisCredentialsModal
+        isOpen={showCredentialsModal}
+        onClose={() => {
+          setShowCredentialsModal(false);
+          setCredentialsError("");
+        }}
+        errorMessage={credentialsError}
+        onSubmit={handleCredentialsSaved}
+      />
+
+      {/* MEBBIS Code Modal */}
+      <MebbisCodeModal
+        isOpen={showCodeModal}
+        onClose={() => setShowCodeModal(false)}
+        schoolCode={activeDrivingSchool?.id.toString() || ''}
+        onSuccess={handleCodeSubmitted}
+        onError={(error) => {
+          setSyncMessage(`❌ Hata: ${error}`);
+          setTimeout(() => setSyncMessage(null), 5000);
+        }}
+      />
     </div>
   );
 };

@@ -87,11 +87,28 @@ export class AuthService {
     const trylogin = await prelogin.tryLogin(username, password);
 
     if (trylogin.success) {
-      return { message: 'login success' };
+      // Login successful - redirected to main page
+      // Now we need to check if AJANDA KODU is required
+      return { 
+        message: 'login success',
+        needsCode: true, // Session established, may need AJANDA KODU for further actions
+      };
     }
+    
+    // Check if the error message indicates wrong credentials
+    const errorMessage = trylogin.data?.toString() || '';
+    const isWrongCredentials = 
+      errorMessage.toLowerCase().includes('kullanıcı') ||
+      errorMessage.toLowerCase().includes('şifre') ||
+      errorMessage.toLowerCase().includes('hatalı') ||
+      errorMessage.toLowerCase().includes('yanlış');
+    
     return {
       data: {},
-      error: { message: trylogin.data },
+      error: { 
+        message: errorMessage || 'Kullanıcı Adı veya Şifre yanlış',
+        isWrongCredentials: isWrongCredentials,
+      },
       message: 'login failed',
     };
   }
