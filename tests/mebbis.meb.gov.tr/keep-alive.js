@@ -4,9 +4,10 @@
  * Automatically keeps ALL online MEBBIS sessions alive.
  * - Scans database for sessions with valid cookies
  * - Validates which sessions are online
- * - Keeps all online sessions alive by sending requests every 2 minutes
+ * - Keeps all online sessions alive by sending requests every 4 minutes (staggered)
  * - Re-scans database every 5 minutes to discover new logins
  * - Removes sessions that expire (e.g. logged in from another computer)
+ * - Automatic retry with exponential backoff on connection errors
  * - No user interaction needed — fully automatic
  */
 
@@ -14,9 +15,10 @@ const mysql = require('mysql2/promise');
 const https = require('https');
 
 // ─── CONFIG ──────────────────────────────────────────────────
-const KEEP_ALIVE_INTERVAL = 2 * 60 * 1000;   // 2 min — ping each session
+const KEEP_ALIVE_INTERVAL = 4 * 60 * 1000;   // 4 min — refresh interval per session
 const DB_RESCAN_INTERVAL  = 5 * 60 * 1000;   // 5 min — check DB for new logins
 const MAX_CONSECUTIVE_FAILURES = 3;           // remove session after 3 consecutive failures
+const RETRY_DELAYS = [2000, 5000, 10000];    // retry delays in ms: 2s, 5s, 10s
 // ─────────────────────────────────────────────────────────────
 
 // Pages to cycle through for keep-alive requests
@@ -48,43 +50,16 @@ const menuLinks = [
 ];
 
 // ─── STATE ───────────────────────────────────────────────────
-// Map<tbmebbis_id, { user, pageIndex, failureCount }>
+// Map<tbmebbis_id, { user, pageIndex, failureCount, timer }>
 const activeSessions = new Map();
 // ─────────────────────────────────────────────────────────────
 
-function loadEnvFile() {
-  const path = require('path');
-  const fs = require('fs');
-  const envPath = path.join(__dirname, '..', '..', 'backend', '.env');
-
-  if (!fs.existsSync(envPath)) {
-    console.error('Backend .env file not found at:', envPath);
-    process.exit(1);
-  }
-
-  const envContent = fs.readFileSync(envPath, 'utf-8');
-  const envVars = {};
-
-  envContent.split('\n').forEach(line => {
-    const trimmedLine = line.trim();
-    if (trimmedLine && !trimmedLine.startsWith('#')) {
-      const [key, ...valueParts] = trimmedLine.split('=');
-      if (key && valueParts.length > 0) {
-        envVars[key.trim()] = valueParts.join('=').trim();
-      }
-    }
-  });
-
-  return envVars;
-}
-
 function getDbConfig() {
-  const env = loadEnvFile();
   return {
-    host: env.DB_HOST,
-    port: parseInt(env.DB_PORT) || 3306,
-    user: env.DB_USERNAME,
-    password: env.DB_PASSWORD,
+    host: 'localhost',
+    port: 3306,
+    user: 'mtsk_rapor',
+    password: 'ua_mV2922',
     database: 'mtsk_rapor',
     connectTimeout: 10000,
     timezone: '+03:00'
@@ -205,9 +180,32 @@ async function validateSession(user) {
   }
 }
 
+// ─── UPDATE LAST ACTIVITY ───────────────────────────────────
+
+async function updateLastActivity(tbmebbisId) {
+  const dbConfig = getDbConfig();
+  let connection;
+
+  try {
+    connection = await mysql.createConnection(dbConfig);
+    
+    // 10-digit Unix timestamp (seconds, not milliseconds)
+    const timestamp = Math.floor(Date.now() / 1000);
+    
+    await connection.query(
+      'UPDATE tb_mebbis SET lastActivity = ? WHERE id = ?',
+      [timestamp, tbmebbisId]
+    );
+  } catch (error) {
+    log(`  Warning: Failed to update lastActivity for ${tbmebbisId}: ${error.message}`);
+  } finally {
+    if (connection) await connection.end();
+  }
+}
+
 // ─── KEEP-ALIVE PING ────────────────────────────────────────
 
-async function pingSession(sessionId) {
+async function pingSessionWithRetry(sessionId, retryCount = 0) {
   const entry = activeSessions.get(sessionId);
   if (!entry) return;
 
@@ -224,41 +222,90 @@ async function pingSession(sessionId) {
     if (headerInfo.found && response.statusCode === 200) {
       entry.failureCount = 0;
       log(`  OK ${name} — ${page.url}`);
+      // Update last activity in database
+      await updateLastActivity(sessionId);
+      // Reschedule for next ping
+      scheduleSessionPing(sessionId);
     } else {
       entry.failureCount++;
       log(`  FAIL ${name} — ${page.url} (${entry.failureCount}/${MAX_CONSECUTIVE_FAILURES})`);
 
       if (entry.failureCount >= MAX_CONSECUTIVE_FAILURES) {
+        clearTimer(sessionId);
         activeSessions.delete(sessionId);
         log(`  REMOVED ${name} — session expired or logged in elsewhere`);
+      } else {
+        // Reschedule with stagger
+        scheduleSessionPing(sessionId);
       }
     }
   } catch (error) {
-    entry.failureCount++;
-    log(`  FAIL ${name} — ${error.message} (${entry.failureCount}/${MAX_CONSECUTIVE_FAILURES})`);
+    const isConnectionError = error.code === 'ECONNRESET' || 
+                             error.code === 'ECONNREFUSED' || 
+                             error.code === 'ETIMEDOUT' ||
+                             error.message.includes('read ECONNRESET');
 
-    if (entry.failureCount >= MAX_CONSECUTIVE_FAILURES) {
-      activeSessions.delete(sessionId);
-      log(`  REMOVED ${name} — too many errors`);
+    if (isConnectionError && retryCount < RETRY_DELAYS.length) {
+      // Retry on connection errors with exponential backoff
+      const delay = RETRY_DELAYS[retryCount];
+      log(`  RETRY ${name} — ${error.code} (attempt ${retryCount + 1}/${RETRY_DELAYS.length}) in ${delay}ms`);
+      
+      setTimeout(() => {
+        pingSessionWithRetry(sessionId, retryCount + 1);
+      }, delay);
+    } else if (retryCount >= RETRY_DELAYS.length) {
+      // Max retries exceeded
+      entry.failureCount++;
+      log(`  FAIL ${name} — ${error.message || error.code} (${entry.failureCount}/${MAX_CONSECUTIVE_FAILURES}) [max retries exceeded]`);
+
+      if (entry.failureCount >= MAX_CONSECUTIVE_FAILURES) {
+        clearTimer(sessionId);
+        activeSessions.delete(sessionId);
+        log(`  REMOVED ${name} — too many errors`);
+      } else {
+        // Reschedule with stagger
+        scheduleSessionPing(sessionId);
+      }
+    } else {
+      // Non-connection error
+      entry.failureCount++;
+      log(`  FAIL ${name} — ${error.message || error.code} (${entry.failureCount}/${MAX_CONSECUTIVE_FAILURES})`);
+
+      if (entry.failureCount >= MAX_CONSECUTIVE_FAILURES) {
+        clearTimer(sessionId);
+        activeSessions.delete(sessionId);
+        log(`  REMOVED ${name} — too many errors`);
+      } else {
+        // Reschedule with stagger
+        scheduleSessionPing(sessionId);
+      }
     }
   }
 }
 
-// Ping all active sessions sequentially
-async function pingAllSessions() {
-  if (activeSessions.size === 0) {
-    log('No active sessions to keep alive');
-    return;
+// Schedule a session ping with random offset to spread requests
+function scheduleSessionPing(sessionId) {
+  const entry = activeSessions.get(sessionId);
+  if (!entry) return;
+
+  // Clear existing timer if any
+  if (entry.timer) clearTimeout(entry.timer);
+
+  // Random offset between 0 and 4 minutes to spread requests throughout the window
+  const randomOffset = Math.random() * KEEP_ALIVE_INTERVAL;
+
+  entry.timer = setTimeout(() => {
+    pingSessionWithRetry(sessionId, 0);
+  }, randomOffset);
+}
+
+// Clear timer for a session
+function clearTimer(sessionId) {
+  const entry = activeSessions.get(sessionId);
+  if (entry && entry.timer) {
+    clearTimeout(entry.timer);
+    entry.timer = null;
   }
-
-  log(`Pinging ${activeSessions.size} session(s)...`);
-
-  for (const sessionId of activeSessions.keys()) {
-    await pingSession(sessionId);
-    await delay(500);
-  }
-
-  log(`Active sessions after ping: ${activeSessions.size}`);
 }
 
 // ─── DB RESCAN ───────────────────────────────────────────────
@@ -294,9 +341,12 @@ async function rescanDatabase() {
         if (result.online) {
           existing.user = result;
           existing.failureCount = 0;
+          // Reschedule with new stagger
+          scheduleSessionPing(id);
           cookieUpdated++;
           log(`  UPDATED ${name} — cookie changed (re-login detected)`);
         } else {
+          clearTimer(id);
           activeSessions.delete(id);
           removedInvalid++;
           log(`  REMOVED ${name} — new cookie already invalid`);
@@ -313,11 +363,15 @@ async function rescanDatabase() {
     await delay(300);
 
     if (result.online) {
-      activeSessions.set(id, {
+      const entry = {
         user: result,
         pageIndex: 0,
         failureCount: 0,
-      });
+        timer: null
+      };
+      activeSessions.set(id, entry);
+      // Schedule first ping with stagger
+      scheduleSessionPing(id);
       added++;
       log(`  ADDED ${name}`);
     }
@@ -351,7 +405,10 @@ function printStatus() {
   }
 
   console.log('='.repeat(70));
-  console.log(`  Ping every ${KEEP_ALIVE_INTERVAL / 1000}s | DB rescan every ${DB_RESCAN_INTERVAL / 1000}s`);
+  console.log(`  Session refresh: every ${KEEP_ALIVE_INTERVAL / 1000}s with staggered timing`);
+  console.log(`  Retry strategy: ${RETRY_DELAYS.length} retries with (${RETRY_DELAYS.map(d => d / 1000 + 's').join(', ')}) backoff`);
+  console.log(`  DB rescan every ${DB_RESCAN_INTERVAL / 1000}s`);
+  console.log(`  Updates lastActivity column on successful pings`);
   console.log('  Press Ctrl+C to stop');
   console.log('='.repeat(70) + '\n');
 }
@@ -362,16 +419,12 @@ async function main() {
   console.log('\n' + '='.repeat(70));
   console.log('  MEBBIS KEEP-ALIVE DAEMON');
   console.log('  Automatically keeps all online sessions alive');
+  console.log('  Sessions scheduled with staggered timing to avoid throttling');
   console.log('='.repeat(70) + '\n');
 
   // Initial scan — find all online sessions
   await rescanDatabase();
   printStatus();
-
-  // Keep-Alive loop — ping all sessions every KEEP_ALIVE_INTERVAL
-  const keepAliveTimer = setInterval(async () => {
-    await pingAllSessions();
-  }, KEEP_ALIVE_INTERVAL);
 
   // DB Rescan loop — discover new/changed sessions every DB_RESCAN_INTERVAL
   const rescanTimer = setInterval(async () => {
@@ -383,8 +436,13 @@ async function main() {
   process.on('SIGINT', () => {
     console.log('\n');
     log('Shutting down...');
-    clearInterval(keepAliveTimer);
     clearInterval(rescanTimer);
+    
+    // Clear all session timers
+    for (const [sessionId] of activeSessions) {
+      clearTimer(sessionId);
+    }
+    
     log(`Was keeping ${activeSessions.size} session(s) alive`);
     log('Goodbye!');
     process.exit(0);
