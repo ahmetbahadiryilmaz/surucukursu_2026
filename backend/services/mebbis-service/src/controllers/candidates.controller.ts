@@ -56,11 +56,14 @@ export class CandidatesController {
         );
 
         if (loginResult.error) {
-          this.logger.error(
-            '❌ Credential validation failed:',
-            loginResult.error.message,
-          );
-          throw new BadRequestException(loginResult.error.message);
+          this.logger.error('❌ Credential validation failed:', loginResult.error.message);
+          
+          if (loginResult.error.isWrongCredentials) {
+            throw new BadRequestException(loginResult.error.message);
+          } else {
+            this.logger.log('🔄 Login failed but not due to wrong credentials - may need AJANDA KODU');
+            throw new BadRequestException('AJANDA KODU gerekli. Lütfen MEBBIS\'ten aldığınız kodu giriniz.');
+          }
         }
 
         this.logger.log('✅ Credentials validated successfully');
