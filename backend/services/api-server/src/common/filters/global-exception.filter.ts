@@ -3,6 +3,24 @@ import { FastifyReply } from 'fastify';
 
 @Catch()
 export class GlobalExceptionFilter implements ExceptionFilter {
+  /**
+   * Map HTTP status codes to default error codes
+   */
+  private getDefaultErrorCode(status: number): string {
+    const statusCodeMap: { [key: number]: string } = {
+      [HttpStatus.BAD_REQUEST]: 'INVALID_REQUEST',
+      [HttpStatus.UNAUTHORIZED]: 'UNAUTHORIZED',
+      [HttpStatus.FORBIDDEN]: 'FORBIDDEN',
+      [HttpStatus.NOT_FOUND]: 'NOT_FOUND',
+      [HttpStatus.CONFLICT]: 'CONFLICT',
+      [HttpStatus.UNPROCESSABLE_ENTITY]: 'VALIDATION_ERROR',
+      [HttpStatus.INTERNAL_SERVER_ERROR]: 'INTERNAL_SERVER_ERROR',
+      [HttpStatus.SERVICE_UNAVAILABLE]: 'SERVICE_UNAVAILABLE',
+    };
+    
+    return statusCodeMap[status] || 'OPERATION_FAILED';
+  }
+
   catch(exception: any, host: ArgumentsHost) {
     const ctx = host.switchToHttp();
     const reply = ctx.getResponse<FastifyReply>();
@@ -34,9 +52,14 @@ export class GlobalExceptionFilter implements ExceptionFilter {
       }
     }
     
+    // If no error code provided, generate default based on HTTP status
+    if (!errorCode) {
+      errorCode = this.getDefaultErrorCode(status);
+    }
+    
     // Prepare response data
     const responseData: any = {
-      ...(errorCode ? { code: errorCode } : {}),
+      code: errorCode,
       message: errorMessage,
       statusCode: status,
       timestamp: new Date().toISOString(),
