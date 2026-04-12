@@ -3,10 +3,12 @@ import {
   Post,
   Body,
   Logger,
-  BadRequestException,
+  HttpException,
+  HttpStatus,
 } from '@nestjs/common';
 import { CandidatesListService } from '../mebbis/candidates-list.service';
 import { AuthService } from '../auth.service';
+import { MebbisErrorCode } from '@surucukursu/shared';
 
 interface SyncStudentsRequest {
   drivingSchoolId: number;
@@ -59,10 +61,22 @@ export class CandidatesController {
           this.logger.error('❌ Credential validation failed:', loginResult.error.message);
           
           if (loginResult.error.isWrongCredentials) {
-            throw new BadRequestException(loginResult.error.message);
+            throw new HttpException(
+              {
+                code: MebbisErrorCode.MEBBIS_INVALID_CREDENTIALS,
+                message: loginResult.error.message,
+              },
+              HttpStatus.BAD_REQUEST,
+            );
           } else {
             this.logger.log('🔄 Login failed but not due to wrong credentials - may need AJANDA KODU');
-            throw new BadRequestException('AJANDA KODU gerekli. Lütfen MEBBIS\'ten aldığınız kodu giriniz.');
+            throw new HttpException(
+              {
+                code: MebbisErrorCode.MEBBIS_2FA_REQUIRED,
+                message: 'AJANDA KODU gerekli. Lütfen MEBBIS\'ten aldığınız kodu giriniz.',
+              },
+              HttpStatus.BAD_REQUEST,
+            );
           }
         }
 
@@ -75,7 +89,13 @@ export class CandidatesController {
 
       if (!cookie) {
         this.logger.error('❌ No session cookie found after login');
-        throw new BadRequestException('MEBBIS oturumu alınamadı');
+        throw new HttpException(
+          {
+            code: MebbisErrorCode.MEBBIS_SESSION_EXPIRED,
+            message: 'MEBBIS oturumu alınamadı',
+          },
+          HttpStatus.BAD_REQUEST,
+        );
       }
 
       this.logger.log(
@@ -96,7 +116,20 @@ export class CandidatesController {
             ? result.data
             : 'Öğrencileri alırken bir hata oluştu';
         this.logger.error('❌ Failed to fetch candidates:', errorMsg);
-        throw new BadRequestException(errorMsg);
+        
+        // Detect error type from message for appropriate error code
+        let errorCode = MebbisErrorCode.MEBBIS_ERROR;
+        if (errorMsg === 'SESSION_EXPIRED' || errorMsg.toLowerCase().includes('session')) {
+          errorCode = MebbisErrorCode.MEBBIS_SESSION_EXPIRED;
+        }
+        
+        throw new HttpException(
+          {
+            code: errorCode,
+            message: errorMsg,
+          },
+          HttpStatus.BAD_REQUEST,
+        );
       }
 
       this.logger.log(
@@ -109,15 +142,20 @@ export class CandidatesController {
       };
     } catch (error) {
       this.logger.error('❌ Error syncing students:', error);
-      // If it's already a BadRequestException, re-throw it
-      if (error instanceof BadRequestException) {
+      
+      // If it's already a HttpException with our error code structure, re-throw it
+      if (error instanceof HttpException) {
         throw error;
       }
-      // Otherwise wrap it as a BadRequestException
-      throw new BadRequestException(
-        error instanceof Error
-          ? error.message
-          : 'Öğrencileri senkronize sırasında bir hata oluştu',
+      
+      throw new HttpException(
+        {
+          code: MebbisErrorCode.MEBBIS_ERROR,
+          message: error instanceof Error
+            ? error.message
+            : 'Öğrencileri senkronize sırasında bir hata oluştu',
+        },
+        HttpStatus.BAD_REQUEST,
       );
     }
   }

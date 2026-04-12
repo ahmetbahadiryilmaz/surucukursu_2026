@@ -1,6 +1,7 @@
-import { Controller, Post, Body, Logger, BadRequestException } from '@nestjs/common';
+import { Controller, Post, Body, Logger, HttpException, HttpStatus } from '@nestjs/common';
 import { VehiclesSimulatorsService } from '../mebbis/vehicles-simulators.service';
 import { AuthService } from '../auth.service';
+import { MebbisErrorCode } from '@surucukursu/shared';
 
 interface FetchVehiclesRequest {
   cookieString: string;
@@ -89,10 +90,22 @@ export class VehiclesController {
           this.logger.error('❌ Credential validation failed:', loginResult.error.message);
           
           if (loginResult.error.isWrongCredentials) {
-            throw new BadRequestException(loginResult.error.message);
+            throw new HttpException(
+              {
+                code: MebbisErrorCode.MEBBIS_INVALID_CREDENTIALS,
+                message: loginResult.error.message,
+              },
+              HttpStatus.BAD_REQUEST,
+            );
           } else {
             this.logger.log('🔄 Login failed but not due to wrong credentials - may need AJANDA KODU');
-            throw new BadRequestException('AJANDA KODU gerekli. Lütfen MEBBIS\'ten aldığınız kodu giriniz.');
+            throw new HttpException(
+              {
+                code: MebbisErrorCode.MEBBIS_2FA_REQUIRED,
+                message: 'AJANDA KODU gerekli. Lütfen MEBBIS\'ten aldığınız kodu giriniz.',
+              },
+              HttpStatus.BAD_REQUEST,
+            );
           }
         }
         
@@ -100,7 +113,13 @@ export class VehiclesController {
         
         if (!body.ajandasKodu) {
           this.logger.log('📱 AJANDA KODU not provided - requesting code entry');
-          throw new BadRequestException('AJANDA KODU gerekli. Lütfen MEBBIS\'ten aldığınız kodu giriniz.');
+          throw new HttpException(
+            {
+              code: MebbisErrorCode.MEBBIS_2FA_REQUIRED,
+              message: 'AJANDA KODU gerekli. Lütfen MEBBIS\'ten aldığınız kodu giriniz.',
+            },
+            HttpStatus.BAD_REQUEST,
+          );
         }
       }
 
@@ -110,7 +129,13 @@ export class VehiclesController {
       
       if (!cookie) {
         this.logger.error('❌ No session cookie found after login');
-        throw new BadRequestException('MEBBIS oturumu alınamadı');
+        throw new HttpException(
+          {
+            code: MebbisErrorCode.MEBBIS_SESSION_EXPIRED,
+            message: 'MEBBIS oturumu alınamadı',
+          },
+          HttpStatus.BAD_REQUEST,
+        );
       }
 
       this.logger.log(`🍪 DEBUG cookie (first 100 chars): ${cookie.substring(0, 100)}...`);
@@ -170,13 +195,20 @@ export class VehiclesController {
       return result;
     } catch (error) {
       this.logger.error('❌ Error syncing vehicles:', error);
-      // If it's already a BadRequestException, re-throw it
-      if (error instanceof BadRequestException) {
+      
+      // If it's already a HttpException with our error code structure, re-throw it
+      if (error instanceof HttpException) {
         throw error;
       }
-      // Otherwise wrap it as a BadRequestException
-      throw new BadRequestException(
-        error instanceof Error ? error.message : 'MEBBIS araçları senkronize sırasında bir hata oluştu'
+      
+      throw new HttpException(
+        {
+          code: MebbisErrorCode.MEBBIS_ERROR,
+          message: error instanceof Error
+            ? error.message
+            : 'MEBBIS araçları senkronize sırasında bir hata oluştu',
+        },
+        HttpStatus.BAD_REQUEST,
       );
     }
   }
