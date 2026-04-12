@@ -263,20 +263,8 @@ const StudentsTable: React.FC<StudentsProps> = ({ onDownload, onJobStart }) => {
       
       console.log("Final error message:", errorMessage);
       
-      // Check if SESSION_EXPIRED (session expired, need to re-login)
+      // Check if error message indicates AJANDA KODU is needed (check this FIRST)
       if (errorMessage && (
-        errorMessage.toLowerCase().includes('session_expired') ||
-        errorMessage.toLowerCase().includes('session expired') ||
-        errorMessage.toLowerCase().includes('oturum') ||
-        errorMessage.toLowerCase().includes('login page')
-      )) {
-        console.log("🔑 Session expired - showing credentials modal");
-        setSyncMessage(null);
-        setCredentialsError("Oturumunuz süresi dolmuş. MEBBIS kimlik bilgilerini yeniden giriniz.");
-        setShowCredentialsModal(true);
-      }
-      // Check if AJANDA KODU is needed (check this FIRST)
-      else if (errorMessage && (
         errorMessage.toLowerCase().includes('ajanda kodu') ||
         errorMessage.toLowerCase().includes('ajanda') ||
         errorMessage.toLowerCase().includes('2fa') ||
