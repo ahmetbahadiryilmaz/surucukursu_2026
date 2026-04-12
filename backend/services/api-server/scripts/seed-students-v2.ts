@@ -110,18 +110,26 @@ async function main() {
 
     console.log(`📝 Generated ${students.length} fake students`);
 
-    // Insert students
+    // Insert students using raw query to avoid entity validation
     const studentRepository = AppDataSource.getRepository(DrivingSchoolStudentEntity);
-    const inserted = await studentRepository.insert(students);
-    console.log(`✅ Successfully inserted ${inserted.identifiers.length} students`);
+    const now = Math.floor(Date.now() / 1000);
+    
+    for (const student of students) {
+      await studentRepository.query(
+        `INSERT INTO driving_school_students (name, email, phone, tc_number, school_id, created_at, updated_at) 
+         VALUES (?, ?, ?, ?, ?, ?, ?)`,
+        [student.name, student.email, student.phone, student.tc_number, student.school_id, now, now]
+      );
+    }
+    
+    console.log(`✅ Successfully inserted ${students.length} students`);
 
     // Display inserted students
     console.log('\n📊 Inserted students:');
-    const insertedStudents = await studentRepository.find({
-      where: { school_id: dogusSchool.id },
-      order: { created_at: 'DESC' },
-      take: 15,
-    });
+    const insertedStudents = await studentRepository.query(
+      `SELECT id, name, tc_number FROM driving_school_students WHERE school_id = ? ORDER BY created_at DESC LIMIT 15`,
+      [dogusSchool.id]
+    );
     insertedStudents.forEach((student) => {
       console.log(`  - ${student.name} (TC: ${student.tc_number})`);
     });
