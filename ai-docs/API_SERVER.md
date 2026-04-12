@@ -304,16 +304,51 @@ healthCheck() { ... }
 ## Error Handling
 
 ### GlobalExceptionFilter
-Catches all unhandled exceptions and formats response:
+Location: `src/common/filters/global-exception.filter.ts`
 
+Catches **all unhandled exceptions** and standardizes error responses:
+
+**Features:**
+- Extracts `code` field from HttpException (e.g., error codes like `CREDENTIALS_INVALID`)
+- Uses HTTP exception status codes when available, defaults to 500
+- Adds development error details in development mode:
+  - `dev_error.name`, `dev_error.message`, `dev_error.stack`
+  - `dev_error.code` and `dev_error.meta` for Prisma errors
+- Includes request path and ISO timestamp in response
+
+**Response Format (Production):**
 ```json
 {
+  "code": "OPERATION_FAILED",
+  "message": "Operation could not be completed",
   "statusCode": 500,
-  "message": "Internal server error",
-  "error": "Error details...",
   "timestamp": "2024-01-22T10:30:00.000Z",
-  "path": "/api/v1/..."
+  "path": "/api/v1/auth/login"
 }
+```
+
+**Response Format (Development):**
+```json
+{
+  "code": "OPERATION_FAILED",
+  "message": "Operation could not be completed",
+  "statusCode": 500,
+  "timestamp": "2024-01-22T10:30:00.000Z",
+  "path": "/api/v1/auth/login",
+  "dev_error": {
+    "name": "BadRequestException",
+    "message": "Validation failed",
+    "stack": "Error stack trace...",
+    "code": "P2025",
+    "meta": { "cause": "Record not found" }
+  }
+}
+```
+
+**Registration:**
+```typescript
+// In main.ts
+app.useGlobalFilters(new GlobalExceptionFilter());
 ```
 
 ### NotFoundExceptionFilter
