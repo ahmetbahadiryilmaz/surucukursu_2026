@@ -253,23 +253,99 @@ When implementing a new feature that needs MEBBIS error handling:
 
 4. **That's it!** No need to reimpl ement error detection logic.
 
-## Backend Implementation Best Practices
+## Backend Error Handling Architecture
+
+The backend error handling system has three layers:
+
+```
+┌─────────────────────────────────────────────────────┐
+│        MEBBIS Service Controllers                   │
+│   (vehicles.controller, candidates.controller)      │
+│        ↓ (catches HTTP errors from MEBBIS)          │
+├─────────────────────────────────────────────────────┤
+│         MebbisErrorMapper (Utility)                 │
+│   (mapErrorMessage: string → {code, message})       │
+│        ↓ (maps error message to standard code)      │
+├─────────────────────────────────────────────────────┤
+│     Throw HttpException with Code                   │
+│        ↓ (propagates through exception chain)       │
+├─────────────────────────────────────────────────────┤
+│    GlobalExceptionFilter (NestJS)                   │
+│   (adds default code if missing, standardizes)      │
+│        ↓ (sends response with code to frontend)     │
+├─────────────────────────────────────────────────────┤
+│          Frontend Client                            │
+│   (receives code in response, shows appropriate UI) │
+└─────────────────────────────────────────────────────┘
+```
+
+### MebbisErrorMapper: Centralized Error Detection
+
+**Location:** `backend/services/mebbis-service/src/utils/mebbis-error.mapper.ts`
+
+A singleton utility class that maps error messages to standardized error codes. This is the **single source of truth** for error type detection across all MEBBIS service controllers.
+
+```typescript
+export class MebbisErrorMapper {
+  static mapErrorMessage(
+    errorMessage: string
+  ): { code: MebbisErrorCode; message: string } {
+    // Returns standardized code + message based on error keywords
+  }
+}
+```
+
+**Detection Logic:**
+
+| Message Contains | Detected Code | Frontend Behavior |
+|-----------------|---------------|-------------------|
+| "SESSION_EXPIRED", "session" | `MEBBIS_SESSION_EXPIRED` → `MEBBIS_2FA_REQUIRED` | Show 2FA Modal |
+| "credential", "invalid", "password" | `MEBBIS_INVALID_CREDENTIALS` | Show Credentials Modal |
+| "unavailable", "timeout", "connection" | `MEBBIS_UNAVAILABLE` | Show Banner |
+| "no data", "not found" | `MEBBIS_NO_DATA` | Show Banner |
+| (default) | `MEBBIS_ERROR` | Show Banner |
+
+**Usage in Controllers:**
+
+```typescript
+@Post('sync')
+async syncVehicles(@Body() body: SyncRequest) {
+  try {
+    // ... MEBBIS API call
+    return { success: true, data: result };
+  } catch (error) {
+    // Use mapper to detect error type from message
+    const { code, message } = MebbisErrorMapper.mapErrorMessage(
+      error.response?.data?.message || error.message
+    );
+    
+    throw new HttpException({ code, message }, HttpStatus.BAD_REQUEST);
+  }
+}
+```
+
+**Critical Implementation Detail:**
+- MebbisErrorMapper is located in **mebbis-service**, not api-server
+- Controllers call `MebbisErrorMapper.mapErrorMessage()` when catching HTTP errors
+- The returned `{ code, message }` is thrown as HttpException response data
+- GlobalExceptionFilter extracts the code from the response and includes it in the final response
 
 ### When Throwing MEBBIS Errors
 
 ```typescript
-// Option 1: Explicit error code (recommended for new code)
+// Recommended: Use MebbisErrorMapper for automatic detection
+throw new HttpException(
+  MebbisErrorMapper.mapErrorMessage(errorMsg),
+  HttpStatus.BAD_REQUEST
+);
+
+// If error code is already known:
 throw new HttpException(
   {
     code: MebbisErrorCode.MEBBIS_2FA_REQUIRED,
     message: 'AJANDA KODU gerekli. Lütfen MEBBIS\'ten aldığınız kodu giriniz.'
   },
   HttpStatus.BAD_REQUEST
-);
-
-// Option 2: Keyword-based (for legacy compatibility)
-throw new BadRequestException(
-  'AJANDA KODU gerekli. Lütfen MEBBIS\'ten aldığınız kodu giriniz.'
 );
 ```
 
@@ -279,22 +355,34 @@ throw new BadRequestException(
 @Post('sync')
 async syncData(@Body() body: SyncRequest): Promise<any> {
   try {
-    // ... sync logic
+    // ... sync logic with HTTP requests
     return { success: true, data: result };
   } catch (error) {
-    if (error instanceof BadRequestException) {
-      throw error;
-    }
+    // The mapper automatically detects error type from message
+    const { code, message } = MebbisErrorMapper.mapErrorMessage(
+      error.response?.data?.message || error.message
+    );
+    
     throw new HttpException(
-      {
-        code: MebbisErrorCode.MEBBIS_ERROR,
-        message: error.message
-      },
-      HttpStatus.INTERNAL_SERVER_ERROR
+      { code, message },
+      HttpStatus.BAD_REQUEST
     );
   }
 }
 ```
+
+### Why MebbisErrorMapper?
+
+**Problem it solves:**
+- Error detection logic was duplicated in every controller
+- Difficult to maintain consistent error detection
+- Hard to update error patterns (had to change every controller)
+
+**Solution benefits:**
+- Single source of truth for error detection
+- Change error patterns once in MebbisErrorMapper
+- All controllers automatically use new detection logic
+- Easier to test error detection logic in isolation
 
 ## Migration Guide
 

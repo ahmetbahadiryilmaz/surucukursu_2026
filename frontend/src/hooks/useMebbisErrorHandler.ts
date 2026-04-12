@@ -66,9 +66,14 @@ export const useMebbisErrorHandler = () => {
    * Determine error code from error message or response
    */
   const getErrorCode = useCallback((err: any, errorMessage: string): MebbisErrorCode => {
-    // Check for explicit error code in response
+    // Check for explicit error code in response (from HttpException)
     if (err?.response?.data?.code) {
       return err.response.data.code as MebbisErrorCode;
+    }
+    
+    // Check for code in different response structure (in case of wrapping)
+    if (err?.response?.data?.error?.code) {
+      return err.response.data.error.code as MebbisErrorCode;
     }
 
     // Fall back to keyword-based detection for backwards compatibility

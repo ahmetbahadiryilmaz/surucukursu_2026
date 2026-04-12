@@ -412,31 +412,88 @@ export class MebbisClientService {
 
 ## Error Handling
 
-### Common Errors
+### MebbisErrorMapper Utility
 
-| Error | Cause | Solution |
-|-------|-------|----------|
-| `Session expired` | Cookies no longer valid | Re-authenticate |
-| `Invalid MEBBIS credentials` | Wrong username/password | Verify credentials with MEBBIS |
-| `2FA timeout` | Code not submitted in time | Restart login flow |
-| `Connection refused` | MEBBIS server down | Retry later |
+**Location:** `backend/services/mebbis-service/src/utils/mebbis-error.mapper.ts`
 
-### Response Format
-```json
-{
-  "message": "login success",
-  "data": {
-    "tbMebbisId": 123,
-    "inputs": {}
+All MEBBIS Controllers (vehicles, candidates) use a centralized error mapper to convert error messages to standardized error codes. This ensures consistent error handling across all MEBBIS endpoints.
+
+```typescript
+import { MebbisErrorMapper } from '../utils/mebbis-error.mapper';
+
+@Post('sync')
+async syncVehicles(@Body() body: SyncRequest) {
+  try {
+    const result = await this.vehiclesService.sync(body);
+    return { success: true, data: result };
+  } catch (error) {
+    // Use mapper to automatically detect error code
+    const { code, message } = MebbisErrorMapper.mapErrorMessage(
+      error.response?.data?.message || error.message
+    );
+    throw new HttpException({ code, message }, HttpStatus.BAD_REQUEST);
   }
 }
+```
 
-// Error
+**Mapper Returns:**
+```typescript
 {
-  "data": {},
-  "error": { "message": "Invalid credentials" },
-  "message": "login failed"
+  code: 'MEBBIS_2FA_REQUIRED' | 'MEBBIS_INVALID_CREDENTIALS' | 'MEBBIS_SESSION_EXPIRED' | 'MEBBIS_UNAVAILABLE' | 'MEBBIS_NO_DATA' | 'MEBBIS_ERROR',
+  message: 'Original or processed error message'
 }
+```
+
+### Common Errors
+
+| Error Message | Detected Code | Cause | Solution |
+|---------------|---------------|-------|----------|
+| `SESSION_EXPIRED` / `session` | `MEBBIS_SESSION_EXPIRED` → `MEBBIS_2FA_REQUIRED` | Cookies no longer valid | Re-authenticate |
+| `credential` / `invalid` / `password` | `MEBBIS_INVALID_CREDENTIALS` | Wrong username/password | Verify credentials with MEBBIS |
+| `unavailable` / `timeout` / `connection` | `MEBBIS_UNAVAILABLE` | MEBBIS server is down | Retry later |
+| `no data` / `not found` | `MEBBIS_NO_DATA` | Resource not found on MEBBIS | Check data exists on MEBBIS |
+| (other messages) | `MEBBIS_ERROR` | Generic MEBBIS error | Check MEBBIS logs |
+
+### Error Response Format
+
+**Success Response:**
+```json
+{
+  "success": true,
+  "data": {
+    "vehicles": [...],
+    "syncedAt": "2026-01-22T10:30:00Z"
+  }
+}
+```
+
+**Error Response (with error code):**
+```json
+{
+  "code": "MEBBIS_2FA_REQUIRED",
+  "message": "AJANDA KODU gerekli. Lütfen MEBBIS'ten aldığınız kodu giriniz.",
+  "statusCode": 400,
+  "timestamp": "2026-01-22T10:30:00Z",
+  "path": "/api/araclar/sync"
+}
+```
+
+### Error Flow
+
+```
+MEBBIS HTTP Error
+  ↓
+catch (error)
+  ↓
+MebbisErrorMapper.mapErrorMessage(error.message)
+  ↓
+{ code: "MEBBIS_2FA_REQUIRED", message: "..." }
+  ↓
+throw new HttpException({ code, message }, 400)
+  ↓
+GlobalExceptionFilter.catch()
+  ↓
+Extract code and send to frontend
 ```
 
 ---

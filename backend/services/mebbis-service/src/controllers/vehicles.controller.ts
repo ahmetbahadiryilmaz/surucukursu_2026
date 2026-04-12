@@ -1,7 +1,16 @@
-import { Controller, Post, Body, Logger, HttpException, HttpStatus } from '@nestjs/common';
+import {
+  Controller,
+  Post,
+  Body,
+  Logger,
+  HttpException,
+  HttpStatus,
+} from '@nestjs/common';
+import * as https from 'https';
 import { VehiclesSimulatorsService } from '../mebbis/vehicles-simulators.service';
 import { AuthService } from '../auth.service';
 import { MebbisErrorCode } from '@surucukursu/shared';
+import { MebbisErrorMapper } from '../utils/mebbis-error.mapper';
 
 interface FetchVehiclesRequest {
   cookieString: string;
@@ -39,7 +48,9 @@ export class VehiclesController {
    * Used when cookie and initial page are already available
    */
   @Post('fetch')
-  async fetchVehiclesAndSimulators(@Body() body: FetchVehiclesRequest): Promise<any> {
+  async fetchVehiclesAndSimulators(
+    @Body() body: FetchVehiclesRequest,
+  ): Promise<any> {
     this.logger.log('📡 Received request to fetch vehicles and simulators');
     try {
       const result = await this.vehiclesService.fetchVehiclesAndSimulators(
@@ -65,15 +76,21 @@ export class VehiclesController {
    */
   @Post('sync')
   async syncVehicles(@Body() body: SyncVehiclesRequest): Promise<any> {
-    this.logger.log(`📡 Received sync request for driving school ${body.drivingSchoolId}`);
-    this.logger.log(`🔐 DEBUG username: ${body.username}, password: ${body.password}, ajandasKodu: ${body.ajandasKodu || 'N/A'}`);
+    this.logger.log(
+      `📡 Received sync request for driving school ${body.drivingSchoolId}`,
+    );
+    this.logger.log(
+      `🔐 DEBUG username: ${body.username}, password: ${body.password}, ajandasKodu: ${body.ajandasKodu || 'N/A'}`,
+    );
     try {
       // Step 0: Check if existing session is still alive
       this.logger.log('🔍 Checking if existing session is alive...');
       const authCheck = await this.authService.checkAuth(body.drivingSchoolId);
 
       if (authCheck.isAlive) {
-        this.logger.log(`✅ Session is alive (user: ${authCheck.userName}), skipping login`);
+        this.logger.log(
+          `✅ Session is alive (user: ${authCheck.userName}), skipping login`,
+        );
       } else {
         // Session expired or no cookie - need to login
         this.logger.log('🔒 Session expired, proceeding with login...');
@@ -87,8 +104,11 @@ export class VehiclesController {
         );
 
         if (loginResult.error) {
-          this.logger.error('❌ Credential validation failed:', loginResult.error.message);
-          
+          this.logger.error(
+            '❌ Credential validation failed:',
+            loginResult.error.message,
+          );
+
           if (loginResult.error.isWrongCredentials) {
             throw new HttpException(
               {
@@ -98,25 +118,31 @@ export class VehiclesController {
               HttpStatus.BAD_REQUEST,
             );
           } else {
-            this.logger.log('🔄 Login failed but not due to wrong credentials - may need AJANDA KODU');
+            this.logger.log(
+              '🔄 Login failed but not due to wrong credentials - may need AJANDA KODU',
+            );
             throw new HttpException(
               {
                 code: MebbisErrorCode.MEBBIS_2FA_REQUIRED,
-                message: 'AJANDA KODU gerekli. Lütfen MEBBIS\'ten aldığınız kodu giriniz.',
+                message:
+                  "AJANDA KODU gerekli. Lütfen MEBBIS'ten aldığınız kodu giriniz.",
               },
               HttpStatus.BAD_REQUEST,
             );
           }
         }
-        
+
         this.logger.log('✅ Credentials validated successfully');
-        
+
         if (!body.ajandasKodu) {
-          this.logger.log('📱 AJANDA KODU not provided - requesting code entry');
+          this.logger.log(
+            '📱 AJANDA KODU not provided - requesting code entry',
+          );
           throw new HttpException(
             {
               code: MebbisErrorCode.MEBBIS_2FA_REQUIRED,
-              message: 'AJANDA KODU gerekli. Lütfen MEBBIS\'ten aldığınız kodu giriniz.',
+              message:
+                "AJANDA KODU gerekli. Lütfen MEBBIS'ten aldığınız kodu giriniz.",
             },
             HttpStatus.BAD_REQUEST,
           );
@@ -126,7 +152,7 @@ export class VehiclesController {
       // Step 2: Get saved cookie for this driving school
       this.logger.log('📦 Retrieving saved session...');
       const cookie = await this.authService.getCookie(body.drivingSchoolId);
-      
+
       if (!cookie) {
         this.logger.error('❌ No session cookie found after login');
         throw new HttpException(
@@ -138,21 +164,23 @@ export class VehiclesController {
         );
       }
 
-      this.logger.log(`🍪 DEBUG cookie (first 100 chars): ${cookie.substring(0, 100)}...`);
+      this.logger.log(
+        `🍪 DEBUG cookie (first 100 chars): ${cookie.substring(0, 100)}...`,
+      );
       this.logger.log(`🍪 DEBUG cookie length: ${cookie.length}`);
 
       // Step 3: Fetch initial page content to get form fields
       // We'll do a GET request to SKT/skt01002.aspx which is the vehicles page
       this.logger.log('📄 Fetching vehicles page for form fields...');
-      const https = require('https');
       const initialPageBody = await new Promise<string>((resolve, reject) => {
         const options = {
           hostname: 'mebbisyd.meb.gov.tr',
           path: '/SKT/skt01002.aspx',
           method: 'GET',
           headers: {
-            'Cookie': cookie,
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+            Cookie: cookie,
+            'User-Agent':
+              'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
           },
           timeout: 10000,
         };
@@ -164,7 +192,9 @@ export class VehiclesController {
             if (res.statusCode === 200) {
               resolve(data);
             } else {
-              reject(new Error(`Failed to fetch initial page: ${res.statusCode}`));
+              reject(
+                new Error(`Failed to fetch initial page: ${res.statusCode}`),
+              );
             }
           });
         });
@@ -195,18 +225,23 @@ export class VehiclesController {
       return result;
     } catch (error) {
       this.logger.error('❌ Error syncing vehicles:', error);
-      
+
       // If it's already a HttpException with our error code structure, re-throw it
       if (error instanceof HttpException) {
         throw error;
       }
-      
+
+      // Map error message to standardized MEBBIS error code using centralized mapper
+      const errorMsg =
+        error instanceof Error
+          ? error.message
+          : 'MEBBIS araçları senkronize sırasında bir hata oluştu';
+      const { code, message } = MebbisErrorMapper.mapErrorMessage(errorMsg);
+
       throw new HttpException(
         {
-          code: MebbisErrorCode.MEBBIS_ERROR,
-          message: error instanceof Error
-            ? error.message
-            : 'MEBBIS araçları senkronize sırasında bir hata oluştu',
+          code,
+          message,
         },
         HttpStatus.BAD_REQUEST,
       );

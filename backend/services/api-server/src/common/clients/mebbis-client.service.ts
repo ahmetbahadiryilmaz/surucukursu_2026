@@ -148,8 +148,9 @@ export class MebbisClientService {
         );
       }
 
+      // Pass the full error response to preserve error code
       throw new HttpException(
-        error.response?.data?.message || 'Error syncing vehicles from MEBBIS service',
+        error.response?.data || { message: 'Error syncing vehicles from MEBBIS service' },
         error.response?.status || HttpStatus.INTERNAL_SERVER_ERROR
       );
     }
@@ -214,8 +215,9 @@ export class MebbisClientService {
         );
       }
 
+      // Pass the full error response to preserve error code
       throw new HttpException(
-        error.response?.data?.message || 'Error fetching vehicles and simulators from MEBBIS service',
+        error.response?.data || { message: 'Error fetching vehicles and simulators from MEBBIS service' },
         error.response?.status || HttpStatus.INTERNAL_SERVER_ERROR
       );
     }
@@ -271,8 +273,9 @@ export class MebbisClientService {
         );
       }
 
+      // Pass the full error response to preserve error code
       throw new HttpException(
-        error.response?.data?.message || 'Error syncing students from MEBBIS service',
+        error.response?.data || { message: 'Error syncing students from MEBBIS service' },
         error.response?.status || HttpStatus.INTERNAL_SERVER_ERROR
       );
     }

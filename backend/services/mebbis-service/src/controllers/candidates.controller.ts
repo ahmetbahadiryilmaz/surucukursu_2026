@@ -9,6 +9,7 @@ import {
 import { CandidatesListService } from '../mebbis/candidates-list.service';
 import { AuthService } from '../auth.service';
 import { MebbisErrorCode } from '@surucukursu/shared';
+import { MebbisErrorMapper } from '../utils/mebbis-error.mapper';
 
 interface SyncStudentsRequest {
   drivingSchoolId: number;
@@ -58,8 +59,11 @@ export class CandidatesController {
         );
 
         if (loginResult.error) {
-          this.logger.error('❌ Credential validation failed:', loginResult.error.message);
-          
+          this.logger.error(
+            '❌ Credential validation failed:',
+            loginResult.error.message,
+          );
+
           if (loginResult.error.isWrongCredentials) {
             throw new HttpException(
               {
@@ -69,11 +73,14 @@ export class CandidatesController {
               HttpStatus.BAD_REQUEST,
             );
           } else {
-            this.logger.log('🔄 Login failed but not due to wrong credentials - may need AJANDA KODU');
+            this.logger.log(
+              '🔄 Login failed but not due to wrong credentials - may need AJANDA KODU',
+            );
             throw new HttpException(
               {
                 code: MebbisErrorCode.MEBBIS_2FA_REQUIRED,
-                message: 'AJANDA KODU gerekli. Lütfen MEBBIS\'ten aldığınız kodu giriniz.',
+                message:
+                  "AJANDA KODU gerekli. Lütfen MEBBIS'ten aldığınız kodu giriniz.",
               },
               HttpStatus.BAD_REQUEST,
             );
@@ -116,17 +123,14 @@ export class CandidatesController {
             ? result.data
             : 'Öğrencileri alırken bir hata oluştu';
         this.logger.error('❌ Failed to fetch candidates:', errorMsg);
-        
-        // Detect error type from message for appropriate error code
-        let errorCode = MebbisErrorCode.MEBBIS_ERROR;
-        if (errorMsg === 'SESSION_EXPIRED' || errorMsg.toLowerCase().includes('session')) {
-          errorCode = MebbisErrorCode.MEBBIS_SESSION_EXPIRED;
-        }
-        
+
+        // Map error message to standardized MEBBIS error code using centralized mapper
+        const { code, message } = MebbisErrorMapper.mapErrorMessage(errorMsg);
+
         throw new HttpException(
           {
-            code: errorCode,
-            message: errorMsg,
+            code,
+            message,
           },
           HttpStatus.BAD_REQUEST,
         );
@@ -142,18 +146,23 @@ export class CandidatesController {
       };
     } catch (error) {
       this.logger.error('❌ Error syncing students:', error);
-      
+
       // If it's already a HttpException with our error code structure, re-throw it
       if (error instanceof HttpException) {
         throw error;
       }
-      
+
+      // Map error message to standardized MEBBIS error code using centralized mapper
+      const errorMsg =
+        error instanceof Error
+          ? error.message
+          : 'Öğrencileri senkronize sırasında bir hata oluştu';
+      const { code, message } = MebbisErrorMapper.mapErrorMessage(errorMsg);
+
       throw new HttpException(
         {
-          code: MebbisErrorCode.MEBBIS_ERROR,
-          message: error instanceof Error
-            ? error.message
-            : 'Öğrencileri senkronize sırasında bir hata oluştu',
+          code,
+          message,
         },
         HttpStatus.BAD_REQUEST,
       );

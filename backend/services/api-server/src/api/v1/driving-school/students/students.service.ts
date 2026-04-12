@@ -1,4 +1,4 @@
-import { Injectable, BadRequestException, Logger } from '@nestjs/common';
+import { Injectable, BadRequestException, Logger, HttpException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { DrivingSchoolStudentEntity, DrivingSchoolEntity, DrivingSchoolStudentIntegrationInfoEntity, TextEncryptor } from '@surucukursu/shared';
@@ -83,6 +83,14 @@ export class StudentsService {
             };
         } catch (error) {
             this.logger.error(`❌ Error syncing students:`, error);
+            
+            // If it's an HttpException (from MebbisClientService), re-throw it as-is
+            // It already has the proper error code and message
+            if (error instanceof HttpException) {
+              throw error;
+            }
+            
+            // Fallback for unexpected errors
             throw new BadRequestException(
                 error instanceof Error ? error.message : 'Senkronize sırasında bir hata oluştu'
             );

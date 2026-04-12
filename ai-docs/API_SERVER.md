@@ -306,41 +306,74 @@ healthCheck() { ... }
 ### GlobalExceptionFilter
 Location: `src/common/filters/global-exception.filter.ts`
 
-Catches **all unhandled exceptions** and standardizes error responses:
+Catches **all unhandled exceptions** and standardizes error responses. This is the central point where error codes flow through the entire system.
 
 **Features:**
-- Extracts `code` field from HttpException (e.g., error codes like `CREDENTIALS_INVALID`)
+- Extracts `code` field from HttpException response data (e.g., `MEBBIS_2FA_REQUIRED`, `INVALID_REQUEST`)
+- **Auto-generates default error codes** based on HTTP status if not provided:
+  - 400 → `INVALID_REQUEST`
+  - 401 → `UNAUTHORIZED`
+  - 403 → `FORBIDDEN`
+  - 404 → `NOT_FOUND`
+  - 409 → `CONFLICT`
+  - 422 → `UNPROCESSABLE_ENTITY`
+  - 500 → `INTERNAL_SERVER_ERROR`
+  - (others) → `INTERNAL_SERVER_ERROR`
 - Uses HTTP exception status codes when available, defaults to 500
 - Adds development error details in development mode:
   - `dev_error.name`, `dev_error.message`, `dev_error.stack`
   - `dev_error.code` and `dev_error.meta` for Prisma errors
 - Includes request path and ISO timestamp in response
 
+**Error Code Flow Through System:**
+
+```
+mebbis-service Controller
+  throw new HttpException({ code: 'MEBBIS_2FA_REQUIRED', message: '...' }, 400)
+        ↓
+mebbis-client.service (api-server)
+  catch (error) {
+    throw new HttpException(error.response?.data, status)
+    // Passes full object with code preserved
+  }
+        ↓
+Services (CarsService, StudentsService)
+  catch (error instanceof HttpException) {
+    throw error; // Re-throw without wrapping
+  }
+        ↓
+GlobalExceptionFilter
+  Extracts code from response data
+  If no code, generates default based on status
+        ↓
+Response to Frontend
+  { code: 'MEBBIS_2FA_REQUIRED', message: '...', statusCode: 400, ... }
+```
+
 **Response Format (Production):**
 ```json
 {
-  "code": "OPERATION_FAILED",
-  "message": "Operation could not be completed",
-  "statusCode": 500,
+  "code": "MEBBIS_2FA_REQUIRED",
+  "message": "AJANDA KODU gerekli. Lütfen MEBBIS'ten aldığınız kodu giriniz.",
+  "statusCode": 400,
   "timestamp": "2024-01-22T10:30:00.000Z",
-  "path": "/api/v1/auth/login"
+  "path": "/api/v1/araclar/sync"
 }
 ```
 
 **Response Format (Development):**
 ```json
 {
-  "code": "OPERATION_FAILED",
-  "message": "Operation could not be completed",
-  "statusCode": 500,
+  "code": "MEBBIS_2FA_REQUIRED",
+  "message": "AJANDA KODU gerekli. Lütfen MEBBIS'ten aldığınız kodu giriniz.",
+  "statusCode": 400,
   "timestamp": "2024-01-22T10:30:00.000Z",
-  "path": "/api/v1/auth/login",
+  "path": "/api/v1/araclar/sync",
   "dev_error": {
-    "name": "BadRequestException",
-    "message": "Validation failed",
+    "name": "HttpException",
+    "message": "AJANDA KODU gerekli. Lütfen MEBBIS'ten aldığınız kodu giriniz.",
     "stack": "Error stack trace...",
-    "code": "P2025",
-    "meta": { "cause": "Record not found" }
+    "originalError": { "code": "MEBBIS_2FA_REQUIRED" }
   }
 }
 ```
@@ -350,6 +383,14 @@ Catches **all unhandled exceptions** and standardizes error responses:
 // In main.ts
 app.useGlobalFilters(new GlobalExceptionFilter());
 ```
+
+**Key Implementation Detail:**
+The filter checks for `code` in the exception response first:
+1. If `response.code` exists → use it
+2. Else if error has `getStatus()` method → generate default code for HTTP status
+3. Else → default to `INTERNAL_SERVER_ERROR`
+
+This ensures error codes from mebbis-service flow all the way to the frontend unchanged.
 
 ### NotFoundExceptionFilter
 Returns 405 for unmatched routes:
