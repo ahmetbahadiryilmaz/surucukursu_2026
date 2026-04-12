@@ -12,6 +12,8 @@ The `ai-docs/` directory is the **single source of truth** for understanding the
 2. **After implementing a new feature**: Update the relevant ai-docs file (or create a new one) with the logic, flow, edge cases, and any gotchas discovered during implementation.
 3. **After modifying an existing feature**: Update the corresponding ai-docs file to reflect the changes.
 4. **New ai-docs files** should be placed in the `ai-docs/` directory with `UPPERCASE_SNAKE_CASE.md` naming.
+5. **If something is updated**: Always update or create the relevant ai-docs file. This ensures documentation stays in sync with code.
+6. **Read necessary docs**: When copilot prompt is related to a specific area, first read the corresponding ai-docs file from the index below to understand patterns and context.
 
 ### AI-docs Index
 Always check these files for context before working on the related area:
@@ -24,6 +26,7 @@ Always check these files for context before working on the related area:
 | `ai-docs/MEBBIS_SERVICE.md` | MEBBIS integration service: authentication flow, cookie management, student sync, login with 2FA, session handling | Any work involving MEBBIS scraping, login, cookie handling, or student data |
 | `ai-docs/MEBBIS_REQUEST_LOGGING.md` | HTTP request/response logging system for all outgoing MEBBIS calls, log file structure | Debugging MEBBIS requests, understanding log formats, modifying the logger |
 | `ai-docs/FRONTEND.md` | React + Vite + TypeScript SPA: admin dashboard, driving school dashboard, routing, components | Frontend changes, adding pages, modifying UI components |
+| `ai-docs/FRONTEND_MEBBIS_SYNC_ERRORS.md` | Frontend error handling for MEBBIS sync: 2FA modals, credential modals, auto-retry flow | Working on MEBBIS sync error handling, modals, or credential re-entry flows |
 | `ai-docs/QUICK_REFERENCE.md` | Developer quick-start: setup commands, env config, Docker, running services | Setting up the project, running services, environment configuration |
 
 ## System Architecture: Old vs New
