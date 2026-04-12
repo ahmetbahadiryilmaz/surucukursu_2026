@@ -353,12 +353,11 @@ const StudentsTable: React.FC<StudentsProps> = ({ onDownload, onJobStart }) => {
       );
       console.log("✅ Sync with AJANDA KODU successful:", response);
       
-      setSyncMessage("Senkronize başarılı! Öğrenciler güncelleniyor...");
+      setSyncMessage("✅ Senkronize başarıyla tamamlandı!");
       
       // Refresh students after sync
       await fetchStudents(activeDrivingSchool.id);
       
-      setSyncMessage("✅ Senkronize başarıyla tamamlandı!");
       setTimeout(() => setSyncMessage(null), 3000);
     } catch (error) {
       console.error("❌ Error syncing with AJANDA KODU:", error);
