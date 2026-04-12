@@ -7,6 +7,8 @@ import { drivingSchoolOwnerContext } from "@/components/contexts/DrivingSchoolMa
 import { apiService } from "@/services/api-service";
 import { toast } from "react-toastify";
 import { socketService } from "@/services/socket-service";
+import { MebbisCodeModal } from "@/components/Modals/MebbisCodeModal";
+import { MebbisCredentialsModal } from "@/components/MebbisCredentialsModal";
 
 // Download için interface
 interface CompletedDownload {
@@ -45,6 +47,9 @@ const StudentsTable: React.FC<StudentsProps> = ({ onDownload, onJobStart }) => {
   const [error, setError] = useState<string | null>(null);
   const [syncMessage, setSyncMessage] = useState<string | null>(null);
   const [showEmptyDialog, setShowEmptyDialog] = useState<boolean>(false);
+  const [showCodeModal, setShowCodeModal] = useState<boolean>(false);
+  const [showCredentialsModal, setShowCredentialsModal] = useState<boolean>(false);
+  const [credentialsError, setCredentialsError] = useState<string>("");
 
   const lastFetchedSchoolId = useRef<number | null>(null);
   const { activeDrivingSchool, user, isLoading: contextLoading } = drivingSchoolOwnerContext();
@@ -245,18 +250,141 @@ const StudentsTable: React.FC<StudentsProps> = ({ onDownload, onJobStart }) => {
       
       let errorMessage = "Senkronize sırasında bir hata oluştu";
       
+      // Try different ways to extract error message
       if ((err as any)?.response?.data?.message) {
         errorMessage = (err as any).response.data.message;
       } else if (err instanceof Error) {
         errorMessage = err.message;
       } else if (typeof err === 'string') {
         errorMessage = err;
+      } else if (typeof err === 'object' && err !== null) {
+        errorMessage = (err as any).message || (err as any).data?.message || JSON.stringify(err);
+      }
+      
+      console.log("Final error message:", errorMessage);
+      
+      // Check if SESSION_EXPIRED (session expired, need to re-login)
+      if (errorMessage && (
+        errorMessage.toLowerCase().includes('session_expired') ||
+        errorMessage.toLowerCase().includes('session expired') ||
+        errorMessage.toLowerCase().includes('oturum') ||
+        errorMessage.toLowerCase().includes('login page')
+      )) {
+        console.log("🔑 Session expired - showing credentials modal");
+        setSyncMessage(null);
+        setCredentialsError("Oturumunuz süresi dolmuş. MEBBIS kimlik bilgilerini yeniden giriniz.");
+        setShowCredentialsModal(true);
+      }
+      // Check if AJANDA KODU is needed (check this FIRST)
+      else if (errorMessage && (
+        errorMessage.toLowerCase().includes('ajanda kodu') ||
+        errorMessage.toLowerCase().includes('ajanda') ||
+        errorMessage.toLowerCase().includes('2fa') ||
+        errorMessage.toLowerCase().includes('doğrulama kodu')
+      )) {
+        console.log("🎯 AJANDA KODU needed - showing modal");
+        setSyncMessage(null);
+        setShowCodeModal(true);
+      }
+      // Check if error indicates invalid credentials
+      else if (
+        errorMessage && 
+        (errorMessage.toLowerCase().includes('kullanıcı adı') ||
+         errorMessage.toLowerCase().includes('şifre') ||
+         errorMessage.toLowerCase().includes('kimlik') ||
+         errorMessage.toLowerCase().includes('hatalı') ||
+         errorMessage.toLowerCase().includes('başarısız'))
+      ) {
+        console.log("🔑 Invalid credentials - showing credentials modal");
+        setSyncMessage(null);
+        setCredentialsError(errorMessage);
+        setShowCredentialsModal(true);
+      } else {
+        setSyncMessage(`❌ Hata: ${errorMessage}`);
+        setTimeout(() => setSyncMessage(null), 10000);
+      }
+    } finally {
+      setSyncing(false);
+    }
+  };
+
+  const handleCredentialsSaved = async (username: string, password: string): Promise<void> => {
+    console.log("💾 Credentials saved, updating school...");
+    
+    try {
+      // Update the school credentials via API
+      await apiService.drivingSchool.updateMebbisCredentials(
+        activeDrivingSchool?.id.toString() || "",
+        username,
+        password
+      );
+
+      console.log("✅ Credentials updated successfully");
+      setShowCredentialsModal(false);
+      setCredentialsError("");
+
+      // Retry sync with updated credentials
+      console.log("🔄 Retrying sync with updated credentials...");
+      setSyncMessage("Güncellenmiş kimlik bilgileri ile senkronize ediliyor...");
+      await handleSync();
+    } catch (error) {
+      console.error("❌ Error updating credentials:", error);
+      
+      // Extract the proper error message from AxiosError
+      let errorMessage = "Kimlik doğrulama başarısız oldu";
+      
+      if ((error as any)?.response?.data?.message) {
+        errorMessage = (error as any).response.data.message;
+      } else if (error instanceof Error) {
+        errorMessage = error.message;
+      }
+      
+      console.log("Final error message:", errorMessage);
+      
+      // Re-throw with the proper error message
+      throw new Error(errorMessage);
+    }
+  };
+
+  const handleCodeSubmitted = async (code: string): Promise<void> => {
+    console.log("📝 Code submitted, retrying sync...");
+    
+    try {
+      setShowCodeModal(false);
+      setSyncMessage("AJANDA KODU ile senkronize ediliyor...");
+      
+      // Retry sync with AJANDA KODU
+      if (!activeDrivingSchool?.id) {
+        setSyncMessage("Aktif sürücü kursu seçilmedi");
+        return;
+      }
+
+      const response = await apiService.drivingSchool.syncStudents(
+        activeDrivingSchool.id.toString(),
+        { ajandasKodu: code }
+      );
+      console.log("✅ Sync with AJANDA KODU successful:", response);
+      
+      setSyncMessage("Senkronize başarılı! Öğrenciler güncelleniyor...");
+      
+      // Refresh students after sync
+      await fetchStudents(activeDrivingSchool.id);
+      
+      setSyncMessage("✅ Senkronize başarıyla tamamlandı!");
+      setTimeout(() => setSyncMessage(null), 3000);
+    } catch (error) {
+      console.error("❌ Error syncing with AJANDA KODU:", error);
+      
+      let errorMessage = "AJANDA KODU ile senkronize sırasında bir hata oluştu";
+      
+      if ((error as any)?.response?.data?.message) {
+        errorMessage = (error as any).response.data.message;
+      } else if (error instanceof Error) {
+        errorMessage = error.message;
       }
       
       setSyncMessage(`❌ Hata: ${errorMessage}`);
       setTimeout(() => setSyncMessage(null), 10000);
-    } finally {
-      setSyncing(false);
     }
   };
 
@@ -355,6 +483,29 @@ const StudentsTable: React.FC<StudentsProps> = ({ onDownload, onJobStart }) => {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* MEBBIS Credentials Modal */}
+      <MebbisCredentialsModal
+        isOpen={showCredentialsModal}
+        onClose={() => {
+          setShowCredentialsModal(false);
+          setCredentialsError("");
+        }}
+        errorMessage={credentialsError}
+        onSubmit={handleCredentialsSaved}
+      />
+
+      {/* MEBBIS Code Modal */}
+      <MebbisCodeModal
+        isOpen={showCodeModal}
+        onClose={() => setShowCodeModal(false)}
+        schoolCode={activeDrivingSchool?.id.toString() || ""}
+        onSuccess={handleCodeSubmitted}
+        onError={(error) => {
+          setSyncMessage(`❌ Hata: ${error}`);
+          setTimeout(() => setSyncMessage(null), 10000);
+        }}
+      />
     </div>
   );
 };
