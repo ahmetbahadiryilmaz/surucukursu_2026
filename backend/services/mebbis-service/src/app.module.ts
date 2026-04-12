@@ -12,6 +12,7 @@ import { SyncController } from './controllers/sync.controller';
 import { TestController } from './controllers/test.controller';
 import { ResponseController } from './controllers/response.controller';
 import { VehiclesController } from './controllers/vehicles.controller';
+import { CandidatesController } from './controllers/candidates.controller';
 import { TbMebbis } from './entities/tb-mebbis.entity';
 import { MebbisCookie } from '@surucukursu/shared';
 import { MebbisGateway } from './mebbis.gateway';
@@ -40,6 +41,7 @@ import { VehiclesSimulatorsService } from './mebbis/vehicles-simulators.service'
     TestController,
     ResponseController,
     VehiclesController,
+    CandidatesController,
   ],
   providers: [
     AppService,

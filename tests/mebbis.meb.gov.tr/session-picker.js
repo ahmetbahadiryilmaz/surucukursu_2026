@@ -273,6 +273,135 @@ function extractDropdowns(html) {
   return dropdowns;
 }
 
+// Parse student table (dgListele) from skt02006.aspx with photo column handling
+function parseStudentTable(html) {
+  const tableRegex = /<table[^>]*id="dgListele"[^>]*>([\s\S]*?)<\/table>/i;
+  const tableMatch = html.match(tableRegex);
+  
+  if (!tableMatch) return [];
+  
+  const tableHtml = tableMatch[1];
+  const rows = [];
+  
+  // Find header row (first tr - frmListBaslik)
+  const headerRowRegex = /<tr[^>]*>([\s\S]*?)<\/tr>/i;
+  const headerRowMatch = tableHtml.match(headerRowRegex);
+  let headers = [];
+  
+  if (headerRowMatch) {
+    const cellRegex = /<td[^>]*>([\s\S]*?)<\/td>/gi;
+    let cellMatch;
+    while ((cellMatch = cellRegex.exec(headerRowMatch[1])) !== null) {
+      let cellText = cellMatch[1].replace(/<[^>]*>/g, '').replace(/&nbsp;/g, ' ').trim();
+      headers.push(cellText);
+    }
+  }
+  
+  // Column names that contain photos (img src should be extracted)
+  const photoColumns = new Set();
+  headers.forEach((h, i) => {
+    const normalized = h.toLowerCase();
+    if (normalized.includes('fotoğraf') || normalized.includes('fotograf') || normalized.includes('foto')) {
+      photoColumns.add(i);
+    }
+  });
+  
+  // Find all data rows (skip header row)
+  const rowRegex = /<tr[^>]*>([\s\S]*?)<\/tr>/gi;
+  let rowMatch;
+  let isFirst = true;
+  
+  while ((rowMatch = rowRegex.exec(tableHtml)) !== null) {
+    if (isFirst) { isFirst = false; continue; }
+    
+    const rowContent = rowMatch[1];
+    const cellRegex2 = /<td[^>]*>([\s\S]*?)<\/td>/gi;
+    const cells = [];
+    let cellMatch2;
+    let cellIdx = 0;
+    
+    while ((cellMatch2 = cellRegex2.exec(rowContent)) !== null) {
+      const rawHtml = cellMatch2[1];
+      
+      if (photoColumns.has(cellIdx)) {
+        // Extract img src for photo columns
+        const imgMatch = rawHtml.match(/src="([^"]+)"/i);
+        cells.push(imgMatch ? imgMatch[1] : '');
+      } else {
+        // Extract text content, preserving meaningful text
+        let text = rawHtml
+          .replace(/<[^>]*>/g, '')
+          .replace(/&nbsp;/g, ' ')
+          .replace(/&#231;/g, 'ç').replace(/&#252;/g, 'ü')
+          .replace(/&#246;/g, 'ö').replace(/&#220;/g, 'Ü')
+          .replace(/&#199;/g, 'Ç').replace(/&#214;/g, 'Ö')
+          .replace(/&amp;/g, '&').replace(/&quot;/g, '"')
+          .replace(/&lt;/g, '<').replace(/&gt;/g, '>')
+          .trim();
+        cells.push(text);
+      }
+      cellIdx++;
+    }
+    
+    if (cells.length > 0 && cells.some(c => c.length > 0)) {
+      const rowObj = {};
+      headers.forEach((header, idx) => {
+        rowObj[header] = cells[idx] || '';
+      });
+      rows.push(rowObj);
+    }
+  }
+  
+  return rows;
+}
+
+// Extract ALL form values from HTML (hidden fields + dropdown selected values + text inputs)
+function extractAllFormValues(html) {
+  const values = {};
+
+  // 1. Hidden inputs
+  const hiddenRegex = /<input[^>]*type\s*=\s*["']?hidden["']?[^>]*>/gi;
+  const hiddenMatches = html.match(hiddenRegex) || [];
+  hiddenMatches.forEach(input => {
+    const nameMatch = input.match(/name\s*=\s*["']([^"']+)["']/i);
+    const valueMatch = input.match(/value\s*=\s*["']([^"']*)["']/i) ||
+                       input.match(/value\s*=\s*([^\s>]+)/i);
+    if (nameMatch) {
+      values[nameMatch[1]] = valueMatch ? valueMatch[1] : '';
+    }
+  });
+
+  // 2. Select dropdowns - get selected values
+  const selectRegex = /<select[^>]*name\s*=\s*["']([^"']+)["'][^>]*>([\s\S]*?)<\/select>/gi;
+  let selectMatch;
+  while ((selectMatch = selectRegex.exec(html)) !== null) {
+    const name = selectMatch[1];
+    const optionsHtml = selectMatch[2];
+    const selectedMatch = optionsHtml.match(/<option[^>]*selected[^>]*value\s*=\s*["']([^"']*)["']/i);
+    if (selectedMatch) {
+      values[name] = selectedMatch[1];
+    } else {
+      const firstOptionMatch = optionsHtml.match(/<option[^>]*value\s*=\s*["']([^"']*)["']/i);
+      if (firstOptionMatch) {
+        values[name] = firstOptionMatch[1];
+      }
+    }
+  }
+
+  // 3. Text inputs
+  const textInputRegex = /<input[^>]*type\s*=\s*["']?text["']?[^>]*>/gi;
+  const textMatches = html.match(textInputRegex) || [];
+  textMatches.forEach(input => {
+    const nameMatch = input.match(/name\s*=\s*["']([^"']+)["']/i);
+    const valueMatch = input.match(/value\s*=\s*["']([^"']*)["']/i);
+    if (nameMatch) {
+      values[nameMatch[1]] = valueMatch ? valueMatch[1] : '';
+    }
+  });
+
+  return values;
+}
+
 // Check if a user's session is still valid
 async function checkUserSession(user) {
   if (!user.cookie) {
@@ -710,6 +839,177 @@ async function main() {
           }
         }
 
+        // Auto-submit for skt02006.aspx (Dönem Adaylarını Onaylama)
+        if (selectedPage.url === '/SKT/skt02006.aspx') {
+          console.log('\n📋 Auto-submit mode for Dönem Adaylarını Onaylama\n');
+
+          try {
+            const dropdownLabels = {
+              'cmbEgitimDonemi': 'Dönemi',
+              'cmbGrubu': 'Grubu',
+              'cmbSubesi': 'Şubesi',
+              'cmbOgrenciDurumu': 'Öğrenci Durumu',
+              'cmbDurumu': 'Onay Durumu'
+            };
+
+            // Step 1: Extract form data and dönem options from initial GET
+            const initialFormValues = extractAllFormValues(response.body);
+            const initialDropdowns = extractDropdowns(response.body);
+
+            console.log('  📄 Initial form state:');
+            initialDropdowns.forEach(dd => {
+              const label = dropdownLabels[dd.name] || dd.name;
+              const selectedOpt = dd.options.find(o => o.value === dd.selectedValue);
+              const selectedText = selectedOpt ? selectedOpt.text : dd.selectedValue;
+              console.log(`     ${label}: ${selectedText} (${dd.selectedValue})`);
+            });
+
+            // Get dönem options, filter out -1 (empty) and 1 (Tüm Dönemler)
+            const donemDropdown = initialDropdowns.find(dd => dd.name === 'cmbEgitimDonemi');
+            if (!donemDropdown) {
+              console.log('  ❌ cmbEgitimDonemi dropdown not found');
+              await question('\nPress Enter to continue...');
+              continue;
+            }
+
+            const donemOptions = donemDropdown.options.filter(o => o.value !== '-1' && o.value !== '1');
+            console.log(`\n  📅 Found ${donemOptions.length} dönem options (excluding -1 and 1)`);
+            donemOptions.forEach((o, i) => {
+              console.log(`     ${i + 1}) ${o.text} (${o.value})`);
+            });
+
+            // Step 2: Trigger initial postback to get updated hidden fields
+            console.log('\n⏳ Step 1: Triggering cmbEgitimDonemi postback...');
+            const postbackData = {
+              ...initialFormValues,
+              '__EVENTTARGET': 'cmbEgitimDonemi',
+              '__EVENTARGUMENT': '',
+              'cmbEgitimDonemi': donemOptions[0].value
+            };
+
+            const postbackResponse = await postPage(selectedSession.cookie, selectedPage.url, postbackData);
+            console.log(`  ✓ Postback Status: ${postbackResponse.statusCode}`);
+
+            // Step 3: Loop through each dönem and scrape students
+            const allStudents = [];
+            let lastResponseBody = postbackResponse.body;
+
+            for (let i = 0; i < donemOptions.length; i++) {
+              const donem = donemOptions[i];
+              console.log(`\n⏳ [${i + 1}/${donemOptions.length}] Fetching dönem: ${donem.text} (${donem.value})...`);
+
+              // Use updated hidden fields from the last response
+              const currentFormValues = extractAllFormValues(lastResponseBody);
+
+              const submitData = {
+                ...currentFormValues,
+                '__EVENTTARGET': '',
+                '__EVENTARGUMENT': '',
+                'cmbEgitimDonemi': donem.value,
+                'cmbGrubu': '-1',
+                'cmbSubesi': '-1',
+                'cmbDurumu': '4',           // Döneme Kayıtlı Tüm Adaylar
+                'cmbOgrenciDurumu': '0',     // Kursa Başvuru Aşamasında (all statuses can be fetched with multiple passes)
+                'txtTcKimlikNo': '',
+                'btnListele': '.:: Listele ::.'
+              };
+
+              const submitResponse = await postPage(selectedSession.cookie, selectedPage.url, submitData);
+              console.log(`  ✓ Status: ${submitResponse.statusCode}, Body: ${submitResponse.body.length} bytes`);
+
+              // Update lastResponseBody for next iteration (keeps __VIEWSTATE fresh)
+              lastResponseBody = submitResponse.body;
+
+              // Parse students from this dönem
+              const donemStudents = parseStudentTable(submitResponse.body);
+
+              if (donemStudents.length > 0) {
+                // Tag each student with dönem info
+                donemStudents.forEach(s => {
+                  s._donemValue = donem.value;
+                  s._donemText = donem.text;
+                });
+                allStudents.push(...donemStudents);
+                console.log(`  ✅ Found ${donemStudents.length} students`);
+              } else {
+                console.log(`  ⚠️  No students for this dönem`);
+              }
+
+              // Save individual dönem response
+              const donemFileName = `${sessionName}_skt02006_donem_${donem.value}.html`;
+              const donemOutputPath = path.join(responsesDir, donemFileName);
+              fs.writeFileSync(donemOutputPath, submitResponse.body);
+            }
+
+            // Summary
+            console.log('\n' + '='.repeat(90));
+            console.log(`📊 TOTAL: ${allStudents.length} students across ${donemOptions.length} dönem`);
+            console.log('='.repeat(90));
+
+            if (allStudents.length > 0) {
+              // Display summary table
+              console.log('\n  ' + '-'.repeat(100));
+              console.log('  | #   | TC Kimlik No  | Adı Soyadı                     | Dönemi              | Kurum Onay     |');
+              console.log('  ' + '-'.repeat(100));
+              allStudents.forEach((s, i) => {
+                const no = String(i + 1).padStart(3);
+                const tc = (s['TC. Kimlik No'] || s['TC Kimlik No'] || '').padEnd(13);
+                const name = (s['Adı Soyadı'] || '').substring(0, 30).padEnd(30);
+                const donem = (s['Dönemi'] || s._donemText || '').substring(0, 19).padEnd(19);
+                const onay = (s['Kurum Onay Durumu'] || '').substring(0, 14).padEnd(14);
+                console.log(`  | ${no} | ${tc} | ${name} | ${donem} | ${onay} |`);
+              });
+              console.log('  ' + '-'.repeat(100));
+
+              // Count photo availability
+              const withBioPhoto = allStudents.filter(s => s['Biyometrik Fotoğraf'] && s['Biyometrik Fotoğraf'].startsWith('data:')).length;
+              const withRegPhoto = allStudents.filter(s => s['Kayıt Fotoğrafı'] && s['Kayıt Fotoğrafı'].startsWith('data:')).length;
+              console.log(`\n  📷 Biyometrik Fotoğraf: ${withBioPhoto}/${allStudents.length}`);
+              console.log(`  📷 Kayıt Fotoğrafı: ${withRegPhoto}/${allStudents.length}`);
+
+              // Per-dönem breakdown
+              const donemCounts = {};
+              allStudents.forEach(s => {
+                const key = s._donemText || s._donemValue || 'Unknown';
+                donemCounts[key] = (donemCounts[key] || 0) + 1;
+              });
+              console.log('\n  📅 Per-dönem breakdown:');
+              Object.entries(donemCounts).forEach(([donem, count]) => {
+                console.log(`     ${donem}: ${count} students`);
+              });
+
+              // Save full JSON (with photos)
+              const jsonFileName = `${sessionName}_students.json`;
+              const jsonOutputPath = path.join(responsesDir, jsonFileName);
+              fs.writeFileSync(jsonOutputPath, JSON.stringify(allStudents, null, 2));
+              console.log(`\n  💾 Student data saved: responses/${jsonFileName}`);
+
+              // Save clean version without base64 photos
+              const cleanStudents = allStudents.map(s => {
+                const clean = { ...s };
+                if (clean['Biyometrik Fotoğraf'] && clean['Biyometrik Fotoğraf'].startsWith('data:')) {
+                  clean['Biyometrik Fotoğraf'] = '[BASE64_IMAGE]';
+                }
+                if (clean['Kayıt Fotoğrafı'] && clean['Kayıt Fotoğrafı'].startsWith('data:')) {
+                  clean['Kayıt Fotoğrafı'] = '[BASE64_IMAGE]';
+                }
+                return clean;
+              });
+              const cleanJsonFileName = `${sessionName}_students_clean.json`;
+              const cleanJsonOutputPath = path.join(responsesDir, cleanJsonFileName);
+              fs.writeFileSync(cleanJsonOutputPath, JSON.stringify(cleanStudents, null, 2));
+              console.log(`  💾 Clean data (no photos): responses/${cleanJsonFileName}`);
+            }
+
+            await question('\nPress Enter to continue...');
+            continue;
+          } catch (error) {
+            console.log(`\n❌ Error during auto-submit: ${error.message}`);
+            await question('\nPress Enter to continue...');
+            continue;
+          }
+        }
+
         // Save response
         let fileName = `${sessionName}_${pageName}.html`;
         let outputPath = path.join(responsesDir, fileName);
@@ -763,6 +1063,18 @@ async function main() {
                 if (optionIdx >= 0 && optionIdx < selectedDropdown.options.length) {
                   const selectedOption = selectedDropdown.options[optionIdx];
                   console.log(`\n⏳ Posting with ${selectedDropdown.name} = "${selectedOption.text}" (${selectedOption.value})...`);
+                  
+                  // Show cookie info
+                  console.log('\n  🍪 Cookie Info:');
+                  const cookiePairs = selectedSession.cookie.split(';').map(c => c.trim()).filter(Boolean);
+                  cookiePairs.forEach(pair => {
+                    const [name, ...valParts] = pair.split('=');
+                    const val = valParts.join('=');
+                    const displayVal = val && val.length > 60 ? val.substring(0, 60) + '...' : (val || '(empty)');
+                    console.log(`     ${name.trim()} = ${displayVal}`);
+                  });
+                  console.log(`  🍪 Total cookies: ${cookiePairs.length}`);
+                  console.log('');
                   
                   // Extract hidden form fields
                   const formFields = extractFormFields(response.body);

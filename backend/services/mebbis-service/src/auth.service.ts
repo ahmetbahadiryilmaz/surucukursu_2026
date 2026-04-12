@@ -67,6 +67,57 @@ export class AuthService {
     );
   }
 
+  /**
+   * Check if the existing session cookie is still alive
+   * Fetches a generic auth-required page (main.aspx) and checks for user identifier
+   * @returns { isAlive: boolean, userName?: string }
+   */
+  async checkAuth(drivingSchoolId: number): Promise<{ isAlive: boolean; userName?: string; institution?: string }> {
+    const cookie = await this.getCookie(drivingSchoolId);
+    if (!cookie) {
+      return { isAlive: false };
+    }
+
+    try {
+      const https = require('https');
+      const html = await new Promise<string>((resolve, reject) => {
+        const options = {
+          hostname: 'mebbisyd.meb.gov.tr',
+          path: '/SKT/skt01001.aspx',
+          method: 'GET',
+          headers: {
+            'Cookie': cookie,
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+          },
+          timeout: 10000,
+        };
+
+        const req = https.get(options, (res: any) => {
+          let data = '';
+          res.on('data', (chunk: any) => (data += chunk));
+          res.on('end', () => resolve(data));
+        });
+
+        req.on('error', reject);
+        req.on('timeout', () => {
+          req.abort();
+          reject(new Error('checkAuth request timeout'));
+        });
+      });
+
+      // Check for SKT module user identifier (same check as session-picker.js)
+      const userMatch = html.match(/<span id="SktPageHeader1_lblKullaniciAdi">([^<]+)<\/span>/i);
+      const instMatch = html.match(/<span id="SktPageHeader1_lblKurumKodu">([^<]+)<\/span>/i);
+      if (userMatch && instMatch && userMatch[1]?.trim().length > 0) {
+        return { isAlive: true, userName: userMatch[1].trim(), institution: instMatch[1]?.trim() };
+      }
+
+      return { isAlive: false };
+    } catch (error) {
+      return { isAlive: false };
+    }
+  }
+
   async tryLogin(username: string, password: string, drivingSchoolId: number) {
     const prelogin = new PreloginService(
       'https://mebbisyd.meb.gov.tr/',
@@ -88,7 +139,16 @@ export class AuthService {
 
     if (trylogin.success) {
       // Login successful - redirected to main page
-      // Now we need to check if AJANDA KODU is required
+      // CRITICAL: We must visit redirect.aspx to finalize the ASP.NET session.
+      // Without this step, the server does not recognize the session as authenticated.
+      try {
+        console.log('[AuthService] Following redirect.aspx to finalize session...');
+        await prelogin.getSocketTokenAndInputs();
+        console.log('[AuthService] Session finalized via redirect.aspx');
+      } catch (redirectError) {
+        console.warn('[AuthService] redirect.aspx follow failed (non-fatal):', redirectError?.message);
+      }
+
       return { 
         message: 'login success',
         needsCode: true, // Session established, may need AJANDA KODU for further actions

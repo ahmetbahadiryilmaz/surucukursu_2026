@@ -33,7 +33,7 @@ pnpm dev:file-server
 | API Gateway | http://localhost:9501 |
 | API Server | http://localhost:3001 |
 | File Server | http://localhost:9504 |
-| MEBBIS Service | http://localhost:3000 |
+| MEBBIS Service | http://localhost:9010 |
 | RabbitMQ UI | http://localhost:15787 |
 | API Docs | http://localhost:3001/docs |
 

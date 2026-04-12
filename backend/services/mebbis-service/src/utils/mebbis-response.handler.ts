@@ -70,9 +70,11 @@ export function checkMebbisInvalidCredentials(
   // Check if response contains login form (indicates login page was returned)
   if (responseBody) {
     const bodyLower = responseBody.toLowerCase();
+    // Only trigger on actual login form fields - NOT on navigation links that reference skt01001.aspx
     if (
       bodyLower.includes('txtusernameoremail') ||
-      (bodyLower.includes('skt01001.aspx') && bodyLower.includes('form'))
+      bodyLower.includes('txtpassword') ||
+      bodyLower.includes('id="frm_default"')
     ) {
       logger.error('❌ MEBBIS returned login form - credentials invalid or session expired');
       throw new MebbisInvalidCredentialsError('Kullanıcı adı veya şifre hatalı');

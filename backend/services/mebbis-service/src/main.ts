@@ -45,7 +45,7 @@ async function bootstrap() {
     new FastifyAdapter(),
   );
   
-  const port = process.env.MEBBIS_SERVICE_PORT || 3000;
+  const port = process.env.MEBBIS_SERVICE_PORT || 9010;
   await app.listen(port, '0.0.0.0');
   console.log(`🚀 MEBBIS Service is running on: http://localhost:${port}`);
 }

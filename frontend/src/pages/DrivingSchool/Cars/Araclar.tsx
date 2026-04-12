@@ -1,6 +1,9 @@
 import { useState, useEffect, useCallback } from "react";
 import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
+import { Eye } from "lucide-react";
 import { apiService } from "@/services/api-service";
 import { drivingSchoolOwnerContext } from "@/components/contexts/DrivingSchoolManagerContext";
 import { MebbisCodeModal } from "@/components/Modals/MebbisCodeModal";
@@ -12,9 +15,25 @@ import { MebbisCredentialsModal } from "@/components/MebbisCredentialsModal";
 interface Arac {
   id: number;
   model: string;
+  brand: string;
   plate_number: string;
   year: number;
   school_id: number;
+  car_type: string;
+  status: string;
+  purchase_date: string | null;
+  last_inspection_date: string | null;
+  inspection_validity_date: string | null;
+  driver_count: number | null;
+  lesson_count: number | null;
+  excuse_days: number | null;
+  serial_number: string | null;
+  start_date: string | null;
+  last_maintenance_date: string | null;
+  usage_hours: number | null;
+  license_validity_date: string | null;
+  created_at: number;
+  updated_at: number;
 }
 
 const AraclarTable = (): JSX.Element => {
@@ -25,6 +44,8 @@ const AraclarTable = (): JSX.Element => {
   const [syncMessage, setSyncMessage] = useState<string | null>(null);
   const [showCodeModal, setShowCodeModal] = useState<boolean>(false);
   const [showCredentialsModal, setShowCredentialsModal] = useState<boolean>(false);
+  const [showEmptyDialog, setShowEmptyDialog] = useState<boolean>(false);
+  const [selectedArac, setSelectedArac] = useState<Arac | null>(null);
   const [credentialsError, setCredentialsError] = useState<string>("");
 
   const { activeDrivingSchool } = drivingSchoolOwnerContext();
@@ -77,6 +98,11 @@ const AraclarTable = (): JSX.Element => {
       
       setAraclar(carsData);
       setError(null);
+
+      // Show dialog if no cars found
+      if (carsData.length === 0) {
+        setShowEmptyDialog(true);
+      }
     } catch (err) {
       console.error("💥 Error in fetchAraclar:", err);
       const errorMessage = err instanceof Error ? err.message : "Bilinmeyen bir hata oluştu";
@@ -301,23 +327,44 @@ const AraclarTable = (): JSX.Element => {
       <Table className="mt-4">
         <TableHeader>
           <TableRow>
+            <TableHead>Marka</TableHead>
             <TableHead>Model</TableHead>
             <TableHead>Plaka</TableHead>
             <TableHead>Yıl</TableHead>
+            <TableHead>Hizmette</TableHead>
+            <TableHead className="text-right">Detay</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
           {araclar?.length > 0 ? (
             araclar.map((arac) => (
               <TableRow key={arac.id}>
+                <TableCell>{arac.brand}</TableCell>
                 <TableCell>{arac.model}</TableCell>
                 <TableCell>{arac.plate_number}</TableCell>
                 <TableCell>{arac.year}</TableCell>
+                <TableCell>
+                  {arac.status && arac.status.toLowerCase().includes('hizmette') ? (
+                    <span className="text-green-600 font-medium">Hizmette</span>
+                  ) : (
+                    <span className="text-red-500 font-medium">Hizmette Değil</span>
+                  )}
+                </TableCell>
+                <TableCell className="text-right">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setSelectedArac(arac)}
+                    title="Detay Gör"
+                  >
+                    <Eye className="h-4 w-4" />
+                  </Button>
+                </TableCell>
               </TableRow>
             ))
           ) : (
             <TableRow>
-              <TableCell colSpan={3} className="text-center">
+              <TableCell colSpan={6} className="text-center">
                 Veri bulunamadı.
               </TableCell>
             </TableRow>
@@ -347,6 +394,74 @@ const AraclarTable = (): JSX.Element => {
           setTimeout(() => setSyncMessage(null), 5000);
         }}
       />
+
+      {/* Empty cars dialog */}
+      <AlertDialog open={showEmptyDialog} onOpenChange={setShowEmptyDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Kayıt Bulunamadı</AlertDialogTitle>
+            <AlertDialogDescription>
+              Hiç kayıt bulunamadı. Senkronize etmek ister misiniz?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Hayır</AlertDialogCancel>
+            <AlertDialogAction onClick={() => { setShowEmptyDialog(false); handleSync(); }}>
+              Evet, Senkronize Et
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Vehicle detail dialog */}
+      <Dialog open={!!selectedArac} onOpenChange={(open) => { if (!open) setSelectedArac(null); }}>
+        <DialogContent className="sm:max-w-[500px]">
+          <DialogHeader>
+            <DialogTitle>Araç Detayı</DialogTitle>
+            <DialogDescription>
+              {selectedArac?.plate_number} - {selectedArac?.brand} {selectedArac?.model}
+            </DialogDescription>
+          </DialogHeader>
+          {selectedArac && (
+            <div className="grid grid-cols-2 gap-3 text-sm">
+              <div className="font-medium text-muted-foreground">Marka</div>
+              <div>{selectedArac.brand || '-'}</div>
+              <div className="font-medium text-muted-foreground">Model</div>
+              <div>{selectedArac.model || '-'}</div>
+              <div className="font-medium text-muted-foreground">Plaka</div>
+              <div>{selectedArac.plate_number || '-'}</div>
+              <div className="font-medium text-muted-foreground">Model Yılı</div>
+              <div>{selectedArac.year || '-'}</div>
+              <div className="font-medium text-muted-foreground">Araç Türü</div>
+              <div>{selectedArac.car_type === 'simulator' ? 'Simülatör' : 'Eğitim Aracı'}</div>
+              <div className="font-medium text-muted-foreground">Durum</div>
+              <div>{selectedArac.status || '-'}</div>
+              <div className="font-medium text-muted-foreground">Hizmete Giriş Tarihi</div>
+              <div>{selectedArac.purchase_date ? new Date(selectedArac.purchase_date).toLocaleDateString('tr-TR') : '-'}</div>
+              <div className="font-medium text-muted-foreground">Son Muayene Tarihi</div>
+              <div>{selectedArac.last_inspection_date ? new Date(selectedArac.last_inspection_date).toLocaleDateString('tr-TR') : '-'}</div>
+              <div className="font-medium text-muted-foreground">Muayene Geçerlilik Tarihi</div>
+              <div>{selectedArac.inspection_validity_date ? new Date(selectedArac.inspection_validity_date).toLocaleDateString('tr-TR') : '-'}</div>
+              <div className="font-medium text-muted-foreground">Sürücü Sayısı</div>
+              <div>{selectedArac.driver_count ?? '-'}</div>
+              <div className="font-medium text-muted-foreground">Ders Sayısı</div>
+              <div>{selectedArac.lesson_count ?? '-'}</div>
+              <div className="font-medium text-muted-foreground">Özür Günü</div>
+              <div>{selectedArac.excuse_days ?? '-'}</div>
+              {selectedArac.car_type === 'simulator' && (
+                <>
+                  <div className="font-medium text-muted-foreground">Seri No</div>
+                  <div>{selectedArac.serial_number || '-'}</div>
+                  <div className="font-medium text-muted-foreground">Kullanım Saati</div>
+                  <div>{selectedArac.usage_hours ?? '-'}</div>
+                  <div className="font-medium text-muted-foreground">Lisans Geçerlilik</div>
+                  <div>{selectedArac.license_validity_date ? new Date(selectedArac.license_validity_date).toLocaleDateString('tr-TR') : '-'}</div>
+                </>
+              )}
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

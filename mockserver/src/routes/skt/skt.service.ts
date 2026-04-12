@@ -52,25 +52,23 @@ export class SktService {
   }
 
   /**
-   * Handle skt02006.aspx GET - Student course selection
+   * Handle skt02006.aspx GET - Dönem Adaylarını Onaylama / Görüntüleme
    */
   handleSkt02006Get(reply: FastifyReply) {
-    return this.renderView(reply, 'skt02006.hbs', {
-      pageTitle: 'Kurs Seçimi',
+    return this.renderView(reply, 'SKT/SKT_skt02006_aspx_GET.hbs', {
+      pageTitle: 'Dönem Adaylarını Onaylama',
       formAction: 'skt02006.aspx',
       method: 'GET'
     });
   }
 
   /**
-   * Handle skt02006.aspx POST - Student course selection submission
+   * Handle skt02006.aspx POST - Dönem Adaylarını Listele
    */
   handleSkt02006Post(reply: FastifyReply) {
-    return this.renderView(reply, 'skt02006_result.hbs', {
-      pageTitle: 'Kurs Seçimi Sonucu',
-      method: 'POST',
-      success: true,
-      message: 'Kurs seçiminiz başarıyla kaydedildi.'
+    return this.renderView(reply, 'SKT/SKT_skt02006_aspx_POST.hbs', {
+      pageTitle: 'Dönem Adaylarını Onaylama',
+      method: 'POST'
     });
   }
 
@@ -78,7 +76,7 @@ export class SktService {
    * Handle skt02009.aspx GET - Course progress tracking
    */
   handleSkt02009Get(reply: FastifyReply) {
-    return this.renderView(reply, 'skt02009.hbs', {
+    return this.renderView(reply, 'SKT/SKT_skt02009_aspx_GET.hbs', {
       pageTitle: 'Kurs İlerleme Takibi',
       formAction: 'skt02009.aspx',
       method: 'GET'
@@ -89,11 +87,9 @@ export class SktService {
    * Handle skt02009.aspx POST - Course progress submission
    */
   handleSkt02009Post(reply: FastifyReply) {
-    return this.renderView(reply, 'skt02009_result.hbs', {
+    return this.renderView(reply, 'SKT/SKT_skt02009_aspx_POST.hbs', {
       pageTitle: 'İlerleme Kaydı',
-      method: 'POST',
-      progress: 75,
-      message: 'İlerleme durumunuz güncellendi.'
+      method: 'POST'
     });
   }
 

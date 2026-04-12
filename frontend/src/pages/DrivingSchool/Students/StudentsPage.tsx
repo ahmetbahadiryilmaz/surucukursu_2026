@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Download } from "lucide-react";
 import { drivingSchoolOwnerContext } from "@/components/contexts/DrivingSchoolManagerContext";
 import { apiService } from "@/services/api-service";
@@ -40,7 +41,10 @@ interface StudentsProps {
 const StudentsTable: React.FC<StudentsProps> = ({ onDownload, onJobStart }) => {
   const [students, setStudents] = useState<Student[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
+  const [syncing, setSyncing] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
+  const [syncMessage, setSyncMessage] = useState<string | null>(null);
+  const [showEmptyDialog, setShowEmptyDialog] = useState<boolean>(false);
 
   const lastFetchedSchoolId = useRef<number | null>(null);
   const { activeDrivingSchool, user, isLoading: contextLoading } = drivingSchoolOwnerContext();
@@ -88,6 +92,15 @@ const StudentsTable: React.FC<StudentsProps> = ({ onDownload, onJobStart }) => {
 
       setStudents(response);
       setLoading(false);
+      
+      // Show/hide empty dialog based on whether there are students
+      if (!response || response.length === 0) {
+        console.log("📭 No students found, showing empty dialog");
+        setShowEmptyDialog(true);
+      } else {
+        console.log("📚 Students found, closing empty dialog");
+        setShowEmptyDialog(false);
+      }
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : String(err);
       setError(errorMessage);
@@ -206,6 +219,47 @@ const StudentsTable: React.FC<StudentsProps> = ({ onDownload, onJobStart }) => {
     }
   };
 
+  const handleSync = async (): Promise<void> => {
+    if (!activeDrivingSchool?.id) {
+      setSyncMessage("Aktif sürücü kursu seçilmedi");
+      return;
+    }
+
+    try {
+      setSyncing(true);
+      setSyncMessage("Senkronize ediliyor...");
+      console.log("🔄 Syncing students for school:", activeDrivingSchool.id);
+      
+      const response = await apiService.drivingSchool.syncStudents(activeDrivingSchool.id.toString());
+      console.log("✅ Sync response:", response);
+      
+      setSyncMessage("Senkronize başarılı! Öğrenciler güncelleniyor...");
+      
+      // Refresh students after sync
+      await fetchStudents(activeDrivingSchool.id);
+      
+      setSyncMessage("✅ Senkronize başarıyla tamamlandı!");
+      setTimeout(() => setSyncMessage(null), 3000);
+    } catch (err) {
+      console.error("❌ Error syncing students:", err);
+      
+      let errorMessage = "Senkronize sırasında bir hata oluştu";
+      
+      if ((err as any)?.response?.data?.message) {
+        errorMessage = (err as any).response.data.message;
+      } else if (err instanceof Error) {
+        errorMessage = err.message;
+      } else if (typeof err === 'string') {
+        errorMessage = err;
+      }
+      
+      setSyncMessage(`❌ Hata: ${errorMessage}`);
+      setTimeout(() => setSyncMessage(null), 10000);
+    } finally {
+      setSyncing(false);
+    }
+  };
+
   if (contextLoading || loading) {
     return <div>Yükleniyor...</div>;
   }
@@ -216,7 +270,23 @@ const StudentsTable: React.FC<StudentsProps> = ({ onDownload, onJobStart }) => {
 
   return (
     <div className="p-6 rounded-lg shadow-lg bg-white dark:bg-black relative">
-      <h2 className="text-2xl font-bold mb-4 text-gray-900 dark:text-gray-100">Öğrenci Raporları</h2>
+      <div className="flex justify-between items-center mb-4">
+        <h2 className="text-2xl font-bold text-gray-900 dark:text-gray-100">Öğrenci Raporları</h2>
+        <Button 
+          onClick={handleSync}
+          disabled={syncing}
+          className="bg-blue-600 hover:bg-blue-700 text-white"
+        >
+          {syncing ? "Senkronize ediliyor..." : "Senkronize Et"}
+        </Button>
+      </div>
+
+      {/* Sync message */}
+      {syncMessage && (
+        <div className="mb-4 p-4 bg-blue-100 dark:bg-blue-900 border border-blue-400 rounded text-sm text-blue-800 dark:text-blue-200">
+          {syncMessage}
+        </div>
+      )}
 
       <Table className="mt-4">
         <TableHeader>
@@ -267,6 +337,24 @@ const StudentsTable: React.FC<StudentsProps> = ({ onDownload, onJobStart }) => {
           )}
         </TableBody>
       </Table>
+
+      {/* Empty state dialog */}
+      <AlertDialog open={showEmptyDialog} onOpenChange={setShowEmptyDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Kayıt Bulunamadı</AlertDialogTitle>
+            <AlertDialogDescription>
+              Hiç kayıt bulunamadı. Senkronize etmek ister misiniz?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Hayır</AlertDialogCancel>
+            <AlertDialogAction onClick={() => { setShowEmptyDialog(false); handleSync(); }}>
+              Evet, Senkronize Et
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 };

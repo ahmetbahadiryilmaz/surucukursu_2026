@@ -16,7 +16,7 @@ export interface VehiclesAndSimulatorsResponse {
 @Injectable()
 export class MebbisClientService {
   private readonly logger = new Logger(MebbisClientService.name);
-  private readonly mebbisServiceUrl = `http://localhost:${process.env.MEBBIS_SERVICE_PORT || '3000'}`;
+  private readonly mebbisServiceUrl = `http://localhost:${process.env.MEBBIS_SERVICE_PORT || '9010'}`;
 
   constructor(private readonly httpService: HttpService) {}
 
@@ -220,4 +220,60 @@ export class MebbisClientService {
       );
     }
   }
-}
+
+  /**
+   * Sync students - handles authentication and fetching candidates in one call
+   * @param drivingSchoolId The driving school ID
+   * @param username MEBBIS username
+   * @param password MEBBIS password
+   * @returns Students data
+   */
+  async syncStudents(
+    drivingSchoolId: number,
+    username: string,
+    password: string,
+  ): Promise<{ success: boolean; students: Array<Record<string, string>>; fetchedAt: string }> {
+    try {
+      const url = `${this.mebbisServiceUrl}/api/mebbis/students/sync`;
+      this.logger.log(`[START] Syncing students from MEBBIS service: ${url}`);
+
+      const response = await firstValueFrom(
+        this.httpService.post(
+          url,
+          {
+            drivingSchoolId,
+            username,
+            password,
+          },
+          {
+            timeout: 300000, // 5 min timeout - dönem loop makes many sequential requests
+          }
+        )
+      );
+
+      this.logger.log(`[SUCCESS] Students synced successfully`);
+      this.logger.debug(`Students: ${response.data.students.length}`);
+
+      return response.data;
+    } catch (error) {
+      this.logger.error(
+        `[ERROR] Error syncing students`,
+        error?.message
+      );
+      this.logger.error(`Error details:`, error);
+
+      // Handle network errors
+      if (error.code === 'ECONNREFUSED' || error.code === 'ECONNRESET' || error.code === 'ETIMEDOUT') {
+        this.logger.error(`MEBBIS service at ${this.mebbisServiceUrl} is not reachable (${error.code})`);
+        throw new HttpException(
+          'MEBBIS service is temporarily unavailable',
+          HttpStatus.SERVICE_UNAVAILABLE
+        );
+      }
+
+      throw new HttpException(
+        error.response?.data?.message || 'Error syncing students from MEBBIS service',
+        error.response?.status || HttpStatus.INTERNAL_SERVER_ERROR
+      );
+    }
+  }}

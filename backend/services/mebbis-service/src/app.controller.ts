@@ -8,7 +8,7 @@ export class AppController {
 
   @All('*')
   async proxy(@Req() req: any, @Res() res: any) {
-    const baseUrl = process.env.MEBBIS_BASE_URL || 'http://localhost:3000';
+    const baseUrl = process.env.MEBBIS_BASE_URL || 'http://localhost:9010';
     const url = `${baseUrl}${req.url}`;
     const method = req.method;
     const headers = { ...req.headers };

@@ -16,10 +16,21 @@ export class CarsService {
       private readonly mebbisClientService: MebbisClientService,
     ) {}
 
+    /**
+     * Parse Turkish date format DD/MM/YYYY to Date object
+     */
+    private parseTurkishDate(dateStr: string | undefined | null): Date | null {
+        if (!dateStr || dateStr.trim() === '') return null;
+        const parts = dateStr.trim().split('/');
+        if (parts.length !== 3) return null;
+        const [day, month, year] = parts.map(Number);
+        if (!day || !month || !year) return null;
+        return new Date(year, month - 1, day);
+    }
+
     async getCars(code: string) {
         const cars = await this.carRepository.find({
-            where: { school_id: parseInt(code) },
-            select: ['id', 'model', 'plate_number', 'school_id', 'year', 'car_type']
+            where: { school_id: parseInt(code) }
         });
 
         if (!cars.length) {
@@ -112,26 +123,33 @@ export class CarsService {
             const car = new DrivingSchoolCarEntity();
             car.school_id = schoolId;
             car.car_type = carType;
-            car.model = vehicle['Model'] || vehicle['model'] || '';
-            car.brand = vehicle['Marka'] || vehicle['brand'] || '';
-            car.plate_number = vehicle['Plaka'] || vehicle['plate_number'] || null;
-            car.year = vehicle['Model Yılı'] ? parseInt(vehicle['Model Yılı']) : null;
 
             // Regular car specific fields
             if (carType === CarType.REGULAR_CAR) {
-                car.purchase_date = vehicle['Alım Tarihi'] ? new Date(vehicle['Alım Tarihi']) : null;
-                car.last_inspection_date = vehicle['Son Muayene Tarihi'] ? new Date(vehicle['Son Muayene Tarihi']) : null;
-                car.inspection_validity_date = vehicle['Muayene Geçerlilik Tarihi'] ? new Date(vehicle['Muayene Geçerlilik Tarihi']) : null;
-                car.driver_count = vehicle['Şoför Adedi'] ? parseInt(vehicle['Şoför Adedi']) : null;
-                car.lesson_count = vehicle['Ders Adedi'] ? parseInt(vehicle['Ders Adedi']) : null;
-                car.excuse_days = vehicle['Mazeretli Gün'] ? parseInt(vehicle['Mazeretli Gün']) : null;
+                car.model = vehicle['Modeli'] || vehicle['Model'] || vehicle['model'] || '';
+                car.brand = vehicle['Markası'] || vehicle['Marka'] || vehicle['brand'] || '';
+                car.plate_number = vehicle['Aracın Plakası'] || vehicle['Plaka'] || vehicle['plate_number'] || null;
+                car.year = vehicle['Model Yılı'] ? parseInt(vehicle['Model Yılı']) : null;
+                car.status = vehicle['Aracın Durumu'] || vehicle['Durum'] || null;
+                car.purchase_date = this.parseTurkishDate(vehicle['Hizmete Giriş Tarihi'] || vehicle['Satın Alma Tarihi'] || vehicle['Alım Tarihi']);
+                car.last_inspection_date = this.parseTurkishDate(vehicle['Son Muayene Tarihi']);
+                car.inspection_validity_date = this.parseTurkishDate(vehicle['Muayene Geçerlilik Tarihi']);
+                car.driver_count = vehicle['Sürücü Sayısı'] || vehicle['Şoför Adedi'] ? parseInt(vehicle['Sürücü Sayısı'] || vehicle['Şoför Adedi']) : null;
+                car.lesson_count = vehicle['Ders Sayısı'] || vehicle['Ders Adedi'] ? parseInt(vehicle['Ders Sayısı'] || vehicle['Ders Adedi']) : null;
+                car.excuse_days = vehicle['Özür Günü'] || vehicle['Mazeretli Gün'] ? parseInt(vehicle['Özür Günü'] || vehicle['Mazeretli Gün']) : null;
             }
 
             // Simulator specific fields
             if (carType === CarType.SIMULATOR) {
-                car.serial_number = vehicle['Seri No'] || vehicle['serial_number'] || null;
+                car.model = 'Simülatör';
+                car.brand = 'SIMULATOR';
+                car.serial_number = vehicle['Seri Numarası'] || vehicle['Seri No'] || null;
+                car.plate_number = vehicle['Seri Numarası'] || vehicle['Seri No'] || null;
+                car.status = vehicle['Cihaz Durumu'] || vehicle['Durum'] || null;
+                car.start_date = this.parseTurkishDate(vehicle['Alınma Tarihi'] || vehicle['Başlangıç Tarihi']);
+                car.last_maintenance_date = this.parseTurkishDate(vehicle['Son Bakım Tarihi']);
                 car.usage_hours = vehicle['Kullanım Saati'] ? parseInt(vehicle['Kullanım Saati']) : null;
-                car.license_validity_date = vehicle['Lisans Geçerlilik'] ? new Date(vehicle['Lisans Geçerlilik']) : null;
+                car.license_validity_date = this.parseTurkishDate(vehicle['Lisans Geçerlilik']);
             }
 
             carsToSave.push(car);

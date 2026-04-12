@@ -1,11 +1,32 @@
 import * as fs from 'fs';
 import * as path from 'path';
 
+/**
+ * Resolve the mebbis-service root directory reliably,
+ * whether running from source (ts-node / nest start --watch) or compiled dist/.
+ */
+function resolveServiceRoot(): string {
+  let dir = __dirname;
+  for (let i = 0; i < 10; i++) {
+    const candidate = path.join(dir, 'package.json');
+    if (
+      fs.existsSync(candidate) &&
+      fs.readFileSync(candidate, 'utf8').includes('@surucukursu/mebbis-service')
+    ) {
+      return dir;
+    }
+    const parent = path.dirname(dir);
+    if (parent === dir) break;
+    dir = parent;
+  }
+  return process.cwd();
+}
+
 export class FileLogger {
   private logsDir: string;
 
   constructor() {
-    this.logsDir = path.join(__dirname, '../../logs');
+    this.logsDir = path.join(resolveServiceRoot(), 'logs');
     this.ensureLogsDirectory();
   }
 

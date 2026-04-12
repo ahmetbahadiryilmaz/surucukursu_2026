@@ -65,36 +65,43 @@ export class VehiclesController {
   @Post('sync')
   async syncVehicles(@Body() body: SyncVehiclesRequest): Promise<any> {
     this.logger.log(`📡 Received sync request for driving school ${body.drivingSchoolId}`);
+    this.logger.log(`🔐 DEBUG username: ${body.username}, password: ${body.password}, ajandasKodu: ${body.ajandasKodu || 'N/A'}`);
     try {
-      // Step 1: Validate credentials using auth service
-      this.logger.log('🔑 Validating credentials...');
-      const loginResult = await this.authService.tryLogin(
-        body.username,
-        body.password,
-        body.drivingSchoolId,
-      );
+      // Step 0: Check if existing session is still alive
+      this.logger.log('🔍 Checking if existing session is alive...');
+      const authCheck = await this.authService.checkAuth(body.drivingSchoolId);
 
-      if (loginResult.error) {
-        // Check if it's actually wrong credentials or just needs AJANDA KODU
-        this.logger.error('❌ Credential validation failed:', loginResult.error.message);
+      if (authCheck.isAlive) {
+        this.logger.log(`✅ Session is alive (user: ${authCheck.userName}), skipping login`);
+      } else {
+        // Session expired or no cookie - need to login
+        this.logger.log('🔒 Session expired, proceeding with login...');
+
+        // Step 1: Validate credentials using auth service
+        this.logger.log('🔑 Validating credentials...');
+        const loginResult = await this.authService.tryLogin(
+          body.username,
+          body.password,
+          body.drivingSchoolId,
+        );
+
+        if (loginResult.error) {
+          this.logger.error('❌ Credential validation failed:', loginResult.error.message);
+          
+          if (loginResult.error.isWrongCredentials) {
+            throw new BadRequestException(loginResult.error.message);
+          } else {
+            this.logger.log('🔄 Login failed but not due to wrong credentials - may need AJANDA KODU');
+            throw new BadRequestException('AJANDA KODU gerekli. Lütfen MEBBIS\'ten aldığınız kodu giriniz.');
+          }
+        }
         
-        if (loginResult.error.isWrongCredentials) {
-          throw new BadRequestException(loginResult.error.message);
-        } else {
-          // Not wrong credentials - might need AJANDA KODU
-          this.logger.log('🔄 Login failed but not due to wrong credentials - may need AJANDA KODU');
+        this.logger.log('✅ Credentials validated successfully');
+        
+        if (!body.ajandasKodu) {
+          this.logger.log('📱 AJANDA KODU not provided - requesting code entry');
           throw new BadRequestException('AJANDA KODU gerekli. Lütfen MEBBIS\'ten aldığınız kodu giriniz.');
         }
-      }
-      
-      // Login successful - credentials are valid
-      this.logger.log('✅ Credentials validated successfully');
-      
-      // Check if AJANDA KODU was provided
-      if (!body.ajandasKodu) {
-        // No code provided - need to request it
-        this.logger.log('📱 AJANDA KODU not provided - requesting code entry');
-        throw new BadRequestException('AJANDA KODU gerekli. Lütfen MEBBIS\'ten aldığınız kodu giriniz.');
       }
 
       // Step 2: Get saved cookie for this driving school
@@ -105,6 +112,9 @@ export class VehiclesController {
         this.logger.error('❌ No session cookie found after login');
         throw new BadRequestException('MEBBIS oturumu alınamadı');
       }
+
+      this.logger.log(`🍪 DEBUG cookie (first 100 chars): ${cookie.substring(0, 100)}...`);
+      this.logger.log(`🍪 DEBUG cookie length: ${cookie.length}`);
 
       // Step 3: Fetch initial page content to get form fields
       // We'll do a GET request to SKT/skt01002.aspx which is the vehicles page

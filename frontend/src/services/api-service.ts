@@ -236,6 +236,14 @@ class ApiService {
       return response.data;
     },
 
+    // Öğrencileri MEBBIS'ten senkronize et
+    syncStudents: async (code: string, options?: { ajandasKodu?: string }): Promise<any> => {
+      const response = await this.axiosService.post(`/driving-school/${code}/students/sync`, {
+        ajandasKodu: options?.ajandasKodu,
+      });
+      return response.data;
+    },
+
     // Araçları getir
     getCars: async (code: string): Promise<any> => {
       const response = await this.axiosService.get(`/driving-school/${code}/cars`);
