@@ -17,7 +17,11 @@ export class CandidatesListService {
     this.tbMebbisId = tbMebbisId;
     this.axiosService = new AxiosService(tbMebbisId);
     if (cookieData) {
+      console.log(`[CandidatesListService] Setting cookie for school ${tbMebbisId} - length: ${cookieData.length}`);
+      console.log(`[CandidatesListService] Cookie data (first 200 chars): ${cookieData.substring(0, 200)}`);
       this.axiosService.setCookieData(cookieData);
+    } else {
+      console.log(`[CandidatesListService] ⚠️  NO COOKIE DATA provided for school ${tbMebbisId}!`);
     }
   }
 

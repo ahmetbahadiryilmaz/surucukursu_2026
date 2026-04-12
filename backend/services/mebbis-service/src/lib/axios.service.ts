@@ -60,6 +60,10 @@ export class AxiosService {
     config.timeout = 120000;
     if (this.cookieData) {
       headers.Cookie = this.cookieData;
+      console.log(`[AxiosService] Sending cookie header - length: ${this.cookieData.length}`);
+      console.log(`[AxiosService] Cookie (first 150 chars): ${this.cookieData.substring(0, 150)}`);
+    } else {
+      console.log(`[AxiosService] ⚠️  No cookie data to send!`);
     }
 
     const instance = axios.create({
