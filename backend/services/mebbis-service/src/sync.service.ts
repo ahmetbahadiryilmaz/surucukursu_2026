@@ -35,7 +35,7 @@ export class SyncService {
         await this.authService.invalidateCookie(tbMebbisId);
         return {
           data: {},
-          error: { message: 'SESSION_EXPIRED', code: 'SESSION_EXPIRED' },
+          error: { message: 'MEBBIS kimlik bilgileri süresi dolmuş. Lütfen yeniden giriniz.' },
           message: 'candidate failed',
         };
       }
