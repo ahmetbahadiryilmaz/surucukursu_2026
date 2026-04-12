@@ -8,6 +8,7 @@ import { apiService } from "@/services/api-service";
 import { drivingSchoolOwnerContext } from "@/components/contexts/DrivingSchoolManagerContext";
 import { MebbisCodeModal } from "@/components/Modals/MebbisCodeModal";
 import { MebbisCredentialsModal } from "@/components/MebbisCredentialsModal";
+import { useMebbisErrorHandler } from "@/hooks/useMebbisErrorHandler";
 
 /**
  * Araç bilgisi arayüzü
@@ -49,6 +50,7 @@ const AraclarTable = (): JSX.Element => {
   const [credentialsError, setCredentialsError] = useState<string>("");
 
   const { activeDrivingSchool } = drivingSchoolOwnerContext();
+  const { handleMebbisError } = useMebbisErrorHandler();
 
   // Debug: log modal state changes
   useEffect(() => {
@@ -140,53 +142,16 @@ const AraclarTable = (): JSX.Element => {
       setSyncMessage("✅ Senkronize başarıyla tamamlandı!");
       setTimeout(() => setSyncMessage(null), 3000);
     } catch (err) {
-      console.error("❌ Error syncing cars:", err);
-      console.error("Error type:", typeof err);
-      console.error("Error keys:", Object.keys(err || {}));
-      
-      let errorMessage = "Senkronize sırasında bir hata oluştu";
-      
-      // Try different ways to extract error message
-      // For AxiosError, check response data first (server message)
-      if ((err as any)?.response?.data?.message) {
-        errorMessage = (err as any).response.data.message;
-      } else if (err instanceof Error) {
-        errorMessage = err.message;
-      } else if (typeof err === 'string') {
-        errorMessage = err;
-      } else if (typeof err === 'object' && err !== null) {
-        // Check various properties where error message might be
-        errorMessage = (err as any).message || (err as any).data?.message || JSON.stringify(err);
-      }
-      
-      console.log("Final error message:", errorMessage);
-      
-      // Check if error message indicates AJANDA KODU is needed (check this FIRST)
-      if (errorMessage && (
-        errorMessage.toLowerCase().includes('ajanda kodu') ||
-        errorMessage.toLowerCase().includes('ajanda') ||
-        errorMessage.toLowerCase().includes('2fa') ||
-        errorMessage.toLowerCase().includes('doğrulama kodu')
-      )) {
-        console.log("🎯 AJANDA KODU needed - showing modal");
-        setSyncMessage(null);
+      const errorAction = handleMebbisError(err);
+      setSyncMessage(null);
+
+      if (errorAction.modalType === '2fa') {
         setShowCodeModal(true);
-      }
-      // Check if error indicates invalid credentials
-      else if (
-        errorMessage && 
-        (errorMessage.toLowerCase().includes('kullanıcı adı') ||
-         errorMessage.toLowerCase().includes('şifre') ||
-         errorMessage.toLowerCase().includes('kimlik') ||
-         errorMessage.toLowerCase().includes('hatalı') ||
-         errorMessage.toLowerCase().includes('başarısız'))
-      ) {
-        console.log("🔑 Invalid credentials - showing credentials modal");
-        setSyncMessage(null);
-        setCredentialsError(errorMessage);
+      } else if (errorAction.modalType === 'credentials') {
+        setCredentialsError(errorAction.message);
         setShowCredentialsModal(true);
       } else {
-        setSyncMessage(`❌ Hata: ${errorMessage}`);
+        setSyncMessage(`❌ Hata: ${errorAction.message}`);
         setTimeout(() => setSyncMessage(null), 10000);
       }
     } finally {

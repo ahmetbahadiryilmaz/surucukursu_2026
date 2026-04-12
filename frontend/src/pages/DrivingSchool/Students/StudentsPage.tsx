@@ -9,6 +9,7 @@ import { toast } from "react-toastify";
 import { socketService } from "@/services/socket-service";
 import { MebbisCodeModal } from "@/components/Modals/MebbisCodeModal";
 import { MebbisCredentialsModal } from "@/components/MebbisCredentialsModal";
+import { useMebbisErrorHandler } from "@/hooks/useMebbisErrorHandler";
 
 // Download için interface
 interface CompletedDownload {
@@ -53,6 +54,7 @@ const StudentsTable: React.FC<StudentsProps> = ({ onDownload, onJobStart }) => {
 
   const lastFetchedSchoolId = useRef<number | null>(null);
   const { activeDrivingSchool, user, isLoading: contextLoading } = drivingSchoolOwnerContext();
+  const { handleMebbisError } = useMebbisErrorHandler();
 
   // Socket connection and hello message handling
   // const { isConnected, helloMessage } = useSocketContext();
@@ -246,49 +248,16 @@ const StudentsTable: React.FC<StudentsProps> = ({ onDownload, onJobStart }) => {
       setSyncMessage("✅ Senkronize başarıyla tamamlandı!");
       setTimeout(() => setSyncMessage(null), 3000);
     } catch (err) {
-      console.error("❌ Error syncing students:", err);
-      
-      let errorMessage = "Senkronize sırasında bir hata oluştu";
-      
-      // Try different ways to extract error message
-      if ((err as any)?.response?.data?.message) {
-        errorMessage = (err as any).response.data.message;
-      } else if (err instanceof Error) {
-        errorMessage = err.message;
-      } else if (typeof err === 'string') {
-        errorMessage = err;
-      } else if (typeof err === 'object' && err !== null) {
-        errorMessage = (err as any).message || (err as any).data?.message || JSON.stringify(err);
-      }
-      
-      console.log("Final error message:", errorMessage);
-      
-      // Check if error message indicates AJANDA KODU is needed (check this FIRST)
-      if (errorMessage && (
-        errorMessage.toLowerCase().includes('ajanda kodu') ||
-        errorMessage.toLowerCase().includes('ajanda') ||
-        errorMessage.toLowerCase().includes('2fa') ||
-        errorMessage.toLowerCase().includes('doğrulama kodu')
-      )) {
-        console.log("🎯 AJANDA KODU needed - showing modal");
-        setSyncMessage(null);
+      const errorAction = handleMebbisError(err);
+      setSyncMessage(null);
+
+      if (errorAction.modalType === '2fa') {
         setShowCodeModal(true);
-      }
-      // Check if error indicates invalid credentials
-      else if (
-        errorMessage && 
-        (errorMessage.toLowerCase().includes('kullanıcı adı') ||
-         errorMessage.toLowerCase().includes('şifre') ||
-         errorMessage.toLowerCase().includes('kimlik') ||
-         errorMessage.toLowerCase().includes('hatalı') ||
-         errorMessage.toLowerCase().includes('başarısız'))
-      ) {
-        console.log("🔑 Invalid credentials - showing credentials modal");
-        setSyncMessage(null);
-        setCredentialsError(errorMessage);
+      } else if (errorAction.modalType === 'credentials') {
+        setCredentialsError(errorAction.message);
         setShowCredentialsModal(true);
       } else {
-        setSyncMessage(`❌ Hata: ${errorMessage}`);
+        setSyncMessage(`❌ Hata: ${errorAction.message}`);
         setTimeout(() => setSyncMessage(null), 10000);
       }
     } finally {
