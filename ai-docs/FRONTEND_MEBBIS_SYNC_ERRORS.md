@@ -8,44 +8,14 @@ Frontend pages that sync data with MEBBIS (Students & Cars) follow a standardize
 
 ## Error Types & Handling Flow
 
-### 1. SESSION_EXPIRED - Credentials Expired
-**When it occurs:**
-- Backend detects that MEBBIS returned a login page instead of data
-- Session cookies in database are marked as invalid
-- Backend returns error: `"SESSION_EXPIRED"` or `"Oturumunuz süresi dolmuş"`
-
-**Frontend response:**
-1. Detect error contains: `session_expired`, `session expired`, `oturum`, or `login page`
-2. Show `MebbisCredentialsModal` with message: "Oturumunuz süresi dolmuş. MEBBIS kimlik bilgilerini yeniden giriniz."
-3. User enters MEBBIS username and password
-4. Frontend saves credentials via `apiService.drivingSchool.updateMebbisCredentials()`
-5. **Automatically retry sync** with updated credentials
-
-**Code Pattern:**
-```typescript
-if (errorMessage && (
-  errorMessage.toLowerCase().includes('session_expired') ||
-  errorMessage.toLowerCase().includes('session expired') ||
-  errorMessage.toLowerCase().includes('oturum') ||
-  errorMessage.toLowerCase().includes('login page')
-)) {
-  console.log("🔑 Session expired - showing credentials modal");
-  setSyncMessage(null);
-  setCredentialsError("Oturumunuz süresi dolmuş. MEBBIS kimlik bilgilerini yeniden giriniz.");
-  setShowCredentialsModal(true);
-}
-```
-
----
-
-### 2. AJANDA KODU / 2FA - Two-Factor Authentication
+### 1. AJANDA KODU / 2FA - Two-Factor Authentication
 **When it occurs:**
 - MEBBIS requires 2-factor authentication (SMS code)
 - Login succeeded but candidates list requires verification
 - Backend returns error containing: `ajanda kodu`, `ajanda`, `2fa`, or `doğrulama kodu`
 
 **Frontend response:**
-1. Detect error contains 2FA keywords
+1. Detect error contains 2FA keywords (check this FIRST)
 2. Show `MebbisCodeModal` (prompts user for MEBBIS AJANDA KODU)
 3. User enters the 6-digit code they received
 4. **Automatically retry sync** with `{ ajandasKodu: code }` parameter
@@ -53,7 +23,7 @@ if (errorMessage && (
 
 **Code Pattern:**
 ```typescript
-else if (errorMessage && (
+if (errorMessage && (
   errorMessage.toLowerCase().includes('ajanda kodu') ||
   errorMessage.toLowerCase().includes('ajanda') ||
   errorMessage.toLowerCase().includes('2fa') ||
@@ -79,7 +49,7 @@ const handleCodeSubmitted = async (code: string): Promise<void> => {
 
 ---
 
-### 3. Invalid Credentials - Wrong Username/Password
+### 2. Invalid Credentials - Wrong Username/Password
 **When it occurs:**
 - MEBBIS rejects login with provided credentials
 - Credentials are incorrect or disabled
@@ -110,7 +80,7 @@ else if (
 
 ---
 
-### 4. Other Errors - Display to User
+### 3. Other Errors - Display to User
 **When:**
 - Error doesn't match any of the above patterns
 - Network errors, timeout, or unexpected backend responses
@@ -134,7 +104,7 @@ const [showCredentialsModal, setShowCredentialsModal] = useState<boolean>(false)
 const [credentialsError, setCredentialsError] = useState<string>("");
 ```
 
-### 2. Main Sync Handler
+### 1. Main Sync Handler
 ```typescript
 const handleSync = async (): Promise<void> => {
   try {
@@ -160,15 +130,17 @@ const handleSync = async (): Promise<void> => {
     }
     
     // Check error type and show appropriate modal
-    if (errorMessage.toLowerCase().includes('session_expired')) {
-      setShowCredentialsModal(true);
-      // ... set error message
-    } else if (errorMessage.toLowerCase().includes('ajanda')) {
+    // Check if AJANDA KODU is needed (check this FIRST)
+    if (errorMessage.toLowerCase().includes('ajanda')) {
       setShowCodeModal(true);
-    } else if (errorMessage.toLowerCase().includes('şifre')) {
+    } 
+    // Check if invalid credentials
+    else if (errorMessage.toLowerCase().includes('şifre')) {
       setShowCredentialsModal(true);
       // ... set error message
-    } else {
+    } 
+    // Other errors
+    else {
       setSyncMessage(`❌ Hata: ${errorMessage}`);
     }
   } finally {
@@ -177,7 +149,7 @@ const handleSync = async (): Promise<void> => {
 };
 ```
 
-### 3. Credentials Handler - Save & Retry
+### 2. Credentials Handler - Save & Retry
 ```typescript
 const handleCredentialsSaved = async (username: string, password: string): Promise<void> => {
   try {
@@ -200,7 +172,7 @@ const handleCredentialsSaved = async (username: string, password: string): Promi
 };
 ```
 
-### 4. 2FA Code Handler - Retry with Code
+### 3. 2FA Code Handler - Retry with Code
 ```typescript
 const handleCodeSubmitted = async (code: string): Promise<void> => {
   try {
@@ -223,7 +195,7 @@ const handleCodeSubmitted = async (code: string): Promise<void> => {
 };
 ```
 
-### 5. Modals in JSX
+### 4. Modals in JSX
 ```typescript
 <MebbisCredentialsModal
   isOpen={showCredentialsModal}
@@ -271,12 +243,6 @@ To add MEBBIS sync to a new page:
 
 The backend (mebbis-service) returns errors that frontend uses for detection:
 
-### Session Expiration Detection
-- **Source:** `CandidatesListService.getCandidates()`
-- **Detection:** Checks if response HTML contains login form fields
-- **Return:** `{ success: false, status: 401, data: 'SESSION_EXPIRED' }`
-- **Backend handler:** `SyncService` invalidates cookie in DB
-
 ### 2FA Code Required
 - **Source:** MEBBIS requires AJANDA KODU during candidate fetching
 - **Messages:** "AJANDA KODU", "Doğrulama kodu gerekli", "2FA"
@@ -293,11 +259,10 @@ The backend (mebbis-service) returns errors that frontend uses for detection:
 
 ## Testing Checklist
 
-- [ ] Session expired → credentials modal shows
-- [ ] New credentials entered → auto-retry succeeds
 - [ ] 2FA code required → code modal shows
 - [ ] Valid code entered → auto-retry succeeds
 - [ ] Invalid credentials → credentials modal shows with error
+- [ ] New credentials entered → auto-retry succeeds
 - [ ] Network error → displays in syncMessage banner
 - [ ] After credentials/code → data refreshes automatically
 - [ ] Modal closes on submit without errors
@@ -308,7 +273,7 @@ The backend (mebbis-service) returns errors that frontend uses for detection:
 ## Key Points
 
 1. **Error detection is based on keywords:** Strings are converted to lowercase and checked for keywords
-2. **Retry is automatic:** After user enters credentials/code, sync is retried immediately
-3. **Data refresh:** After successful retry, data is fetched from backend
-4. **Modal ordering:** Check SESSION_EXPIRED first, then 2FA, then invalid credentials
+2. **Check 2FA first:** AJANDA KODU check should be first (if statement), then invalid credentials (else if)
+3. **Retry is automatic:** After user enters credentials/code, sync is retried immediately
+4. **Data refresh:** After successful retry, data is fetched from backend
 5. **Consistent UX:** Both Students and Cars pages follow the exact same pattern for consistency
