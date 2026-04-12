@@ -2,7 +2,7 @@
 
 ## General Guidelines
 
-**IMPORTANT**: When responding to any request, always start by specifying which AI model you are using. State "I'm using xxx ai model " or the appropriate model name at the beginning of your response.Read any relevant ai-docs file before responding to ensure your answer is informed by the project's architecture and patterns. Always follow the patterns and rules outlined in the ai-docs files.Always update the relevant ai-docs file after implementing or modifying a feature to keep documentation in sync with code. If you discover any tricky implementation details or edge cases during your work, make sure to document them in the corresponding ai-docs file.
+**IMPORTANT**: When responding to any request, always start by specifying which AI model you are using. State "I'm using xxx ai model " or the appropriate model name at the beginning of your response.Read any relevant ai-docs file before responding to ensure your answer is informed by the project's architecture and patterns. Always follow the patterns and rules outlined in the ai-docs files.Always update the relevant ai-docs file after implementing or modifying a feature to keep documentation in sync with code. If you discover any tricky implementation details or edge cases during your work, make sure to document them in the corresponding ai-docs file.dont commit anything without asking
 
 ## AI-docs Directory Overview
 The `ai-docs/` directory is the **single source of truth** for understanding the project's architecture, logic, and tricky implementation details. AI assistants should **always consult the relevant ai-docs file before making changes** to any part of the system.
