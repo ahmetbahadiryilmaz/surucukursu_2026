@@ -68,11 +68,11 @@ async function main() {
 
     const schoolRepository = AppDataSource.getRepository(DrivingSchoolEntity);
     const dogusSchool = await schoolRepository.findOne({
-      where: { name: 'Doğuş Sürücü Kursu' },
+      where: { name: 'Test Doğuş Sürücü Kursu 1' },
     });
 
     if (!dogusSchool) {
-      console.error('❌ Driving school "Doğuş Sürücü Kursu" not found');
+      console.error('❌ Driving school "Test Doğuş Sürücü Kursu 1" not found');
       console.log('\n📋 Available driving schools:');
       const allSchools = await schoolRepository.find();
       allSchools.forEach((school) => {
