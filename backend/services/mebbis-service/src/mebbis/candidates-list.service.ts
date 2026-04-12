@@ -26,6 +26,14 @@ export class CandidatesListService {
   }
 
   /**
+   * Check if the HTML response is a login page (indicating session expired)
+   */
+  private isLoginPage(html: string): boolean {
+    // Login page contains the login form with username/password fields
+    return html.includes('txtKullaniciAd') && html.includes('txtSifre');
+  }
+
+  /**
    * Encode an object as application/x-www-form-urlencoded string.
    */
   private encodeForm(data: Record<string, string>): string {
@@ -51,6 +59,17 @@ export class CandidatesListService {
       );
 
       const r2Html = r2.data;
+
+      // CHECK: If response is a login page, session has expired
+      if (this.isLoginPage(r2Html)) {
+        console.error(`[CandidatesList] ❌ Session expired - got login page instead of candidates page`);
+        return {
+          success: false,
+          status: 401,
+          data: 'SESSION_EXPIRED', // Special error code for frontend to trigger re-login
+        };
+      }
+
       const r2Root = parse(r2Html);
 
       // Extract dönem options (skip -1 empty and 1 Tüm Dönemler)

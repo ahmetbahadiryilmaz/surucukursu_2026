@@ -29,6 +29,16 @@ export class SyncService {
     if (r.success) {
       return r.data;
     } else {
+      // Check if session expired
+      if (r.data === 'SESSION_EXPIRED') {
+        this.logger.warn(`Session expired for school ${tbMebbisId} - invalidating cookie`);
+        await this.authService.invalidateCookie(tbMebbisId);
+        return {
+          data: {},
+          error: { message: 'SESSION_EXPIRED', code: 'SESSION_EXPIRED' },
+          message: 'candidate failed',
+        };
+      }
       return {
         data: {},
         error: { message: r.data },
