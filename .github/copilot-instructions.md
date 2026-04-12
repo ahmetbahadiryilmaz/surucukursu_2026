@@ -2,7 +2,7 @@
 
 ## General Guidelines
 
-**IMPORTANT**: When responding to any request, always start by specifying which AI model you are using. State "I'm using xxx ai model " or the appropriate model name at the beginning of your response.Read any relevant ai-docs file before responding to ensure your answer is informed by the project's architecture and patterns. Always follow the patterns and rules outlined in the ai-docs files.
+**IMPORTANT**: When responding to any request, always start by specifying which AI model you are using. State "I'm using xxx ai model " or the appropriate model name at the beginning of your response.Read any relevant ai-docs file before responding to ensure your answer is informed by the project's architecture and patterns. Always follow the patterns and rules outlined in the ai-docs files.Always update the relevant ai-docs file after implementing or modifying a feature to keep documentation in sync with code. If you discover any tricky implementation details or edge cases during your work, make sure to document them in the corresponding ai-docs file.
 
 ## AI-docs Directory Overview
 The `ai-docs/` directory is the **single source of truth** for understanding the project's architecture, logic, and tricky implementation details. AI assistants should **always consult the relevant ai-docs file before making changes** to any part of the system.
@@ -25,6 +25,7 @@ Always check these files for context before working on the related area:
 | `ai-docs/DATABASE_ENTITIES.md` | All shared TypeORM entities, relationships, field definitions | Creating/modifying database entities, writing queries, or understanding data model |
 | `ai-docs/MEBBIS_SERVICE.md` | MEBBIS integration service: authentication flow, cookie management, student sync, login with 2FA, session handling | Any work involving MEBBIS scraping, login, cookie handling, or student data |
 | `ai-docs/MEBBIS_REQUEST_LOGGING.md` | HTTP request/response logging system for all outgoing MEBBIS calls, log file structure | Debugging MEBBIS requests, understanding log formats, modifying the logger |
+| `ai-docs/MEBBIS_ERROR_HANDLING.md` | Centralized error handling system: error codes, modals (2FA, credentials), hook usage, backend patterns | Working on error handling, implementing new MEBBIS operations, handling auth errors |
 | `ai-docs/FRONTEND.md` | React + Vite + TypeScript SPA: admin dashboard, driving school dashboard, routing, components | Frontend changes, adding pages, modifying UI components |
 | `ai-docs/FRONTEND_MEBBIS_SYNC_ERRORS.md` | Frontend error handling for MEBBIS sync: 2FA modals, credential modals, auto-retry flow | Working on MEBBIS sync error handling, modals, or credential re-entry flows |
 | `ai-docs/QUICK_REFERENCE.md` | Developer quick-start: setup commands, env config, Docker, running services | Setting up the project, running services, environment configuration |
