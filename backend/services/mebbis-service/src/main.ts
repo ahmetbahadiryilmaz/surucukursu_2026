@@ -12,6 +12,8 @@ const possiblePaths = [
   path.resolve(__dirname, '../../../.env'),                 // dev: src/../../../.env
   path.resolve(process.cwd(), '.env'),                      // current working directory
   path.resolve(process.cwd(), 'backend/.env'),              // from root: backend/.env
+  path.resolve(process.cwd(), '../..', '.env'),             // from services/mebbis-service -> backend/.env
+  path.resolve(process.cwd(), '../../..', '.env'),          // deeper nesting fallback
 ];
 
 for (const tryPath of possiblePaths) {

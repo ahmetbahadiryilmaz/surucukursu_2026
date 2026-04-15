@@ -409,3 +409,47 @@ const decrypted = TextEncryptor.userPasswordDecrypt(encrypted);
 ```
 
 Uses `ENCRYPTION_KEY` from environment variables.
+
+---
+
+## Data Migration (Old System → New System)
+
+**Date:** 2026-04-15  
+**Script:** `migrate.js` (project root)  
+**Credentials report:** `migration_credentials.txt` (project root)
+
+### Source
+- **Database:** `mtsk_rapor` on `ekullanici.com:3306`
+- **Tables:** `tb_user` (805 rows), `tb_mebbis` (1,371 rows)
+
+### Migration Mapping
+| Old Table | Old Field | New Table | New Field |
+|-----------|-----------|-----------|-----------|
+| tb_user | adi | driving_school_owners + driving_school_managers | name |
+| tb_user | mail | driving_school_owners + driving_school_managers | email |
+| tb_user | yetki (prime/demo) | subscriptions | type |
+| tb_mebbis | companyName | driving_schools | name |
+| tb_mebbis | adi (mebbis username) | driving_schools | mebbis_username (encrypted) |
+| tb_mebbis | sifre (mebbis password) | driving_schools | mebbis_password (encrypted) |
+| tb_mebbis | endDate | subscriptions | ends_at |
+
+### Key Decisions
+- **Same person = both owner and manager**: Each old user created as both `driving_school_owners` and `driving_school_managers` with matching IDs
+- **New passwords generated**: Old passwords (MD5) not migrated. New 10-char random passwords generated and encrypted with AES-256-CBC. Plaintext passwords saved to `migration_credentials.txt`
+- **Phone placeholder**: Old system had no phone field; `0000000000` used as placeholder
+- **HTML entities decoded**: 566 school names had HTML-encoded Turkish chars (&#214;→Ö, &#220;→Ü etc.), decoded post-migration
+- **Duplicate emails**: Handled with `+dup1@` suffix
+- **Kapali (closed) users**: 5 skipped
+
+### Results
+| Table | Records Created |
+|-------|----------------|
+| driving_school_owners | 799 |
+| driving_school_managers | 799 |
+| driving_schools | 799 |
+| subscriptions | 799 |
+| driving_school_settings | 799 |
+
+- **Subscription types:** demo: 586, prime: 213
+- **Errors:** 0
+- **Skipped (kapali):** 5

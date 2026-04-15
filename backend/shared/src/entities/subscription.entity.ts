@@ -3,8 +3,8 @@ import { BaseEntity } from './base.entity';
 import { DrivingSchoolEntity } from './driving-school.entity';
 
 const dateTransformer = {
-  to: (value: number) => new Date(value * 1000),
-  from: (value: Date) => Math.floor(value.getTime() / 1000),
+  to: (value: number) => value ? new Date(value * 1000) : null,
+  from: (value: Date) => value ? Math.floor(value.getTime() / 1000) : null,
 };
 
 @Entity('subscriptions')

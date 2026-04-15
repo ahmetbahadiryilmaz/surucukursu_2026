@@ -12,6 +12,7 @@ import { AdminDashboardModule } from './admin/dashboard/dashboard.module';
 import { CitiesModule } from './cities/cities.module';
 import { InternalModule } from '../internal/internal.module';
 import { WorkerModule } from './worker/worker.module';
+import { DesktopUpdateModule } from './desktop-update/desktop-update.module';
 
 @Module({
   imports: [
@@ -26,7 +27,8 @@ import { WorkerModule } from './worker/worker.module';
     AdminDashboardModule,
     CitiesModule,
     InternalModule,
-    WorkerModule
+    WorkerModule,
+    DesktopUpdateModule,
   ]
 })
 export class V1Module { }

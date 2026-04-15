@@ -24,7 +24,8 @@ api-server/src/
 │   │   ├── driving-school/ # Driving school operations
 │   │   ├── cities/         # City/District data
 │   │   ├── mebbis/         # MEBBIS integration (empty)
-│   │   └── worker/         # Background worker API
+│   │   ├── worker/         # Background worker API
+│   │   └── desktop-update/ # Electron auto-update file serving
 │   ├── health/             # Health check endpoints
 │   └── internal/           # Internal service communication
 ├── common/
@@ -228,6 +229,36 @@ Internal endpoints for PDF worker communication. **No authentication required** 
 | GET | `/jobs/pending` | Get pending PDF jobs |
 | PATCH | `/jobs/:id/complete` | Mark job complete |
 | PATCH | `/jobs/:id/fail` | Mark job failed |
+
+---
+
+## Desktop Update Module (`/api/v1/desktop-update`)
+
+Serves Electron auto-update files for the desktop app. Uses `electron-updater` generic provider pattern.
+
+**Update files stored at:** `backend/storage/PUBLIC/desktop-updates/`
+
+### Public Endpoints (no auth — desktop app has no token)
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/latest.yml` | Version metadata for Windows |
+| GET | `/latest-mac.yml` | Version metadata for macOS |
+| GET | `/latest-linux.yml` | Version metadata for Linux |
+| GET | `/download/:filename` | Download installer file |
+
+### Admin Endpoints (requires AdminGuard)
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/admin/files` | List all update files on server |
+| POST | `/admin/generate-yml` | Generate latest.yml from an exe in the update directory |
+
+### Deploy Flow
+1. Bump `version` in `desktop/package.json`
+2. Build: `cd desktop && npm run dist`
+3. Copy `release/MEBBIS-Setup-x.x.x.exe` + `release/latest.yml` to `backend/storage/PUBLIC/desktop-updates/`
+4. All desktop apps auto-detect the new version on next launch
 
 ---
 

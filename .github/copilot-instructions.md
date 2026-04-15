@@ -29,6 +29,10 @@ Always check these files for context before working on the related area:
 | `ai-docs/FRONTEND.md` | React + Vite + TypeScript SPA: admin dashboard, driving school dashboard, routing, components | Frontend changes, adding pages, modifying UI components |
 | `ai-docs/FRONTEND_MEBBIS_SYNC_ERRORS.md` | Frontend error handling for MEBBIS sync: 2FA modals, credential modals, auto-retry flow | Working on MEBBIS sync error handling, modals, or credential re-entry flows |
 | `ai-docs/QUICK_REFERENCE.md` | Developer quick-start: setup commands, env config, Docker, running services | Setting up the project, running services, environment configuration |
+| `desktop/ai-docs/DESKTOP_APP.md` | Electron desktop app: MEBBIS account management, auto-login, cookie persistence, left menu injection | Working on the desktop Electron app, MEBBIS session management |
+| `desktop/ai-docs/DESKTOP_APP_SIMULATOR_MENU_AND_SERVER_CONNECTION.md` | Adding simulator raporu (Sesim/Ana Grup) menu to desktop + server connection + secure auth | Adding simulator report download to desktop app, connecting desktop to backend |
+| `desktop/ai-docs/ELECTRON_CODE_SERVING_FROM_SERVER.md` | Remote renderer code serving: loading desktop UI from server for instant updates, caching, fallback | Implementing dynamic code updates for desktop app, remote renderer loading |
+| `ai-docs/DELETABLE_CODE.md` | Full inventory of removable backend + frontend code after desktop migration | Cleaning up unused code, understanding what to keep vs remove |
 
 ## System Architecture: Old vs New
 

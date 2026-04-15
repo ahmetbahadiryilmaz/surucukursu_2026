@@ -14,3 +14,4 @@ export * from './system-logs.entity';
 export * from './city.entity';
 export * from './district.entity';
 export * from './job.entity';
+export * from './password-reset-token.entity';

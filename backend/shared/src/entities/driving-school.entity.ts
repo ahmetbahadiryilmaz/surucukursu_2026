@@ -71,6 +71,6 @@ export class DrivingSchoolEntity extends BaseEntity {
   @OneToOne(() => DrivingSchoolSettingsEntity, (settings) => settings.driving_school, { nullable: true })
   settings: DrivingSchoolSettingsEntity;
 
-  @OneToOne(() => SubscriptionEntity, subscription => subscription.driving_school_id)
+  @OneToOne(() => SubscriptionEntity, subscription => subscription.driving_school)
   subscription: SubscriptionEntity;
 }
