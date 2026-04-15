@@ -6,4 +6,3 @@ var PdfGenerationMode;
     PdfGenerationMode["SINGLE"] = "single";
     PdfGenerationMode["GROUP"] = "group";
 })(PdfGenerationMode || (exports.PdfGenerationMode = PdfGenerationMode = {}));
-//# sourceMappingURL=pdf.types.js.map

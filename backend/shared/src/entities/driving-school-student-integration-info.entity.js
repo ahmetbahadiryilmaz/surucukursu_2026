@@ -30,4 +30,3 @@ __decorate([
 exports.DrivingSchoolStudentIntegrationInfoEntity = DrivingSchoolStudentIntegrationInfoEntity = __decorate([
     (0, typeorm_1.Entity)('driving_school_student_integration_infos')
 ], DrivingSchoolStudentIntegrationInfoEntity);
-//# sourceMappingURL=driving-school-student-integration-info.entity.js.map

@@ -10,7 +10,11 @@ const addSwagger = (app) => {
         .addBearerAuth()
         .build();
     const document = swagger_1.SwaggerModule.createDocument(app, options);
-    const enhancedDocument = Object.assign(Object.assign({}, document), { openapi: '3.1.0' });
+    // Enhanced document with hierarchical tags using OpenAPI 3.1 and x-tagGroups fallback
+    const enhancedDocument = {
+        ...document,
+        openapi: '3.1.0', // Use supported OpenAPI version 
+    };
     swagger_1.SwaggerModule.setup('api/swagger1', app, enhancedDocument, {
         customSiteTitle: 'PL - API Documentation',
         customfavIcon: '/favicon.ico',
@@ -37,4 +41,3 @@ const addSwagger = (app) => {
     });
 };
 exports.addSwagger = addSwagger;
-//# sourceMappingURL=swagger.js.map

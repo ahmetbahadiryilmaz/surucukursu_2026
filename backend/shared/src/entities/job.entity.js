@@ -73,4 +73,3 @@ __decorate([
 exports.JobEntity = JobEntity = __decorate([
     (0, typeorm_1.Entity)('jobs')
 ], JobEntity);
-//# sourceMappingURL=job.entity.js.map

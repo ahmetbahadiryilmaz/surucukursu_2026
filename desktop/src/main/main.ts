@@ -8,8 +8,6 @@ let mainWindow: BrowserWindow | null = null;
 let accountStore: AccountStore;
 let mebbisManager: MebbisManager;
 
-const API_SERVER_URL = process.env.API_SERVER_URL || 'http://localhost:3001';
-
 function createMainWindow() {
   // __dirname is dist/main, renderer files are in src/renderer
   const rendererPath = path.join(__dirname, '..', '..', 'src', 'renderer');
@@ -91,16 +89,18 @@ app.whenReady().then(async () => {
   accountStore = new AccountStore();
   mebbisManager = new MebbisManager();
 
+  // Register IPC handlers before creating window so they're ready
+  // when the renderer loads and immediately calls accounts:list
+  setupIPC();
+
   createMainWindow();
 
   // STRICT VERSION GATE — must pass before app becomes usable
-  const allowed = await enforceVersionCheck(API_SERVER_URL, mainWindow!);
+  const allowed = await enforceVersionCheck(mainWindow!);
   if (!allowed) {
-    // App is being updated or user chose to quit — don't set up IPC
+    // App is being updated or user chose to quit
     return;
   }
-
-  setupIPC();
 });
 
 app.on('window-all-closed', () => {

@@ -1,10 +1,43 @@
 "use strict";
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
 var __decorate = (this && this.__decorate) || function (decorators, target, key, desc) {
     var c = arguments.length, r = c < 3 ? target : desc === null ? desc = Object.getOwnPropertyDescriptor(target, key) : desc, d;
     if (typeof Reflect === "object" && typeof Reflect.decorate === "function") r = Reflect.decorate(decorators, target, key, desc);
     else for (var i = decorators.length - 1; i >= 0; i--) if (d = decorators[i]) r = (c < 3 ? d(r) : c > 3 ? d(target, key, r) : d(target, key)) || r;
     return c > 3 && r && Object.defineProperty(target, key, r), r;
 };
+var __importStar = (this && this.__importStar) || (function () {
+    var ownKeys = function(o) {
+        ownKeys = Object.getOwnPropertyNames || function (o) {
+            var ar = [];
+            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
+            return ar;
+        };
+        return ownKeys(o);
+    };
+    return function (mod) {
+        if (mod && mod.__esModule) return mod;
+        var result = {};
+        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
+        __setModuleDefault(result, mod);
+        return result;
+    };
+})();
 var __metadata = (this && this.__metadata) || function (k, v) {
     if (typeof Reflect === "object" && typeof Reflect.metadata === "function") return Reflect.metadata(k, v);
 };
@@ -15,10 +48,11 @@ exports.getEnv = getEnv;
 const class_validator_1 = require("class-validator");
 const class_transformer_1 = require("class-transformer");
 const dotenv_1 = require("dotenv");
-const path = require("path");
+const path = __importStar(require("path"));
 class EnvironmentVariables {
     constructor() {
         this.SESSION_EXPIRY = 86400;
+        // Application
         this.PORT = 3000;
         this.API_GATEWAY_PORT = 3000;
         this.API_SERVER_PORT = 3001;
@@ -27,13 +61,16 @@ class EnvironmentVariables {
         this.SOCKET_SERVICE_PORT = 3003;
         this.WORKER_SERVICE_PORT = 3004;
         this.NODE_ENV = 'development';
+        // Slack Notifications
         this.SLACK_NOTIFICATION_URL = 'http://your-slack-notification-url';
         this.SLACK_NOTIFICATION_SECRET = '';
+        // RabbitMQ
         this.RABBITMQ_HOST = 'localhost';
         this.RABBITMQ_PORT = 5672;
         this.RABBITMQ_MANAGEMENT_PORT = 15672;
         this.RABBITMQ_USER = 'guest';
         this.RABBITMQ_PASSWORD = 'guest';
+        // Worker specific
         this.RABBITMQ_QUEUE_NAME = 'pdf_generation_queue';
         this.BACKEND_URL = 'http://localhost:3000';
     }
@@ -196,21 +233,24 @@ function validate(config) {
     }
     return validatedConfig;
 }
+// Export a singleton instance
 let envInstance = null;
 function getEnv() {
     if (!envInstance) {
         try {
+            // Try multiple possible .env file locations to handle both dev and build scenarios
             const possiblePaths = [
-                path.resolve(process.cwd(), '.env'),
-                path.resolve(process.cwd(), '..', '..', '.env'),
-                path.resolve(process.cwd(), '..', '.env'),
-                path.resolve(process.cwd(), '..', '..', 'backend', '.env'),
-                path.resolve(process.cwd(), 'backend', '.env'),
-                path.resolve(__dirname, '../../../.env'),
-                path.resolve(__dirname, '../../.env'),
+                path.resolve(process.cwd(), '.env'), // From backend folder (cwd)
+                path.resolve(process.cwd(), '..', '..', '.env'), // From services/*/* folder (two levels up)
+                path.resolve(process.cwd(), '..', '.env'), // From services/* folder (one level up)
+                path.resolve(process.cwd(), '..', '..', 'backend', '.env'), // From workspace root
+                path.resolve(process.cwd(), 'backend', '.env'), // From workspace root (alternative)
+                path.resolve(__dirname, '../../../.env'), // From source shared/src/config (dev)
+                path.resolve(__dirname, '../../.env'), // From dist/shared/config (build) -> backend/.env
             ];
             let result = null;
             let envPath = '';
+            // Try each path until we find the .env file
             for (const tryPath of possiblePaths) {
                 result = (0, dotenv_1.config)({ path: tryPath });
                 if (!result.error) {
@@ -219,7 +259,7 @@ function getEnv() {
                 }
             }
             console.log('Env file path:', envPath || 'not found');
-            if (result === null || result === void 0 ? void 0 : result.error) {
+            if (result?.error) {
                 console.warn('.env file not found in any expected location, using environment variables');
                 console.warn('Tried paths:', possiblePaths);
             }
@@ -237,6 +277,7 @@ function getEnv() {
     }
     return envInstance;
 }
+// Individual getters for convenience
 exports.env = {
     get database() {
         const config = getEnv();
@@ -318,8 +359,8 @@ exports.env = {
             },
         };
     },
+    // Direct access to all env variables
     get all() {
         return getEnv();
     },
 };
-//# sourceMappingURL=env.config.js.map

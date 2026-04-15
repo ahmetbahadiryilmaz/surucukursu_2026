@@ -32,4 +32,3 @@ __decorate([
 exports.DistrictEntity = DistrictEntity = __decorate([
     (0, typeorm_1.Entity)('districts')
 ], DistrictEntity);
-//# sourceMappingURL=district.entity.js.map

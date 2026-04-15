@@ -32,4 +32,3 @@ var SyncCarsStage;
     SyncCarsStage["SAVING"] = "saving";
     SyncCarsStage["COMPLETED"] = "completed";
 })(SyncCarsStage || (exports.SyncCarsStage = SyncCarsStage = {}));
-//# sourceMappingURL=job.types.js.map

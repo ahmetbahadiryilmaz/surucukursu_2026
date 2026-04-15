@@ -27,4 +27,3 @@ __decorate([
 exports.CityEntity = CityEntity = __decorate([
     (0, typeorm_1.Entity)('cities')
 ], CityEntity);
-//# sourceMappingURL=city.entity.js.map

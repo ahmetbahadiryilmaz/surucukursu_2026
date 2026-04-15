@@ -30,4 +30,3 @@ __decorate([
 exports.AdminEntity = AdminEntity = __decorate([
     (0, typeorm_1.Entity)('admins')
 ], AdminEntity);
-//# sourceMappingURL=admin.entity.js.map

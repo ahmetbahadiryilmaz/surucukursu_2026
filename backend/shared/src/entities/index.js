@@ -31,4 +31,3 @@ __exportStar(require("./city.entity"), exports);
 __exportStar(require("./district.entity"), exports);
 __exportStar(require("./job.entity"), exports);
 __exportStar(require("./password-reset-token.entity"), exports);
-//# sourceMappingURL=index.js.map

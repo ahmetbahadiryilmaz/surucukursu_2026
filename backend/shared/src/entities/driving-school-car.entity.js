@@ -101,4 +101,3 @@ __decorate([
 exports.DrivingSchoolCarEntity = DrivingSchoolCarEntity = __decorate([
     (0, typeorm_1.Entity)('driving_school_cars')
 ], DrivingSchoolCarEntity);
-//# sourceMappingURL=driving-school-car.entity.js.map

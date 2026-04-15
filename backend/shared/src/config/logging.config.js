@@ -1,21 +1,44 @@
 "use strict";
-var __rest = (this && this.__rest) || function (s, e) {
-    var t = {};
-    for (var p in s) if (Object.prototype.hasOwnProperty.call(s, p) && e.indexOf(p) < 0)
-        t[p] = s[p];
-    if (s != null && typeof Object.getOwnPropertySymbols === "function")
-        for (var i = 0, p = Object.getOwnPropertySymbols(s); i < p.length; i++) {
-            if (e.indexOf(p[i]) < 0 && Object.prototype.propertyIsEnumerable.call(s, p[i]))
-                t[p[i]] = s[p[i]];
-        }
-    return t;
-};
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
+var __importStar = (this && this.__importStar) || (function () {
+    var ownKeys = function(o) {
+        ownKeys = Object.getOwnPropertyNames || function (o) {
+            var ar = [];
+            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
+            return ar;
+        };
+        return ownKeys(o);
+    };
+    return function (mod) {
+        if (mod && mod.__esModule) return mod;
+        var result = {};
+        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
+        __setModuleDefault(result, mod);
+        return result;
+    };
+})();
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.appLogger = exports.AppLogger = exports.CustomTypeORMLogger = exports.logger = exports.LogLevel = void 0;
 exports.getLoggingConfig = getLoggingConfig;
-const winston = require("winston");
-const path = require("path");
+const winston = __importStar(require("winston"));
+const path = __importStar(require("path"));
 const env_config_1 = require("./env.config");
+// Define log levels
 var LogLevel;
 (function (LogLevel) {
     LogLevel["ERROR"] = "error";
@@ -24,6 +47,7 @@ var LogLevel;
     LogLevel["DEBUG"] = "debug";
     LogLevel["VERBOSE"] = "verbose";
 })(LogLevel || (exports.LogLevel = LogLevel = {}));
+// Development logging configuration
 const developmentConfig = {
     level: LogLevel.DEBUG,
     enableConsole: true,
@@ -31,13 +55,13 @@ const developmentConfig = {
     enableDatabase: false,
     typeorm: {
         logging: [
-            'error',
-            'warn',
-            'info',
-            'query',
-            'schema'
+            'error', // Log all errors
+            'warn', // Log warnings
+            'info', // Log info messages
+            'query', // Log all queries (for debugging)
+            'schema' // Log schema operations
         ],
-        maxQueryExecutionTime: 1000
+        maxQueryExecutionTime: 1000 // Log slow queries (>1 second)
     },
     categories: {
         database: true,
@@ -48,62 +72,70 @@ const developmentConfig = {
         performance: true
     }
 };
+// Production logging configuration
 const productionConfig = {
     level: LogLevel.INFO,
-    enableConsole: false,
+    enableConsole: false, // Don't log to console in production
     enableFile: true,
     enableDatabase: false,
     typeorm: {
         logging: [
-            'error',
-            'warn'
+            'error', // Only log errors
+            'warn' // Log warnings
+            // No 'query', 'info', 'schema' in production for performance
         ],
-        maxQueryExecutionTime: 5000
+        maxQueryExecutionTime: 5000 // Log very slow queries (>5 seconds)
     },
     categories: {
-        database: false,
-        http: false,
-        auth: true,
-        socket: false,
-        business: true,
-        performance: true
+        database: false, // Don't log normal database operations
+        http: false, // Don't log normal HTTP requests
+        auth: true, // Log authentication events
+        socket: false, // Don't log normal socket operations
+        business: true, // Log important business logic
+        performance: true // Log performance issues
     }
 };
+// Get current logging configuration based on environment
 function getLoggingConfig() {
     return env_config_1.env.app.isProduction ? productionConfig : developmentConfig;
 }
+// Winston logger configuration
 const logFormat = winston.format.combine(winston.format.timestamp({ format: 'YYYY-MM-DD HH:mm:ss' }), winston.format.errors({ stack: true }), winston.format.json());
-const consoleFormat = winston.format.combine(winston.format.colorize(), winston.format.timestamp({ format: 'HH:mm:ss' }), winston.format.printf((_a) => {
-    var { timestamp, level, message } = _a, meta = __rest(_a, ["timestamp", "level", "message"]);
+// Console format for development
+const consoleFormat = winston.format.combine(winston.format.colorize(), winston.format.timestamp({ format: 'HH:mm:ss' }), winston.format.printf(({ timestamp, level, message, ...meta }) => {
     const metaStr = Object.keys(meta).length ? `\n${JSON.stringify(meta, null, 2)}` : '';
     return `${timestamp} ${level}: ${message}${metaStr}`;
 }));
+// Create winston logger
 exports.logger = winston.createLogger({
     level: getLoggingConfig().level,
     format: logFormat,
     transports: [
+        // Error log file (always enabled)
         new winston.transports.File({
             filename: path.join(process.cwd(), 'logs', 'error.log'),
             level: 'error',
             format: logFormat
         }),
+        // Combined log file
         new winston.transports.File({
             filename: path.join(process.cwd(), 'logs', 'combined.log'),
             format: logFormat
         })
     ]
 });
+// Add console transport for development
 if (getLoggingConfig().enableConsole) {
     exports.logger.add(new winston.transports.Console({
         format: consoleFormat
     }));
 }
+// Custom TypeORM logger
 class CustomTypeORMLogger {
     constructor() {
         this.config = getLoggingConfig();
     }
     log(level, message, queryRunner) {
-        var _a, _b, _c;
         const shouldLog = this.shouldLogTypeORM(level);
         if (!shouldLog)
             return;
@@ -111,9 +143,9 @@ class CustomTypeORMLogger {
             type: 'typeorm',
             level,
             message,
-            query: ((_a = queryRunner === null || queryRunner === void 0 ? void 0 : queryRunner.data) === null || _a === void 0 ? void 0 : _a.query) || 'N/A',
-            parameters: ((_b = queryRunner === null || queryRunner === void 0 ? void 0 : queryRunner.data) === null || _b === void 0 ? void 0 : _b.parameters) || [],
-            executionTime: ((_c = queryRunner === null || queryRunner === void 0 ? void 0 : queryRunner.data) === null || _c === void 0 ? void 0 : _c.executionTime) || 0
+            query: queryRunner?.data?.query || 'N/A',
+            parameters: queryRunner?.data?.parameters || [],
+            executionTime: queryRunner?.data?.executionTime || 0
         };
         switch (level) {
             case 'error':
@@ -131,14 +163,13 @@ class CustomTypeORMLogger {
         }
     }
     logQuery(query, parameters, queryRunner) {
-        var _a;
         if (!this.shouldLogTypeORM('query'))
             return;
-        const executionTime = ((_a = queryRunner === null || queryRunner === void 0 ? void 0 : queryRunner.data) === null || _a === void 0 ? void 0 : _a.executionTime) || 0;
+        const executionTime = queryRunner?.data?.executionTime || 0;
         const isSlowQuery = executionTime > (this.config.typeorm.maxQueryExecutionTime || 1000);
         const logData = {
             type: 'typeorm-query',
-            query: query.substring(0, 500),
+            query: query.substring(0, 500), // Truncate long queries
             parameters: parameters || [],
             executionTime,
             isSlowQuery
@@ -151,13 +182,12 @@ class CustomTypeORMLogger {
         }
     }
     logQueryError(error, query, parameters, queryRunner) {
-        var _a;
         exports.logger.error('Query Error', {
             type: 'typeorm-query-error',
             error,
             query: query.substring(0, 500),
             parameters: parameters || [],
-            executionTime: ((_a = queryRunner === null || queryRunner === void 0 ? void 0 : queryRunner.data) === null || _a === void 0 ? void 0 : _a.executionTime) || 0
+            executionTime: queryRunner?.data?.executionTime || 0
         });
     }
     logQuerySlow(time, query, parameters, queryRunner) {
@@ -169,21 +199,19 @@ class CustomTypeORMLogger {
         });
     }
     logSchemaBuild(message, queryRunner) {
-        var _a;
         if (!this.shouldLogTypeORM('schema'))
             return;
         exports.logger.info('Schema Build', {
             type: 'typeorm-schema',
             message,
-            query: ((_a = queryRunner === null || queryRunner === void 0 ? void 0 : queryRunner.data) === null || _a === void 0 ? void 0 : _a.query) || 'N/A'
+            query: queryRunner?.data?.query || 'N/A'
         });
     }
     logMigration(message, queryRunner) {
-        var _a;
         exports.logger.info('Migration', {
             type: 'typeorm-migration',
             message,
-            query: ((_a = queryRunner === null || queryRunner === void 0 ? void 0 : queryRunner.data) === null || _a === void 0 ? void 0 : _a.query) || 'N/A'
+            query: queryRunner?.data?.query || 'N/A'
         });
     }
     shouldLogTypeORM(type) {
@@ -195,6 +223,7 @@ class CustomTypeORMLogger {
     }
 }
 exports.CustomTypeORMLogger = CustomTypeORMLogger;
+// Application logging helpers
 class AppLogger {
     constructor() {
         this.config = getLoggingConfig();
@@ -211,6 +240,7 @@ class AppLogger {
     debug(message, meta) {
         exports.logger.debug(message, meta);
     }
+    // Category-specific logging methods
     database(message, meta) {
         if (this.config.categories.database) {
             this.info(`[DATABASE] ${message}`, meta);
@@ -243,5 +273,5 @@ class AppLogger {
     }
 }
 exports.AppLogger = AppLogger;
+// Export singleton instance
 exports.appLogger = new AppLogger();
-//# sourceMappingURL=logging.config.js.map

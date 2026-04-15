@@ -39,4 +39,3 @@ __decorate([
 exports.DrivingSchoolOwnerEntity = DrivingSchoolOwnerEntity = __decorate([
     (0, typeorm_1.Entity)('driving_school_owners')
 ], DrivingSchoolOwnerEntity);
-//# sourceMappingURL=driving-school-owner.entity.js.map

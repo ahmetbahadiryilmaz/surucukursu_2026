@@ -1,7 +1,9 @@
 import { autoUpdater } from 'electron-updater';
 import { app, BrowserWindow, dialog } from 'electron';
-import http from 'http';
 import https from 'https';
+
+const VERSION_CHECK_URL = 'https://online.mtsk.app/desktop-updates/minimum_version.json';
+const UPDATE_BASE_URL = 'https://online.mtsk.app/desktop-updates';
 
 interface VersionCheckResult {
   allowed: boolean;
@@ -11,15 +13,31 @@ interface VersionCheckResult {
 }
 
 /**
+ * Compare two semver strings. Returns:
+ *  -1 if a < b, 0 if a === b, 1 if a > b
+ */
+function compareSemver(a: string, b: string): number {
+  const pa = a.split('.').map(Number);
+  const pb = b.split('.').map(Number);
+  for (let i = 0; i < Math.max(pa.length, pb.length); i++) {
+    const na = pa[i] || 0;
+    const nb = pb[i] || 0;
+    if (na < nb) return -1;
+    if (na > nb) return 1;
+  }
+  return 0;
+}
+
+/**
  * STRICT VERSION GATE
  *
- * On startup, the app calls the server's check-version endpoint.
- * If the current version is below minimumVersion → the app is LOCKED.
+ * On startup, the app fetches the minimum required version from minimum_version.json.
+ * If the current version is below that → the app is LOCKED.
  * The user MUST update to continue. No skip, no "later".
  *
  * Flow:
  * 1. App starts → enforceVersionCheck() blocks until check completes
- * 2. GET /api/v1/desktop-update/check-version/{currentVersion}
+ * 2. GET https://online.mtsk.app/desktop-updates/minimum_version.json
  * 3. If allowed=false → show mandatory update dialog (no dismiss)
  * 4. Force download → force install → app restarts with new version
  * 5. If server unreachable → allow running (can't gate without server)
@@ -32,19 +50,18 @@ const APP_VERSION = app.getVersion(); // reads from package.json "version"
  * Returns true if app is allowed to run, false if it must quit.
  */
 export async function enforceVersionCheck(
-  serverUrl: string,
   mainWindow: BrowserWindow,
 ): Promise<boolean> {
   console.log(`[VersionGate] Current version: ${APP_VERSION}`);
 
   try {
-    const result = await fetchVersionCheck(serverUrl, APP_VERSION);
+    const result = await fetchVersionCheck(APP_VERSION);
     console.log(`[VersionGate] Server response:`, result);
 
     if (result.allowed) {
       console.log('[VersionGate] Version allowed. Starting app normally.');
       // Still set up auto-updater for non-mandatory updates
-      setupAutoUpdater(serverUrl, mainWindow);
+      setupAutoUpdater(mainWindow);
       return true;
     }
 
@@ -53,7 +70,7 @@ export async function enforceVersionCheck(
       `[VersionGate] BLOCKED! Current: ${APP_VERSION}, minimum: ${result.minimumVersion}, latest: ${result.latestVersion}`,
     );
 
-    await forceMandatoryUpdate(serverUrl, mainWindow, result);
+    await forceMandatoryUpdate(mainWindow, result);
     // If we reach here, the download failed or user somehow dismissed
     return false;
   } catch (err: any) {
@@ -69,14 +86,13 @@ export async function enforceVersionCheck(
  * The user cannot use the app until they update.
  */
 async function forceMandatoryUpdate(
-  serverUrl: string,
   mainWindow: BrowserWindow,
   versionInfo: VersionCheckResult,
 ): Promise<void> {
   // Configure auto-updater
   autoUpdater.setFeedURL({
     provider: 'generic',
-    url: `${serverUrl}/api/v1/desktop-update/download`,
+    url: UPDATE_BASE_URL,
   });
   autoUpdater.autoDownload = false;
   autoUpdater.autoInstallOnAppQuit = false;
@@ -150,8 +166,12 @@ async function forceMandatoryUpdate(
       resolve();
     });
 
-    // Trigger the download
-    autoUpdater.downloadUpdate().catch(() => {});
+    // Trigger check + download
+    autoUpdater.checkForUpdates().catch(() => {});
+
+    autoUpdater.on('update-available', () => {
+      autoUpdater.downloadUpdate().catch(() => {});
+    });
   });
 }
 
@@ -159,10 +179,10 @@ async function forceMandatoryUpdate(
  * Non-blocking auto-updater for when the version IS allowed.
  * Shows optional update prompts for newer versions.
  */
-function setupAutoUpdater(serverUrl: string, mainWindow: BrowserWindow | null) {
+function setupAutoUpdater(mainWindow: BrowserWindow | null) {
   autoUpdater.setFeedURL({
     provider: 'generic',
-    url: `${serverUrl}/api/v1/desktop-update/download`,
+    url: UPDATE_BASE_URL,
   });
 
   autoUpdater.autoDownload = false;
@@ -226,25 +246,17 @@ function setupAutoUpdater(serverUrl: string, mainWindow: BrowserWindow | null) {
 }
 
 /**
- * HTTP call to GET /api/v1/desktop-update/check-version/:version
+ * Fetch minimum required version from minimum_version.json and compare with current.
  */
 function fetchVersionCheck(
-  serverUrl: string,
   version: string,
 ): Promise<VersionCheckResult> {
   return new Promise((resolve, reject) => {
-    const url = new URL(
-      `/api/v1/desktop-update/check-version/${encodeURIComponent(version)}`,
-      serverUrl,
-    );
-    const client = url.protocol === 'https:' ? https : http;
-
-    const req = client.get(
-      url.toString(),
+    const req = https.get(
+      VERSION_CHECK_URL,
       {
         timeout: 10000,
         headers: {
-          Accept: 'application/json',
           'User-Agent': `mebbis-desktop/${version}`,
         },
       },
@@ -259,9 +271,23 @@ function fetchVersionCheck(
         });
         res.on('end', () => {
           try {
-            resolve(JSON.parse(data));
+            const json = JSON.parse(data);
+            const minimumVersion = (json.minimumVersion || '').trim();
+            if (!/^\d+\.\d+\.\d+/.test(minimumVersion)) {
+              reject(new Error('Invalid version format in minimum_version.json'));
+              return;
+            }
+            const allowed = compareSemver(version, minimumVersion) >= 0;
+            resolve({
+              allowed,
+              latestVersion: minimumVersion,
+              minimumVersion,
+              message: json.message || (allowed
+                ? 'Sürümünüz güncel.'
+                : 'Uygulamanızın sürümü eski. Lütfen güncelleyin.'),
+            });
           } catch {
-            reject(new Error('Invalid JSON response'));
+            reject(new Error('Invalid JSON in minimum_version.json'));
           }
         });
       },

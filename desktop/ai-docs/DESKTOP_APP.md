@@ -107,3 +107,4 @@ npm run start    # Build + launch
 3. **`flushStore()` needed**: Always flush before close/quit or cookies may be lost
 4. **MEBBIS form fields**: `txtKullaniciAd`, `txtSifre` — ASP.NET needs `change` events
 5. **Renderer files not in dist**: Static HTML/CSS/JS stays in `src/renderer/`, path is `__dirname + ../../src/renderer`
+6. **IPC handlers must be registered before createMainWindow()**: The renderer loads immediately and calls `accounts:list` on DOMContentLoaded. If `setupIPC()` runs after the window is created (e.g. after an async version check), the handler won't exist yet → "No handler registered" error.

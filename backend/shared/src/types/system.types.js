@@ -15,4 +15,3 @@ var ServiceType;
     ServiceType["REDIS"] = "redis";
     ServiceType["FRONTEND"] = "frontend";
 })(ServiceType || (exports.ServiceType = ServiceType = {}));
-//# sourceMappingURL=system.types.js.map

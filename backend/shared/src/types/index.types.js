@@ -20,6 +20,7 @@ var Modes;
     Modes["DEV"] = "dev";
     Modes["PROD"] = "prod";
 })(Modes || (exports.Modes = Modes = {}));
+// Export system types
 __exportStar(require("./system.types"), exports);
 var DB_TYPES;
 (function (DB_TYPES) {
@@ -113,6 +114,7 @@ var PERMISSION_TYPES;
     PERMISSION_TYPES[PERMISSION_TYPES["USER"] = 1] = "USER";
     PERMISSION_TYPES[PERMISSION_TYPES["STORE"] = 2] = "STORE";
 })(PERMISSION_TYPES || (exports.PERMISSION_TYPES = PERMISSION_TYPES = {}));
+// If a change is made, the same change must be made on the admin side!!!
 var ACTION_HISTORY_SERVICES;
 (function (ACTION_HISTORY_SERVICES) {
     ACTION_HISTORY_SERVICES["ADMIN"] = "ADMIN";
@@ -121,6 +123,7 @@ var ACTION_HISTORY_SERVICES;
     ACTION_HISTORY_SERVICES["PACKAGE"] = "PACKAGE";
     ACTION_HISTORY_SERVICES["USER"] = "USER";
 })(ACTION_HISTORY_SERVICES || (exports.ACTION_HISTORY_SERVICES = ACTION_HISTORY_SERVICES = {}));
+// If a change is made, the same change must be made on the admin side!!!
 var COMMON_ACTION_STATUSES;
 (function (COMMON_ACTION_STATUSES) {
     COMMON_ACTION_STATUSES[COMMON_ACTION_STATUSES["CREATE"] = 1] = "CREATE";
@@ -135,4 +138,3 @@ var OTP_PROCESS_STATES;
     OTP_PROCESS_STATES["PASSIVE"] = "PASSIVE";
     OTP_PROCESS_STATES["COMPLETED"] = "COMPLETED";
 })(OTP_PROCESS_STATES || (exports.OTP_PROCESS_STATES = OTP_PROCESS_STATES = {}));
-//# sourceMappingURL=index.types.js.map

@@ -14,9 +14,9 @@ var __exportStar = (this && this.__exportStar) || function(m, exports) {
     for (var p in m) if (p !== "default" && !Object.prototype.hasOwnProperty.call(exports, p)) __createBinding(exports, m, p);
 };
 Object.defineProperty(exports, "__esModule", { value: true });
+// Main exports for the shared package
 __exportStar(require("./entities"), exports);
 __exportStar(require("./types"), exports);
 __exportStar(require("./enums"), exports);
 __exportStar(require("./config"), exports);
 __exportStar(require("./utils"), exports);
-//# sourceMappingURL=index.js.map

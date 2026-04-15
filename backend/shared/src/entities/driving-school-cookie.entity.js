@@ -49,4 +49,3 @@ __decorate([
 exports.MebbisCookie = MebbisCookie = __decorate([
     (0, typeorm_1.Entity)('driving_school_cookies')
 ], MebbisCookie);
-//# sourceMappingURL=driving-school-cookie.entity.js.map

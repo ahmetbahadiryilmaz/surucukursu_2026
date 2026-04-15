@@ -34,4 +34,3 @@ __decorate([
 exports.SystemLogsEntity = SystemLogsEntity = __decorate([
     (0, typeorm_1.Entity)('system_logs')
 ], SystemLogsEntity);
-//# sourceMappingURL=system-logs.entity.js.map

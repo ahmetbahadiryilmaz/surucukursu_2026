@@ -2,6 +2,9 @@ import { BrowserWindow, session, dialog } from 'electron';
 import { Account } from './account-store';
 import * as path from 'path';
 import * as fs from 'fs';
+import * as https from 'https';
+
+const TEMPLATE_BASE_URL = 'https://online.mtsk.app/templates/direksiyon-takip';
 
 interface RunningAccount {
   account: Account;
@@ -167,16 +170,19 @@ export class MebbisManager {
         // Phase 1: SKT module loaded, now click the menu item for skt02009
         console.log(`[${account.label}] SKT module loaded, clicking Aday Durum Görüntüleme...`);
         this.pendingDownloadPhase = 'navigate';
+        this.injectLeftMenu(win, account);
         this.handleSktModuleLoaded(win, account);
       } else if (currentURL.toLowerCase().includes('skt02009')) {
         // Handle skt02009 page loads for direksiyon takip download
         if (this.pendingDownload && this.pendingDownloadPhase === 'navigate') {
           // First load: page loaded after menu click, fill TC and search
           this.pendingDownloadPhase = 'search';
+          this.injectLeftMenu(win, account);
           this.handleSkt02009Loaded(win, account);
         } else if (this.pendingDownload && this.pendingDownloadPhase === 'search') {
           // Second load: results after form submission
           this.pendingDownloadPhase = null;
+          this.injectLeftMenu(win, account);
           this.handleSkt02009Results(win, account);
         } else {
           // Normal visit to skt02009 (not triggered by download)
@@ -195,6 +201,9 @@ export class MebbisManager {
     win.webContents.on('dom-ready', () => {
       const currentURL = win.webContents.getURL();
       console.log(`[${account.label}] DOM READY: ${currentURL}`);
+      if (!this.isLoginPage(currentURL)) {
+        this.injectLeftMenu(win, account);
+      }
       if (this.isLoginPage(currentURL)) {
         const attempts = this.loginAttempts.get(account.id) || 0;
         if (attempts < 3) {
@@ -765,11 +774,24 @@ export class MebbisManager {
 
     } catch (error: any) {
       console.error(`[${account.label}] Download error:`, error);
+      const errMsg = error?.message || 'PDF oluşturulamadı';
+
+      // Show alert dialog with error
+      dialog.showMessageBox(parentWin, {
+        type: 'error',
+        title: 'Direksiyon Takip Hatası',
+        message: errMsg,
+        buttons: ['Tamam'],
+        noLink: true,
+      }).catch(() => {});
+
+      // Update modal status
+      const escapedMsg = errMsg.replace(/'/g, "\\'").replace(/\n/g, ' ');
       parentWin.webContents.executeJavaScript(`
         (function() {
           const status = document.getElementById('mebbis-modal-status');
           if (status) {
-            status.textContent = 'Hata: ' + ${JSON.stringify(typeof error === 'string' ? error : 'PDF oluşturulamadı')};
+            status.textContent = 'Hata: ${escapedMsg}';
             status.style.color = '#ff4444';
           }
           const submitBtn = document.querySelector('#mebbis-modal-overlay button:last-child');
@@ -804,25 +826,21 @@ export class MebbisManager {
     }
     if (lessonCount > 20) closestCount = 20;
 
-    // Check for simli template
-    const templateDir = path.join(__dirname, '..', '..', '..', 'backend', 'workers', 'pdf-worker', 'data', 'templates', 'direksiyon-takip');
-    let templateFile = path.join(templateDir, `${closestCount}n.html`);
-
+    // Determine template filename
+    let templateName = `${closestCount}n.html`;
     if (hasSimulator && [12, 14, 16].includes(closestCount)) {
-      const simliFile = path.join(templateDir, `${closestCount}nsimli.html`);
-      if (fs.existsSync(simliFile)) {
-        templateFile = simliFile;
-      }
+      templateName = `${closestCount}nsimli.html`;
     }
 
-    if (!fs.existsSync(templateFile)) {
-      throw new Error(`Template not found: ${templateFile}`);
+    console.log(`[PDF] Fetching template: ${templateName} for ${lessonCount} lessons`);
+
+    // Fetch template HTML from remote server
+    let html: string;
+    try {
+      html = await this.fetchTemplate(templateName);
+    } catch (err: any) {
+      throw new Error(`Template indirilemedi: ${templateName} - ${err.message}`);
     }
-
-    console.log(`[PDF] Using template: ${path.basename(templateFile)} for ${lessonCount} lessons`);
-
-    // Read template HTML
-    let html = fs.readFileSync(templateFile, 'utf-8');
 
     // Use a hidden BrowserWindow to render and fill the template
     const pdfWin = new BrowserWindow({
@@ -901,6 +919,23 @@ export class MebbisManager {
 
     pdfWin.close();
     return Buffer.from(pdfBuffer);
+  }
+
+  private fetchTemplate(templateName: string): Promise<string> {
+    const url = `${TEMPLATE_BASE_URL}/${encodeURIComponent(templateName)}`;
+    return new Promise((resolve, reject) => {
+      const req = https.get(url, { timeout: 15000 }, (res) => {
+        if (res.statusCode !== 200) {
+          reject(new Error(`HTTP ${res.statusCode}`));
+          return;
+        }
+        let data = '';
+        res.on('data', (chunk: string) => { data += chunk; });
+        res.on('end', () => resolve(data));
+      });
+      req.on('error', reject);
+      req.on('timeout', () => { req.destroy(); reject(new Error('Timeout')); });
+    });
   }
 
   stopAll() {

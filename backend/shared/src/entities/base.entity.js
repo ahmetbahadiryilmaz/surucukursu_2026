@@ -63,4 +63,3 @@ __decorate([
     __metadata("design:paramtypes", []),
     __metadata("design:returntype", void 0)
 ], BaseEntity.prototype, "setUpdatedAt", null);
-//# sourceMappingURL=base.entity.js.map
