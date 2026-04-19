@@ -5,7 +5,7 @@ contextBridge.exposeInMainWorld('mebbisAPI', {
   listAccounts: () => ipcRenderer.invoke('accounts:list'),
   addAccount: (username: string, password: string, label: string) =>
     ipcRenderer.invoke('accounts:add', { username, password, label }),
-  updateAccount: (id: string, data: { username?: string; password?: string; label?: string }) =>
+  updateAccount: (id: string, data: { username?: string; password?: string; label?: string; simulatorType?: string }) =>
     ipcRenderer.invoke('accounts:update', { id, ...data }),
   removeAccount: (id: string) => ipcRenderer.invoke('accounts:remove', id),
 

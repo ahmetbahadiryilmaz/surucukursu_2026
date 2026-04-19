@@ -1,0 +1,590 @@
+<html><head>
+    <title>MEBBİS -- Özel MTSK Modülü</title>
+    <meta name="GENERATOR" content="Microsoft Visual Studio 7.0">
+    <meta name="CODE_LANGUAGE" content="C#">
+    <meta name="vs_defaultClientScript" content="JavaScript">
+
+    <link rel="stylesheet" type="text/css" href="/Styles/style.css">
+    <script language="javascript" charset="ISO-8859-9" src="/scripts/kabartma.js"></script>
+    <script language="javascript" charset="ISO-8859-9" src="/scripts/alankontrol.js"></script>
+    <script language="javascript">
+        function AlanKontrolveKayit() {
+            var UyariMesaji = ""; 
+            var frm;
+            frm = document.getElementById("FRM_SKT02006");
+
+            //UyariMesaji = UyariMesaji + NumAlan(frm.Gv_kod1_txtGuvenlikKod.value, "Güvenlik Kodu", 9999, 0, false);
+
+            if (UyariMesaji != "") {
+                alert(UyariMesaji);
+                return false;
+            }
+            else {
+                if (Beklet(13)) {
+                    frm.hiddenKaydet.value = "Kaydet";
+                    frm.submit();
+                    return true;
+                }
+            }
+        }
+
+        function fnIslemSecSilme(KayitNo) {
+            var frm;
+            var onay;
+            var UyariMesaji = "";
+            frm = document.getElementById("FRM_SKT02006");
+
+            //UyariMesaji = UyariMesaji + NumAlan(frm.Gv_kod1_txtGuvenlikKod.value, "Güvenlik Kodu", 9999, 0, false);
+            if (UyariMesaji != "") {
+                alert(UyariMesaji);
+                return false;
+            }
+            else {
+                onay = confirm("Seçmiş Olduğunuz Dönem Kaydı Silinecek İşlemi Onaylıyor musunuz ?");
+                if (onay) {
+                    if (Beklet(13)) {
+                        frm.hdnKayitNoSilmeIcin.value = KayitNo;
+                        frm.submit();
+                        return true;
+                    }
+                }
+                else
+                    return false;
+            }
+        }
+    </script>
+<style>body { margin-left: 200px !important; } main { margin-left: 0 !important; }</style></head>
+<body>
+    <form method="post" name="rapor_submit_form" action="../common/reportsubmitter.aspx" target="Raporlar">
+        <input name="RaporEkranKodu" type="hidden" id="RaporEkranKodu" value="SKT02006"><input name="SecilmisKurum" type="hidden" id="SecilmisKurum"></form>
+    <form method="post" action="./skt02006.aspx" id="FRM_SKT02006">
+<div class="aspNetHidden">
+<input type="hidden" name="__VIEWSTATEFIELDCOUNT" id="__VIEWSTATEFIELDCOUNT" value="8">
+<input type="hidden" name="__VIEWSTATE" id="__VIEWSTATE" value="Rc6EQ21NKoHDKzhCqprwd73OyVW3+tjSFIORmpb/oZclkHlmQKOQJ0I6/s+APEhvphlkuNEq6N80RM5Aa5sQkYNRhBwVVq8qxBstBmYkVt8vmyY/FRzPMXmJQEqa2xS/d6AXfT5Wo1eeEAJnq0TjE+Mp3sY72frz11uikcvPREIIPfEsvw4xY8AqUYahRNipzSrOvbs+jpFNkK+dyTl1rc1N//XtQNlxVDhT1u4lhSlWvl5JEZauT5pszRDumvjtLGAvx8S6b+xQM1OStllYaskZtf9AX7ZhS3PJDYgUMF3oBWN566DMA2BDB8RV9Yp0qNdeNZoV24MU3T5UWRYnEwoRR1rair5n7xOWvhoWwxoEsIg56xmtjbQFatNxdKXmzOEcrhSQb/vjv4zw0iuWZ05T6Dxg3vYqDdedAw5YRyZ6d1BzGkvVM47hXLpWeodW0fquFhLKl6MNZSWN7jd5VndlBgKlT5ksEnhbNB9rufvW5nP8votS3OQLHg+SL2gjp+zemnhOp4IKWeDz9xXKfQ0gBHeFv7izExo2LQFyJz3JePHXrDks9NavpFIgIqPv7V+M6l3SOtWYYqIg2Yqf9HtNEY5G2NXoiLzPvm3ILCJ2zddEk+wfDCxeswT+4LDLxBkegG1lp+3YOrSvdEJqPp1seskQ8tH7DHuIb7rhNUQ6O8vFRYs2rGtxdlOfTG8UIw+D4OjKWap9kVmKIrW9etUj5nbYeV65pJq1k+svhwhiNkH2vr06jZcYFX1putW1FoV12awWxpo23BY/6sk/uf6V1HWjdKvRNtE1SrJ3UEZRxgS+VPZP+XxCJeTdkvtgePN8KJHEsPGffs1vojIINUb/VTzxqfkXUP9Z469m2gNbw+qV5+cXRD17Eh6W+VyVa/63oFZaAmeDO2gszyyLwOWDToRmNbvW/+aU6p7/ECLOmsJejOTUDL47EBRMVj+AoPb99dRuUUZq14hsuMt/I42BfEbIUKIzjvEQBhZK29fvSmQxdpqukSeihmKFHLxU">
+<input type="hidden" name="__VIEWSTATE1" id="__VIEWSTATE1" value="aPlPasdKQHkG3Qs9df+CkJnVvBihqhVL7lET1oFxzSmUi091crDiAOQ9eehA67/GkNsfGJ/nsFzvRetj21OFj3zOkNc4Svg6TGAeV8+d51f0PZ705K9R5jOvzjmUIxnweqJatAmfZuSSmX3L4JIYn3/a+pCjTtx30EodKovCfivNqAKO4O13d/kcA9ByV7P1JmuISxEUdy9SbCV0T02so5NmtiDv1nDD/yE8nt902mhdmqTs8oWdU1+ZSqqWeuGnEhGBE5ZKizfKKopVgPZx2rLCsQmCQwnD83I7yapxHG1CS7zDxf11Cd9X8q/EXFDKyhk5qhYfHvallHa3E3fHLTKrh/E+1wcWDnDYTOmDnKmb7VCyb6hJZi7W/0ZT0E/2qeGgrtGfrqb7TIDu5GE074faLSmcjOaF2+ghpKgZM0fUkYudn5dxGInsIWZIFZmA4dP2zpPqNM+YN0dvULqNzz74lio7WJfqYguiH0w6Qgfm7794l54RRMmfvG8AxAlyb8FRKUo/Jiju8y0z/LUrBvC7WIzGqPPZVliMcK/GxHVUA+snO508rwm4Qm50dZRZDQSf28vChXfuAmBnY+7PjMowYcUGtWjZ2GxodNvJiqzHqnVGpAfMwDVqghaZMIlz9O8DpFeVFaApMsZP53vAN9DL1SHjcSi0KYvqGKT94Ux6q6woWUJFo0gB4vBGIQ7QtI/7Fj+OEd+g6i8KX2osP/yVupnJD9VKMrpqRiAJ8uhBcwNO/sHdZxUp2tLs4ivgtzq8b/cit13WYfTD0oAXgjLve0KHa2hth5Y/d75ST6zZqhAUz+ydD6FYw6krb9dJjoTPkoCiKMyyiYhjY3JN2CxyLk5nja3qMXQ9jZe0MK/UPYx9Mlrs8W2c+dkKX1FeJAP5DJIRFc9w0Ipgvt7hzvkD6QSZSozDF1DyOBAd02f/xY3IKhjCY3F5OD3Qs1tGCUl7vW50HoyWhufFavWtqByG32ukxbcz4u0dr4MZU7VfgvVcMWNafQpBeg25DGEd">
+<input type="hidden" name="__VIEWSTATE2" id="__VIEWSTATE2" value="sY8y9EtZA2QpRy03qoDX0PwGEHuvQhZInwrK4J9oE3rushppxwxyaA7B1N36YrXpvZmc10e4NZRuV9ZTxaVX3m5fl6P9vUIeHXLXx3F8vsoC1DGsdS55bKkNoAgh1TjJ2/JHJycz0eOEj4g4tEOUD9OiguC+TFwa9Zt6B6pCHrIVa8vrr8o89ai9kSgBnH0B6l4UECCJIkdxPZQ1euUNWjWDdwc8ocGhagrOaDj6Bzqsa74aR0D6fqDjFkvyPoEGUDdO+F9BoNRDVrt8kCIayKwMUgTHI6+tdsTo6ZL+SbXtH5aHd+C1BENLvAne8LZj9Z10W2gasgtueu2zI6rZtsk8K1Pe3XYyRQALejHidn+oZNg5RRMmsLv6uwgkbKFHU1hRDYs2S7SBPdL3GiDvveZfgSDORcXNNbd2ilv3t0ETKfSJln+4CpMMV2AscS1UvjvkQVLcOPV59rB8RELe2Mycl4G9MC5oN4fcORSQQc7FIxFjLFoNXl6cTlx0bcJ4cGyu1FztxjL5pMkT33ej/2wiOHxcnkbrNLPhKn8/f62upcqQ0WZF4eUfYJhtzXfzdRCitdVc5SyJ0HVTOrsM3/Gfz9KpwZLpqAL+52fgHKwCQf1HhGuNbUIlgQbnV6WWRApO8hFUW9W8zhP0j9ygttQMhmYWzntOV9ADPhQ6cFKxRJsBlgWi617UlysYQmsJfbIfRH4dinDzkDCaoCaX73yaXmumHLpxn1llrz3EiTf93odurhDah8bru5QZOpILbXCe8cu6j7hkI7Su4yz6rhbj7PlKRY4Xw6+oZrBFWiwNiBGVQjcMCfJsXO/340PbLbKb82xVjJrVIustzKI/GHWJ9rSEcr8pmZsnPwKCTt26Ko3W2hx8NiAOzWj8H+Ssy1drLnnFZ9vh/xsdc/2/ynfBhPw07wMyaK/oihzKM7GXUq34oifWoPz19SRzkDz8MyzDWCc/ZYOzuK9XFbcIaQjTfzbU3K1zudzxD0tmxYrMaEZJWI5GODG1zvaMaynL">
+<input type="hidden" name="__VIEWSTATE3" id="__VIEWSTATE3" value="BJrshjuDKuygNG7+V+nDRN/2f92DUoLUx04OCvOdCaF2Bw4Diu1pPKGWbgZU6FR0twAs+tF8o9X83P+5qUz7EKGG9N+zHyrOyZfdiuFFN8QX+ryVzml489Zg9ShJ87DSky2ZmRkE9hlHNgZzm6oK74B/NrEupMfVq5TceoLeEzAWJffEai9fhMH9HNvZWL/DKKxwP1Of9QNRAKPq1kMBDCrcWUNczNUGXyhTB8kRU+kD7BiRQhAy+xEl7JY6B3TMQDRyNv3i0Hw77NnudrCVHu9qPljSxWYPtRIWKdMt880Oe0Sriv/ehNw9x6D1Jl3kZnBZjjaueJw22WiG8tMyLwMdHIMTz2Rycabvrz1WJTDHKZCDOfTtRVRBZZNVQbh3BftKKXnXu+UTXH2GLj8Z32U+wtOV8m1pgrux4Hm0tf1Op0c5Z5ap+5Y2wK4x878wrO/vnQz08p4PLn92NtyRi4DAoCLa9/WscP8a7g++LS2NLFMsccpwqOH5E9Hpl1zjQ6kNpFidtzfjI5cC9/+Rx+Xa4RNUuxWtxFwENs8QACI3tk8Fsj8V3Qj7XMTbZXGzOk9POQtnsf43PyXt3TCv2L2PC5r22VUoBmH4kXSqhVmC3rHrjTvR8cHlvLDUrO+jJonhWiT9OhPytwOBcxdKR+h+7Ks6hVNFlwJuRJ50Xadk20x1Y/hq0AouLYm1xdht88qpIFK6qVtoAzQC1x2pTUT+1edI1VPxj6lOfqrRt7v6+7aWj0lK0bLjWu3nkA+2H+Fms5MxVrzopPckcb85hCqTV9B4NAO28EHzN6w2n/cdjIYCxbPJs1Tgz0l1CCZ+r4r6TuRb20tj+QbgC1C9r3TPCdM9r3W9zWw5jYSfK+HOYhyyIcB3zeukKg+w7+oGrL0WosxDJ9VYK8dWjz4ZBBBQlmyQzJ5MCB5Qc1zPXibU0uUA3A8xNMXS0lUpRfD1L3hYngBZPnCYwBVUxhMv/xCoTn5DRgLlhBvPjWdbfhO84EMi42IVoLd74BuVJbfE">
+<input type="hidden" name="__VIEWSTATE4" id="__VIEWSTATE4" value="qJ9VkIPSok+uOf+QRQDsRlRRM5PrTiIwxuTRHVLZFebj71V8jpthHBpQKg3v8YrJrTOPsbWiAr+382VUQ/nqcpEbG6P2p3tSnb+mOs3JYgbiQhkK27OGpEYxnwtBPtWwzLR86hkBw67scKswMtCH5LnkKZyWdwvYmZYA6wQnHCgpKK7ctKSBBWHGuc3zYp7EEjsssBCCtoVbacbAlYZGRaliGVn+oZgnOSsmGZjAgrmGE0tmUN0mNSYap/RbXYCcZI79OgJ8SMg4BHs78AH0ftcftdvk++QwMe10AiVMn7VpTWzOZEY0pH+d4eekaEu0CsCg8ijhsqeKhxwVNA4QvKfLZS0tLZkLy5nILOL/gVal91vxRZ3bfyEhD4+9ZDbapdb8uaFao29cllIxIgGSeSLJgFtc/LaGaAsfNDxkJ3BGGdRdgj/HpYmO5M1c08lhB0pDH8WNPB9wsSd9jy2pYMy3A9OXC74sSF/9T7elgLdCrd/qX4iUD8Y6zigXHAB7IFIWQQgnIkegLhAO5ZgiHrETPwcKahEegXXmBWebyQQXEBWfYIu41ex6ah/tPaHITkUMIk/F2o3gaoFRS7sioFP64rR2/M8PboWJ8CBeEMA55Ql1i0xi1tX3dflCmTwR9FLlNXG8BKZxTXIHaHzI8Xeq2Yb0YgATkltdhSwb5Vk6eAapFhbPSWdZZhjy2PSAaA0PIA/8T9JLkUPiHKeBGVfpfIaXQwsTqrKtlvo+aVRIWaVMBIVuiifbd4cAgOLrakEAIZFyzMJLWXyhchxZde09Ec2xh1PbW8X/js+7g+/aEjMbBeAOMeT3FTOFt2gtHkoQ9XJ+jLg76ieUlmQ3M7NToBjstVF12TySM54Ob7SBNWtuVGFLAdiLnwivX8ACEwX7RpfOH6gbIRB5m4kfou6HnWTlIb+0prwUL/SL9XChGVbRag43yBa3eWogb0J9BmzocFHKhv6UKhWi35bUBDDh+S4kFCvmAoeYARssElpm1JzLpj046tWF5kMcKjwm">
+<input type="hidden" name="__VIEWSTATE5" id="__VIEWSTATE5" value="qempr45BrDaNWjOAe+pNFFJKqL+6mlt6kCiKQRv6o/S9ukAjNVCTHY0Aq9foTRULXLp/uBHt/x8FiYG6EOZNiIrXCYwRbtHxxQ+1eqKZ3hWOMsQmTNi8DnLBSb0JW3q8WWXeS6ONXcsXulSNGNg81p5Ja7a3sm1YouLarUIbiwUK0YeMVAiNOvlNFqPQjbSNfYfaJrTmYDkhws54kHK5gtqdIXnaWvs7wlQx5tQV4gUv35+FdGQ17OkR0bpGLFd6KR+vk/3iL507eS1wsClnahKdIRydmZKanVYMSJ6DjfbT3p8q891wE/eEKAE4ugnZzFUW6EpZP+jYxd9wf5kGYivz73b4L+6Aa1wgpx08zzXaYJkfK7+YP9VJm+PEgWUJLt/Bj/35eu8el7gbc2Md+jo8Slpz1o/26+bTtL+OqWce7Q8XUidrNvTd3HzWaj+YrCIb9qBw5QSZT10GxBRNCJQxINbTC8Hf4tWLXI9WcJJxFk77yVytMDEUegqQwJHWFC/bMj1C8L8Nk9cMHuan4A4UC05/QSXmnmnwabdVg4YAcZdFOiZ1Gj/W9xEinAjKCC86UKbGbKXFNoI+17ABPzqk6bGBRM24sz7EpT6u5PresqTeFUQ+R6S2iKkaJmFuRBg4R6DynVX8cgulv4dADbShHffpzShQsSdJmdNDs2nMpfytkWNsJZPR45P9yVUyBcTAY4ZvWhEfcImu4/I7jgVSkNRfo6qBO1OC9biCHZNzgCoL063IPRHG32MtIA4WZ8PT9hvKfOqqo2wCKXmvgkmZ3jE4vTjctSz7hdM5tcqXBR+0WzGO/r0XiRjAHIV/iALJPeYGXzzWHXLXyC623YMDfsbi8pitTOrporg9RjLvjXjGyS5XQLS3IHFH5iLU+9NBI6Ctd2Qce8o7UYj/89NqGwCcv3Vt6CybIzV8QKPTftGMxw5YimraUaH1MGcjLpo3OnMu/MFO4Vwoehwz2RNEQOIK5bV4mX3tK6qp/PNC0S0lnR/Pvj1UYUMaP04y">
+<input type="hidden" name="__VIEWSTATE6" id="__VIEWSTATE6" value="wuHnRG8k5ubwjuV5QQE+FlwrE8TcZEaDJ38YJtBQvWWiQNIRtB43euCHAdqjluPGRKRyR+xosC2zNnFj7HPHED+4VBZIBQ9RLLDwWLNHkzk0fpf0NGcW0NFljvXxga41wrSrbOVE61nJP8UbJUGQQrSMpv19DuyPyqQAEg2hB449vr8F3H2IABne9K2atdzDo27oDQhwYM/2cicli4A2Gns0mGl9WDfYHOikjZCYI4R413URGcatr6xt6+U1IDCD7utJjL7nFtoYyJ0c7wtZ8D106o+mOyYuMyb10UxNH/X9Mr/My+WhQVn8LIq3c0iLjvU6FcfhCH48tJiWWNUhyyB6vSJfTBaub4xBWP6GSUfduS4PTbwvDh5g0mF/NgVnrx5blCng3VkKmaEKWkszWPJKJkJndFo3lKziUj/i71MtjpIWd6vuMJhLEjHYIk50EOXmNaIdxJbdR7P8k8sxj4mMebsfDD0VcZvl/oiqVW7Z9xwtS0tpaHgvp6AT0c4kEZP8q+lw1lmZG7zdztCBlSoXevn6cgmRYq1J4YTVYRnqIMbzxuL2E6oyDH3V5ClASmBxFczopydGIbmCY8LjVkCI42txNM14Yt87zR9Ppq2MmYtHQ/7nGw6o+CJFuJJAqzTEr3cHFD5MClyuHtTujve/IEJdPhhIxFjoCBAH8irP2hJBc6CcIowJiUny3w504paydOUL4B7JBunahRyt6GeX01bJqxa10xFJVTkW9YX4zwr1TGGoT8qskm9e3vVP0x5TywwBcPUik39DrTgfP94KEaZbA8BG5AQ8uiyYiT/ugIS3TKBvUTolkNA80qC5PjEZvyDiWNMEJyv21DAuD61aikXzv5EpHHIm0XCOL6/tjBLrml+aGH/mqHkVc+ycQ79wae5iFJPBINH6X8EJ3hxgehUDDPzsAVAXIPcWYCfzkDlhcCBYCAsxfuVvfe1puB1kHzxMzfOIdD2IdHtm6BAtyx/bf0lkPDu6ug7qs14p0Jim5LxLzmVpaXBH18q4">
+<input type="hidden" name="__VIEWSTATE7" id="__VIEWSTATE7" value="Xdvhu0lXpEvqVUSSQjykPGCO8hmDEMUsfXBtZZdJm1dFUieuyrT7iQAX3+/1rPVBwmJWdpGD1azvjEUVdoCkkUvPmKuTaqAIu9vWOl0Y4dIwEcdrGt9JECAXezI0MRdRz0hAIttmf7dpvzg/KnoqzDajK20QaeaXPq6SCf4FXSu+JU0psSi07VuXVjNrzXVZ/aR9kGT0x4t8Mkeh2Sr9REIVkq+XAM7V9qBVH32PxrjLWLvp5CRFJMxIUJ1C0Z3FfahKZUjxMHAO0+bjY+qZ2mmxQnhS+auBJvhytKUYhqpu3maMSkF0oyFS4JsneJZqggRpURrhJtHJs6svC6WPNNW9qHVjFf7QEMLFwNquipdIs6kAedrRvgh8i+Wh7csE1I6pUNWpv1CuwmvRsxQ5O0nI8xLxW3ojl0VIW3c3HEFc10rFVKoCARnsGAjubqy3fGweS5PUh7sMrP47qFG/MBYRXnEVXIpSDYzda+36Tji3ip9zi+FTWSm1QMTZ4mvOE2MmW11h4yn8DQs177sqI2RVvr7WQZX2SLiqwbaX5SIZZ29r+teVdheGV5qjjtkn">
+</div>
+
+<div class="aspNetHidden">
+
+	<input type="hidden" name="__VIEWSTATEGENERATOR" id="__VIEWSTATEGENERATOR" value="F7B7D943">
+	<input type="hidden" name="__EVENTVALIDATION" id="__EVENTVALIDATION" value="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">
+</div>
+        <table cellspacing="0" cellpadding="0" width="100%" border="0">
+            <tbody><tr>
+                <td height="30">
+                    
+<script language="javascript" src="/scripts/header.js" charset="ISO-8859-9"></script>
+<table class="solidBorderTable" id="Table1" height="40" cellspacing="0" cellpadding="0" width="100%">
+	<tbody><tr>
+		<td class="kabartmaBorder">
+			<table id="Table2" cellspacing="0" cellpadding="0" width="100%" border="0">
+				<tbody><tr>
+					<td class="header1" rowspan="2"><img src="/images/mebbis.png">
+					</td>
+					<td class="header1" align="left" width="16" rowspan="2"></td>
+					<td class="header3" valign="bottom" align="left">MEBBİS -&nbsp;Özel MTSK Modülü</td>
+					<td class="header3" valign="top" align="left" width="200" rowspan="2">
+						<div id="Beklet" style="Z-INDEX: 101; VISIBILITY: hidden; WIDTH: 200px; POSITION: absolute; HEIGHT: 20px; BACKGROUND-COLOR: #ffffff; layer-background-color: #FFFFFF">
+							<table class="solidBorderTable" id="Table3" height="100%" cellspacing="0" width="100%" border="0">
+								<tbody><tr>
+									<td class="header3" align="center" width="30"><img height="20" src="/images/bekle.gif" width="20" border="0">
+									</td>
+									<td class="header3">Lütfen Bekleyiniz..</td>
+								</tr>
+							</tbody></table>
+						</div>
+						
+						<div id="IslemSonucuBulunamadi" style="Z-INDEX: 1; VISIBILITY: hidden; WIDTH: 200px; POSITION: absolute; HEIGHT: 20px; BACKGROUND-COLOR: #ffffff; layer-background-color: #FFFFFF"></div>
+						<div id="IslemSonucuIPTAL" style="Z-INDEX: 103; VISIBILITY: hidden; WIDTH: 200px; POSITION: absolute; HEIGHT: 20px; BACKGROUND-COLOR: #ffffff; layer-background-color: #FFFFFF">
+							<table class="solidBorderTable" id="Table7" height="100%" cellspacing="0" width="100%" border="0">
+								<tbody><tr>
+									<td class="header3" align="center" width="30" rowspan="2"><img height="20" src="/images/info.gif" width="15" border="0">
+									</td>
+									<td class="header3">İşleminiz İptal Edilmiştir.</td>
+								</tr>
+							</tbody></table>
+						</div>
+					</td>
+					<td class="header3" valign="bottom" align="right"><span id="SktPageHeader1_lblKullaniciAdi">ARNAVUTKÖY</span></td>
+					<td valign="top" align="right" width="10" rowspan="2"></td>
+				</tr>
+				<tr>
+					<td class="header2" valign="bottom" align="left"><span id="SktPageHeader1_lblKurumKodu">99942601,ÖZEL ARNAVUTKÖY MOTORLU TAŞIT SÜRÜCÜLERİ KURSU</span></td>
+					<td class="header3" valign="bottom" align="right">Aktif Kullanıcı:<span id="SktPageHeader1_lblAktifKullaniciSayisi"></span></td>
+				</tr>
+				<tr>
+					<td></td>
+				</tr>
+			</tbody></table>
+		</td>
+	</tr>
+</tbody></table>
+
+                </td>
+            </tr>
+            <tr>
+                <td valign="top" width="100%">
+                    <table id="Table2" cellspacing="0" cellpadding="0" width="100%" border="0">
+                        <tbody><tr>
+                            <td valign="top" width="130" align="left">
+                                
+                                
+<link href="/Styles/style.css" type="text/css" rel="stylesheet">
+ <script language="javascript" charset="ISO-8859-9" src="/scripts/submit.js"></script>
+<script language="javascript" charset="ISO-8859-9" src="/scripts/menu.js"></script><script type="text/javascript" src="/jsyeni/jquery.min.js"></script><script type="text/javascript" src="/jsyeni/jquery.colorbox-min.js"></script><script>$(document).ready(function () {$(".iframe").colorbox({ iframe: true, width: "70%", height: "60%", transition: "elastic", scrolling: true });$("#click").click(function () {$("#click").css({ "background-color": "#f00", "color": "#fff", "cursor": "inherit" }).text("SayfayÄ± tekrar aÃ§Ä±nÄ±z.");return false;});});</script>
+<table id="Table1" cellspacing="0" cellpadding="0" width="120" border="0">
+	<tbody><tr>
+		<td>
+			
+			<table class="solidBorderTable" id="KurumAramaLink" cellspacing="0" cellpadding="0" width="120">
+				<tbody><tr>
+					<td id="SktMenu1_TD_KurumArama_2" onmouseover="javascript:kabartmaOvr(this)" onclick="if (Beklet(13) != false) window.location.href='skt00001.aspx';" onmouseout="javascript:kabartmaOut(this)" width="102" height="20" class="kabartma">Ana 
+						Sayfa
+					</td>
+
+				</tr>
+			</tbody></table>
+			<table height="5" width="125">
+				<tbody><tr>
+					<td></td>
+				</tr>
+			</tbody></table>
+			<table id="SktMenu1_TB_AnaMenu" class="solidBorderTable" cellspacing="0" cellpadding="0" style="width:118px;border-collapse:collapse;">
+	<tbody><tr>
+		<td><table width="118" cellpadding="0" cellspacing="0"><tbody><tr><td colspan="2" title="Kurum İşlemleri" class="kabartma" onmouseout="javascript:kabartmaOut(this)" onmouseover="javascript:kabartmaOvr(this)" height="20" onclick="GosterSakla('SKT01000')">	<img src="/images/current_kucuk_yan.gif"><img src="/images/imgSpacer.gif" width="3">Kurum İşlemleri</td></tr></tbody></table><table width="118" cellpadding="0" cellspacing="0" id="SKT01000" style="visibility:hidden;position:absolute;"><tbody><tr><td width="5" rowspan="4" class="kabartma"><img src="/images/imgSpacer.gif"></td><td title="Kurum Bilgileri" onmouseout="javascript:kabartmaOut(this)" onmouseover="javascript:kabartmaOvr(this)" height="20" onclick="if (Beklet(13) !=	false)	window.location.href='/SKT/skt01001.aspx';" class="kabartma">Kurum Bilgileri</td></tr><tr><td title="Kurum Araç Giriş / Görüntüleme" onmouseout="javascript:kabartmaOut(this)" onmouseover="javascript:kabartmaOvr(this)" height="20" onclick="if (Beklet(13) !=	false)	window.location.href='/SKT/skt01002.aspx';" class="kabartma">Kurum Araç Giriş / Görüntüleme</td></tr><tr><td title="Kurum Derslik Giriş / Görüntüleme" onmouseout="javascript:kabartmaOut(this)" onmouseover="javascript:kabartmaOvr(this)" height="20" onclick="if (Beklet(13) !=	false)	window.location.href='/SKT/skt01003.aspx';" class="kabartma">Kurum Derslik Giriş / Görüntüleme</td></tr><tr><td title="Kurum Randevu Tanımlama Ekranı" onmouseout="javascript:kabartmaOut(this)" onmouseover="javascript:kabartmaOvr(this)" height="20" onclick="if (Beklet(13) !=	false)	window.location.href='/SKT/skt01005.aspx';" class="kabartma">Kurum Randevu Tanımlama Ekranı</td></tr></tbody></table></td>
+	</tr><tr>
+		<td><table width="118" cellpadding="0" cellspacing="0"><tbody><tr><td colspan="2" title="Kurum Aday Kayıt İşlemleri" class="kabartmaActive" onmouseout="javascript:kabartmaOut(this)" onmouseover="javascript:kabartmaOvr(this)" height="20" onclick="GosterSakla('SKT02000')"> <img src="/images/current_kucuk_asagi.gif"><img src="/images/imgSpacer.gif" width="3">Kurum Aday Kayıt İşlemleri</td></tr></tbody></table><table width="118" cellpadding="0" cellspacing="0" id="SKT02000"><tbody><tr><td width="5" rowspan="12" class="kabartma"><img src="/images/imgSpacer.gif"></td><td title="Aday Dönem Kayıt İşlemleri" onmouseout="javascript:kabartmaOut(this)" onmouseover="javascript:kabartmaOvr(this)" height="20" onclick="if (Beklet(13) !=	false)	window.location.href='/SKT/skt02001.aspx';" class="kabartma">Aday Dönem Kayıt İşlemleri</td></tr><tr><td title="Aday Fotograf Kayıt" onmouseout="javascript:kabartmaOut(this)" onmouseover="javascript:kabartmaOvr(this)" height="20" onclick="if (Beklet(13) !=	false)	window.location.href='/SKT/skt02002.aspx';" class="kabartma">Aday Fotograf Kayıt</td></tr><tr><td title="Aday Öğrenim Bilgisi Kayıt" onmouseout="javascript:kabartmaOut(this)" onmouseover="javascript:kabartmaOvr(this)" height="20" onclick="if (Beklet(13) !=	false)	window.location.href='/SKT/skt02003.aspx';" class="kabartma">Aday Öğrenim Bilgisi Kayıt</td></tr><tr><td title="Aday Sağlık Raporu Kayıt" onmouseout="javascript:kabartmaOut(this)" onmouseover="javascript:kabartmaOvr(this)" height="20" onclick="if (Beklet(13) !=	false)	window.location.href='/SKT/skt02004.aspx';" class="kabartma">Aday Sağlık Raporu Kayıt</td></tr><tr><td title="Aday Sabıka Kayıt" onmouseout="javascript:kabartmaOut(this)" onmouseover="javascript:kabartmaOvr(this)" height="20" onclick="if (Beklet(13) !=	false)	window.location.href='/SKT/skt02005.aspx';" class="kabartma">Aday Sabıka Kayıt</td></tr><tr><td title="Aday İmza Kayıt" onmouseout="javascript:kabartmaOut(this)" onmouseover="javascript:kabartmaOvr(this)" height="20" onclick="if (Beklet(13) !=	false)	window.location.href='/SKT/SKT02010.aspx';" class="kabartma">Aday İmza Kayıt</td></tr><tr><td title="Dönem Adaylarını Onaylama / Görüntüleme" onmouseout="javascript:kabartmaOut(this)" onmouseover="javascript:kabartmaOvr(this)" height="20" onclick="if (Beklet(13) !=	false)	window.location.href='/SKT/skt02006.aspx';" class="kabartmaActive">Dönem Adaylarını Onaylama</td></tr><tr><td title="e-Sınav Başvuru İşlemleri" onmouseout="javascript:kabartmaOut(this)" onmouseover="javascript:kabartmaOvr(this)" height="20" onclick="if (Beklet(13) !=	false)	window.location.href='/SKT/skt02007.aspx';" class="kabartma">e-Sınav Başvuru İşlemleri</td></tr><tr><td title="Sınav Sonuç Listeleme" onmouseout="javascript:kabartmaOut(this)" onmouseover="javascript:kabartmaOvr(this)" height="20" onclick="if (Beklet(13) !=	false)	window.location.href='/SKT/skt02008.aspx';" class="kabartma">Sınav Sonuç Listeleme</td></tr><tr><td title="Aday Durum Görüntüleme" onmouseout="javascript:kabartmaOut(this)" onmouseover="javascript:kabartmaOvr(this)" height="20" onclick="if (Beklet(13) !=	false)	window.location.href='/SKT/skt02009.aspx';" class="kabartma">Aday Durum Görüntüleme</td></tr><tr><td title="Aday Sözleşme Bilgisi Kayıt İşlemleri" onmouseout="javascript:kabartmaOut(this)" onmouseover="javascript:kabartmaOvr(this)" height="20" onclick="if (Beklet(13) !=	false)	window.location.href='/SKT/skt02011.aspx';" class="kabartma">Aday Sözleşme Bilgisi Kayıt</td></tr><tr><td title="Aday Adres Beyan" onmouseout="javascript:kabartmaOut(this)" onmouseover="javascript:kabartmaOvr(this)" height="20" onclick="if (Beklet(13) !=	false)	window.location.href='/SKT/SKT02012.aspx';" class="kabartma">Aday Adres Beyan</td></tr></tbody></table></td>
+	</tr><tr>
+		<td><table width="118" cellpadding="0" cellspacing="0"><tbody><tr><td colspan="2" title="Kurum Dönem Açılış İşlemleri" class="kabartma" onmouseout="javascript:kabartmaOut(this)" onmouseover="javascript:kabartmaOvr(this)" height="20" onclick="GosterSakla('SKT03000')">	<img src="/images/current_kucuk_yan.gif"><img src="/images/imgSpacer.gif" width="3">Kurum Dönem Açılış İşlemleri</td></tr></tbody></table><table width="118" cellpadding="0" cellspacing="0" id="SKT03000" style="visibility:hidden;position:absolute;"><tbody><tr><td width="5" rowspan="4" class="kabartma"><img src="/images/imgSpacer.gif"></td><td title="Dönem Grup Açılış Tarihi Giriş" onmouseout="javascript:kabartmaOut(this)" onmouseover="javascript:kabartmaOvr(this)" height="20" onclick="if (Beklet(13) !=	false)	window.location.href='/SKT/skt03001.aspx';" class="kabartma">Dönem Grup Açılış Tarihi Giriş</td></tr><tr><td title="Grup Şube Tanımlama" onmouseout="javascript:kabartmaOut(this)" onmouseover="javascript:kabartmaOvr(this)" height="20" onclick="if (Beklet(13) !=	false)	window.location.href='/SKT/skt03002.aspx';" class="kabartma">Grup Şube Tanımlama</td></tr><tr><td title="Teorik Ders Programı Giriş" onmouseout="javascript:kabartmaOut(this)" onmouseover="javascript:kabartmaOvr(this)" height="20" onclick="if (Beklet(13) !=	false)	window.location.href='/SKT/skt03003.aspx';" class="kabartma">Teorik Ders Programı Giriş</td></tr><tr><td title="Direksiyon Eğitimi Ders Programı Giriş" onmouseout="javascript:kabartmaOut(this)" onmouseover="javascript:kabartmaOvr(this)" height="20" onclick="if (Beklet(13) !=	false)	window.location.href='/SKT/skt03004.aspx';" class="kabartma">Direksiyon Eğitimi Ders Programı Giriş</td></tr></tbody></table></td>
+	</tr><tr>
+		<td><table width="118" cellpadding="0" cellspacing="0"><tbody><tr><td colspan="2" title="Listeleme İşlemleri" class="kabartma" onmouseout="javascript:kabartmaOut(this)" onmouseover="javascript:kabartmaOvr(this)" height="20" onclick="GosterSakla('SKT04000')">	<img src="/images/current_kucuk_yan.gif"><img src="/images/imgSpacer.gif" width="3">Listeleme İşlemleri</td></tr></tbody></table><table width="118" cellpadding="0" cellspacing="0" id="SKT04000" style="visibility:hidden;position:absolute;"><tbody><tr><td width="5" rowspan="3" class="kabartma"><img src="/images/imgSpacer.gif"></td><td title="Teorik Ders Programı Görüntüleme" onmouseout="javascript:kabartmaOut(this)" onmouseover="javascript:kabartmaOvr(this)" height="20" onclick="if (Beklet(13) !=	false)	window.location.href='/SKT/skt04001.aspx';" class="kabartma">Teorik Ders Programı Görüntüleme</td></tr><tr><td title="Direksiyon Ders Programı Görüntüleme" onmouseout="javascript:kabartmaOut(this)" onmouseover="javascript:kabartmaOvr(this)" height="20" onclick="if (Beklet(13) !=	false)	window.location.href='/SKT/skt04002.aspx';" class="kabartma">Direksiyon Ders Programı Görüntüleme</td></tr><tr><td title="Sınav Bilgileri Görüntüleme" onmouseout="javascript:kabartmaOut(this)" onmouseover="javascript:kabartmaOvr(this)" height="20" onclick="if (Beklet(13) !=	false)	window.location.href='/SKT/skt04003.aspx';" class="kabartma">Sınav Bilgileri Görüntüleme</td></tr></tbody></table></td>
+	</tr>
+</tbody></table>
+			<table height="10" width="125">
+				<tbody><tr>
+					<td></td>
+				</tr>
+			</tbody></table>
+		</td>
+	</tr>
+</tbody></table>
+
+                            </td>
+                            <td valign="top" width="5000" align="left">
+                                <input name="hdnKayitSec" type="hidden" id="hdnKayitSec" designtimedragdrop="768"><input name="hiddenKaydet" type="hidden" id="hiddenKaydet">
+                                <input name="hdnKayitNoSilmeIcin" type="hidden" id="hdnKayitNoSilmeIcin">
+                                
+                                <table class="frmDis" cellspacing="0" cellpadding="0" width="100%" align="center" border="0">
+                                    <tbody>
+                                        <tr>
+                                            <td colspan="3">
+                                                <table class="frmBaslik" cellspacing="0" cellpadding="2" width="100%" border="0">
+                                                    <tbody><tr>
+                                                        <td>Özel MTSK Modülü</td>
+                                                        <td></td>
+                                                        <td align="right">SKT02006</td>
+                                                    </tr>
+                                                </tbody></table>
+                                            </td>
+                                        </tr>
+                                        <tr>
+                                            <td class="frmDisToolbar" height="10" colspan="3">
+                                                
+<table width="100%" border="0" cellspacing="0" cellpadding="1">
+	<tbody><tr>
+		<td width="100%">
+			<table border="0" cellspacing="0" cellpadding="0">
+				<tbody><tr>
+					<td id="IncToolbarActive1_yeniKayit_b" width="25"><img border="0" src="/images/toolimages/new_d.jpg" alt="Yeni Kayıt"></td>
+
+					<td id="IncToolbarActive1_silme_b" width="25"><img border="0" src="/images/toolimages/delete_d.jpg" alt="Sil"></td>
+
+					<td><img border="0" src="/images/toolimages/seperator.jpg"></td>
+					<td id="IncToolbarActive1_kaydet_b" width="25"><img border="0" src="/images/toolimages/save_d.jpg" alt="Kaydet"> </td>
+
+					<td id="IncToolbarActive1_cancel_b" width="25"><img border="0" src="/images/toolimages/cancel_d.jpg" alt="Kaydet"> </td>
+
+					<td><img border="0" src="/images/toolimages/seperator.jpg"></td>
+					<td id="IncToolbarActive1_find_b" width="25"><img border="0" src="/images/toolimages/search_d.jpg" alt="Ara"></td>
+
+					<td id="IncToolbarActive1_print_b" width="25"><img src="/images/toolimages/print.jpg" style="cursor:hand;" alt="Yazdır" onmouseover="this.src='/images/toolimages/print_a.jpg'" onmouseout="this.src='/images/toolimages/print.jpg'" onclick="return SubmitRapor();"></td>
+
+					<td><img border="0" src="/images/toolimages/seperator.jpg"></td>
+					<td id="IncToolbarActive1_refresh_b" width="25"><a href="skt02006.aspx"><img border="0" src="/images/toolimages/refresh.jpg" alt="Yenile" onmouseover="this.src='/images/toolimages/refresh_a.jpg'" onmouseout="this.src='/images/toolimages/refresh.jpg'"></a></td>
+
+				</tr>
+			</tbody></table>
+		</td>
+		<td>
+			<table width="100%" border="0" cellspacing="0" cellpadding="0">
+				<tbody><tr>
+					<td width="25">
+						<img src="/images/toolimages/hata.gif" id="IncToolbarActive1_imgHataBildirim" border="0" style="CURSOR:hand" onmouseover="this.src ='/images/toolimages/hata_over.gif';" onmouseout="this.src ='/images/toolimages/hata.gif';" alt="Hata Bildirimi" onclick="SubmitHata('SKT','SKT02006',6472717)">
+					</td>
+					<td id="IncToolbarActive1_help_b" width="25"><img border="0" src="/images/toolimages/help_2_d.jpg" alt="Yardım"></td>
+
+					<td id="IncToolbarActive1_exit_b" width="25"><a href="../main.aspx"><img border="0" src="/images/toolimages/exit.jpg" alt="Çıkış" onmouseover="this.src='/images/toolimages/exit_a.jpg'" onmouseout="this.src='/images/toolimages/exit.jpg'"></a></td>
+
+				</tr>
+			</tbody></table>
+		</td>
+	</tr>
+</tbody></table>
+
+                                            </td>
+                                        </tr>
+                                        <tr><td colspan="3">
+                                        
+                                        
+                                            </td></tr>
+                                        <tr>
+                                            <td height="10" width="2%"></td>
+                                            <td width="96%">
+                                                <table class="frmDis" cellspacing="0" cellpadding="2" width="100%" border="0">
+                                                    <tbody><tr class="frmBaslik">
+                                                        <td colspan="9">Aday Kayıt İşlemleri</td>
+                                                    </tr>
+                                                    <tr class="frmInput">
+                                                        <td width="1%"></td>
+                                                        <td width="17%"><strong>Dönemi</strong></td>
+                                                        <td width="1%"><strong>:</strong></td>
+                                                        <td width="31%">
+                                                            <select name="cmbEgitimDonemi" id="cmbEgitimDonemi" style="width:100%;">
+	<option value="-1"></option>
+	<option value="1">-Tüm Dönemler-</option>
+	<option value="202605">2026 - Mayıs</option>
+	<option value="202604">2026 - Nisan</option>
+	<option value="202603">2026 - Mart</option>
+	<option value="202602">2026 - Şubat</option>
+	<option value="202601">2026 - Ocak</option>
+	<option value="202512">2025 - Aralık</option>
+	<option value="202511">2025 - Kasım</option>
+	<option value="202510">2025 - Ekim</option>
+	<option value="202509">2025 - Eylül</option>
+	<option value="202508">2025 - Ağustos</option>
+	<option value="202507">2025 - Temmuz</option>
+	<option value="202506">2025 - Haziran</option>
+	<option value="202505">2025 - Mayıs</option>
+	<option value="202504">2025 - Nisan</option>
+	<option value="202503">2025 - Mart</option>
+	<option value="202502">2025 - Şubat</option>
+	<option value="202501">2025 - Ocak</option>
+	<option value="202412">2024 - Aralık</option>
+	<option value="202411">2024 - Kasım</option>
+	<option value="202410">2024 - Ekim</option>
+	<option value="202409">2024 - Eylül</option>
+	<option value="202408">2024 - Ağustos</option>
+	<option value="202407">2024 - Temmuz</option>
+	<option value="202406">2024 - Haziran</option>
+	<option value="202405">2024 - Mayıs</option>
+	<option value="202404">2024 - Nisan</option>
+	<option value="202403">2024 - Mart</option>
+	<option value="202402">2024 - Şubat</option>
+	<option value="202401">2024 - Ocak</option>
+	<option value="202312">2023 - Aralık</option>
+	<option value="202311">2023 - Kasım</option>
+	<option value="202310">2023 - Ekim</option>
+	<option value="202309">2023 - Eylül</option>
+	<option value="202308">2023 - Ağustos</option>
+	<option value="202307">2023 - Temmuz</option>
+	<option value="202306">2023 - Haziran</option>
+	<option value="202305">2023 - Mayıs</option>
+	<option value="202304">2023 - Nisan</option>
+	<option value="202303">2023 - Mart</option>
+	<option value="202302">2023 - Şubat</option>
+	<option value="202301">2023 - Ocak</option>
+	<option value="202212">2022 - Aralık</option>
+	<option value="202211">2022 - Kasım</option>
+	<option value="202210">2022 - Ekim</option>
+	<option value="202209">2022 - Eylül</option>
+	<option value="202208">2022 - Ağustos</option>
+	<option value="202207">2022 - Temmuz</option>
+	<option value="202206">2022 - Haziran</option>
+	<option value="202205">2022 - Mayıs</option>
+	<option value="202204">2022 - Nisan</option>
+	<option value="202203">2022 - Mart</option>
+	<option value="202202">2022 - Şubat</option>
+	<option value="202201">2022 - Ocak</option>
+	<option value="202112">2021 - Aralık</option>
+	<option value="202111">2021 - Kasım</option>
+	<option value="202110">2021 - Ekim</option>
+	<option value="202109">2021 - Eylül</option>
+	<option value="202108">2021 - Ağustos</option>
+	<option value="202107">2021 - Temmuz</option>
+	<option value="202106">2021 - Haziran</option>
+	<option value="202105">2021 - Mayıs</option>
+	<option value="202104">2021 - Nisan</option>
+	<option value="202103">2021 - Mart</option>
+	<option value="202102">2021 - Şubat</option>
+	<option value="202101">2021 - Ocak</option>
+	<option value="202012">2020 - Aralık</option>
+	<option value="202011">2020 - Kasım</option>
+	<option value="202010">2020 - Ekim</option>
+	<option value="202009">2020 - Eylül</option>
+	<option value="202008">2020 - Ağustos</option>
+	<option value="202007">2020 - Temmuz</option>
+	<option value="202006">2020 - Haziran</option>
+	<option value="202003">2020 - Mart</option>
+	<option value="202002">2020 - Şubat</option>
+	<option value="202001">2020 - Ocak</option>
+	<option value="201912">2019 - Aralık</option>
+	<option value="201911">2019 - Kasım</option>
+	<option value="201910">2019 - Ekim</option>
+	<option value="201909">2019 - Eylül</option>
+	<option value="201908">2019 - Ağustos</option>
+	<option value="201907">2019 - Temmuz</option>
+	<option value="201906">2019 - Haziran</option>
+	<option value="201905">2019 - Mayıs</option>
+	<option value="201904">2019 - Nisan</option>
+	<option value="201903">2019 - Mart</option>
+	<option value="201902">2019 - Şubat</option>
+	<option value="201901">2019 - Ocak</option>
+	<option value="201812">2018 - Aralık</option>
+	<option value="201811">2018 - Kasım</option>
+	<option value="201810">2018 - Ekim</option>
+	<option value="201809">2018 - Eylül</option>
+	<option value="201808">2018 - Ağustos</option>
+	<option value="201807">2018 - Temmuz</option>
+	<option value="201806">2018 - Haziran</option>
+	<option value="201805">2018 - Mayıs</option>
+	<option value="201804">2018 - Nisan</option>
+	<option value="201803">2018 - Mart</option>
+	<option value="201802">2018 - Şubat</option>
+	<option value="201801">2018 - Ocak</option>
+	<option value="201712">2017 - Aralık</option>
+	<option value="201711">2017 - Kasım</option>
+	<option value="201710">2017 - Ekim</option>
+	<option value="201709">2017 - Eylül</option>
+	<option value="201708">2017 - Ağustos</option>
+	<option value="201707">2017 - Temmuz</option>
+	<option value="201706">2017 - Haziran</option>
+	<option value="201705">2017 - Mayıs</option>
+	<option value="201704">2017 - Nisan</option>
+	<option value="201703">2017 - Mart</option>
+	<option value="201702">2017 - Şubat</option>
+	<option value="201701">2017 - Ocak</option>
+	<option value="201612">2016 - Aralık</option>
+	<option value="201611">2016 - Kasım</option>
+	<option value="201610">2016 - Ekim</option>
+	<option value="201609">2016 - Eylül</option>
+	<option value="201608">2016 - Ağustos</option>
+	<option value="201607">2016 - Temmuz</option>
+	<option value="201606">2016 - Haziran</option>
+	<option value="201605">2016 - Mayıs</option>
+	<option value="201604">2016 - Nisan</option>
+	<option value="201603">2016 - Mart</option>
+	<option value="201602">2016 - Şubat</option>
+	<option value="201601">2016 - Ocak</option>
+	<option value="201512">2015 - Aralık</option>
+	<option value="201511">2015 - Kasım</option>
+	<option value="201510">2015 - Ekim</option>
+	<option value="201509">2015 - Eylül</option>
+	<option value="201508">2015 - Ağustos</option>
+	<option value="201507">2015 - Temmuz</option>
+	<option value="201506">2015 - Haziran</option>
+	<option value="201505">2015 - Mayıs</option>
+	<option value="201504">2015 - Nisan</option>
+	<option value="201503">2015 - Mart</option>
+	<option value="201502">2015 - Şubat</option>
+	<option value="201501">2015 - Ocak</option>
+	<option value="201412">2014 - Aralık</option>
+	<option value="201411">2014 - Kasım</option>
+	<option value="201410">2014 - Ekim</option>
+	<option value="201409">2014 - Eylül</option>
+	<option value="201408">2014 - Ağustos</option>
+	<option value="201407">2014 - Temmuz</option>
+	<option value="201406">2014 - Haziran</option>
+	<option value="201405">2014 - Mayıs</option>
+	<option value="201404">2014 - Nisan</option>
+	<option value="20143">2014 - Mart</option>
+	<option value="20142">2014 - Şubat</option>
+	<option value="20141">2014 - Ocak</option>
+	<option value="201312">2013 - Aralık</option>
+	<option value="201311">2013 - Kasım</option>
+	<option value="201310">2013 - Ekim</option>
+	<option value="20139">2013 - Eylül</option>
+	<option value="20138">2013 - Ağustos</option>
+	<option value="20137">2013 - Temmuz</option>
+	<option value="20136">2013 - Haziran</option>
+	<option value="20135">2013 - Mayıs</option>
+	<option value="20134">2013 - Nisan</option>
+	<option value="20133">2013 - Mart</option>
+	<option value="20132">2013 - Şubat</option>
+	<option value="20131">2013 - Ocak</option>
+	<option value="201212">2012 - Aralık</option>
+	<option value="201211">2012 - Kasım</option>
+	<option value="201210">2012 - Ekim</option>
+	<option value="20129">2012 - Eylül</option>
+	<option value="20128">2012 - Ağustos</option>
+	<option value="20127">2012 - Temmuz</option>
+	<option value="20126">2012 - Haziran</option>
+	<option value="20125">2012 - Mayıs</option>
+	<option value="20120">Eski Dönem Adaylar</option>
+
+</select></td>
+                                                        <td width="1%"></td>
+                                                        <td width="15%"><strong></strong></td>
+                                                        <td width="1%"><strong></strong></td>
+                                                        <td width="31%"></td>
+                                                        <td width="2%"></td>
+                                                    </tr>
+                                                    <tr class="frmInput">
+                                                        <td width="1%"></td>
+                                                        <td width="17%"><strong>Grubu</strong></td>
+                                                        <td width="1%"><strong>:</strong></td>
+                                                        <td width="31%">
+                                                            <select name="cmbGrubu" id="cmbGrubu" style="width:100%;">
+	<option value="-1">--Seçiniz--</option>
+	<option value="1">Grup 1</option>
+	<option value="2">Grup 2</option>
+	<option value="3">Grup 3</option>
+
+</select></td>
+                                                        <td width="1%"></td>
+                                                        <td width="15%"></td>
+                                                        <td width="1%"></td>
+                                                        <td width="31%"></td>
+                                                        <td width="2%"></td>
+                                                    </tr>
+                                                    <tr class="frmInput">
+                                                        <td width="1%"></td>
+                                                        <td width="17%"><strong>Şubesi</strong></td>
+                                                        <td width="1%"><strong>:</strong></td>
+                                                        <td width="31%">
+                                                            <select name="cmbSubesi" id="cmbSubesi" style="width:100%;">
+	<option value="-1">--Seçiniz--</option>
+	<option value="1">A Şubesi</option>
+	<option value="2">B Şubesi</option>
+	<option value="3">C Şubesi</option>
+	<option value="4">D Şubesi</option>
+	<option value="5">E Şubesi</option>
+	<option value="6">F Şubesi</option>
+	<option value="7">G Şubesi</option>
+	<option value="8">H Şubesi</option>
+
+</select></td>
+                                                        <td width="1%"></td>
+                                                        <td width="15%"></td>
+                                                        <td width="1%"></td>
+                                                        <td width="31%"></td>
+                                                        <td width="2%"></td>
+                                                    </tr>
+                                                    <tr class="frmInput">
+                                                        <td width="1%"></td>
+                                                        <td width="17%"><strong>Öğrenci Durumu</strong></td>
+                                                        <td width="1%"><strong>:</strong></td>
+                                                        <td width="31%">
+                                                            <select name="cmbOgrenciDurumu" id="cmbOgrenciDurumu" style="width:100%;">
+	<option value="0">Kursa Başvuru Aşamasında</option>
+	<option value="1">Teorik Sınav Aşamasında</option>
+	<option value="2">Uygulama Sınav Aşamasında</option>
+	<option value="3">Teorik Sınav Hakkı Doldu</option>
+	<option value="4">Uygulama Sınav Hakkı Doldu</option>
+	<option value="5">Sertifika Almaya Hak Kazandı</option>
+	<option value="6">Sertifikası İptal Edildi</option>
+	<option value="7">e-Sınav Aşamasında</option>
+	<option value="8">e-Sınav Test Aşamasında</option>
+	<option value="9">e-Sınavdan Başarısız Oldu</option>
+	<option value="10">e-Sınav Hakkı Doldu</option>
+	<option value="11">Kaydı Silindi</option>
+	<option value="12">Ceza Kaydı Var</option>
+	<option value="13">Kayıt Dondurma</option>
+	<option value="14">Kayıt Dışı Aday</option>
+	<option value="15">Ücretsiz Aday</option>
+	<option value="22">2.Direksiyon Aşamasında</option>
+	<option value="23">e-Sınavdan Muaf Aday</option>
+	<option value="24">A1/125 CC Sertifika</option>
+
+</select></td>
+                                                        <td width="1%"></td>
+                                                        <td width="15%"></td>
+                                                        <td width="1%"></td>
+                                                        <td width="31%"></td>
+                                                        <td width="2%"></td>
+                                                    </tr>
+                                                    <tr class="frmInput">
+                                                        <td></td>
+                                                        <td><strong>Onay Durumu</strong></td>
+                                                        <td><strong>:</strong></td>
+                                                        <td>
+                                                            <select name="cmbDurumu" id="cmbDurumu" style="width:100%;">
+	<option value="0">Kurum Onay Bekliyor</option>
+	<option value="1">Kurum Onaylandı</option>
+	<option value="2">İlçe Onay Bekliyor</option>
+	<option value="3">İlçe Onaylandı</option>
+	<option value="4">Döneme Kayıtlı Tüm Adaylar</option>
+
+</select></td>
+                                                        <td></td>
+                                                        <td><strong></strong></td>
+                                                        <td><strong></strong></td>
+                                                        <td></td>
+                                                        <td></td>
+                                                    </tr>
+                                                    <tr class="frmInput">
+                                                        <td></td>
+                                                        <td><strong>TC Kimlik No</strong></td>
+                                                        <td><strong>:</strong></td>
+                                                        <td>
+                                                            <input name="txtTcKimlikNo" type="text" maxlength="11" id="txtTcKimlikNo" class="frmInput"></td>
+                                                        <td></td>
+                                                        <td></td>
+                                                        <td></td>
+                                                        <td></td>
+                                                        <td></td>
+                                                    </tr>
+                                                    <tr>
+                                                        <td></td>
+                                                        <td></td> 
+                                                        <td></td>
+                                                        <td>
+                                                            <input type="submit" name="btnListele" value=".:: Listele ::." id="btnListele" class="SubmitButton">&nbsp;&nbsp;
+                                                            
+                                                        </td>
+                                                        <td></td>
+                                                        <td></td>
+                                                        <td></td>
+                                                        <td></td>
+                                                        <td></td>
+                                                    </tr>
+                                                    <tr>
+                                                        <td>&nbsp;</td>
+                                                        <td colspan="7">
+                                                   
+                                                            
+                                                            
+                                                        </td>
+                                                        <td>&nbsp;</td>
+                                                    </tr>
+                                                    <tr><td colspan="9">
+                                                    
+                                                        </td></tr>
+                                                </tbody></table>
+                                            </td>
+                                            <td width="2%"></td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </td>
+                        </tr>
+                    </tbody></table>
+                </td>
+            </tr>
+            <tr>
+                <td valign="bottom" width="100%" align="center">
+                    
+<div class="frmFooter">Tüm hakları Milli Eğitim Bakanlığına aittir.</div>
+
+                </td>
+            </tr>
+        </tbody></table>
+    </form>
+
+
+<div id="cboxOverlay" style="display: none;"></div><div id="colorbox" class="" role="dialog" tabindex="-1" style="display: none;"><div id="cboxWrapper"><div><div id="cboxTopLeft" style="float: left;"></div><div id="cboxTopCenter" style="float: left;"></div><div id="cboxTopRight" style="float: left;"></div></div><div style="clear: left;"><div id="cboxMiddleLeft" style="float: left;"></div><div id="cboxContent" style="float: left;"><div id="cboxTitle" style="float: left;"></div><div id="cboxCurrent" style="float: left;"></div><button type="button" id="cboxPrevious"></button><button type="button" id="cboxNext"></button><button id="cboxSlideshow"></button><div id="cboxLoadingOverlay" style="float: left;"></div><div id="cboxLoadingGraphic" style="float: left;"></div></div><div id="cboxMiddleRight" style="float: left;"></div></div><div style="clear: left;"><div id="cboxBottomLeft" style="float: left;"></div><div id="cboxBottomCenter" style="float: left;"></div><div id="cboxBottomRight" style="float: left;"></div></div></div><div style="position: absolute; width: 9999px; visibility: hidden; display: none; max-width: none;"></div></div><div id="mebbis-left-menu" style="position: fixed; left: 0px; top: 0px; bottom: 0px; width: 200px; z-index: 10000; background: rgb(26, 26, 46); border-right: 1px solid rgb(42, 42, 74); display: flex; flex-direction: column; color: white; font-family: Arial, sans-serif; overflow-y: auto;"><div style="padding: 15px; border-bottom: 1px solid rgb(42, 42, 74); font-weight: bold; color: rgb(67, 97, 238);">Menu</div><button style="background: none; border-top: none; border-right: none; border-left: none; border-image: initial; width: 100%; padding: 12px 15px; text-align: left; color: rgb(204, 204, 204); cursor: pointer; border-bottom: 1px solid rgb(42, 42, 74); font-size: 14px; transition: all 0.2s ease 0s;">Direksiyon Takip İndir</button><button style="background: none; border-top: none; border-right: none; border-left: none; border-image: initial; width: 100%; padding: 12px 15px; text-align: left; color: rgb(204, 204, 204); cursor: pointer; border-bottom: 1px solid rgb(42, 42, 74); font-size: 14px; transition: all 0.2s ease 0s;">Çoklu Direksiyon Takip</button><button style="background: none; border-top: none; border-right: none; border-left: none; border-image: initial; width: 100%; padding: 12px 15px; text-align: left; color: rgb(204, 204, 204); cursor: pointer; border-bottom: 1px solid rgb(42, 42, 74); font-size: 14px; transition: all 0.2s ease 0s;">Simulasyon Raporu Oluştur</button><button style="background: none; border-top: none; border-right: none; border-left: none; border-image: initial; width: 100%; padding: 12px 15px; text-align: left; color: rgb(204, 204, 204); cursor: pointer; border-bottom: 1px solid rgb(42, 42, 74); font-size: 14px; transition: all 0.2s ease 0s;">Çoklu Simulasyon Raporu</button><button style="background: none; border-top: none; border-right: none; border-left: none; border-image: initial; width: 100%; padding: 12px 15px; text-align: left; color: rgb(204, 204, 204); cursor: pointer; border-bottom: 1px solid rgb(42, 42, 74); font-size: 14px; transition: all 0.2s ease 0s;">Çoklu EK4 Belgesi</button><div style="padding: 10px 15px; border-top: 2px solid rgb(255, 107, 53); border-bottom: 1px solid rgb(42, 42, 74); font-weight: bold; color: rgb(255, 107, 53); font-size: 12px; margin-top: auto;">⚙ Developer</div><button id="dev-auto-refresh-btn" style="background: none; border-top: none; border-right: none; border-left: none; border-image: initial; width: 100%; padding: 12px 15px; text-align: left; color: rgb(204, 204, 204); cursor: pointer; border-bottom: 1px solid rgb(42, 42, 74); font-size: 13px; transition: all 0.2s ease 0s;">⟳ Auto Refresh (30s)</button></div></body></html>

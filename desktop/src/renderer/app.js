@@ -15,6 +15,7 @@ const formUsername = document.getElementById('form-username');
 const formPassword = document.getElementById('form-password');
 const togglePasswordBtn = document.getElementById('toggle-password');
 const btnCancel = document.getElementById('btn-cancel');
+const formSimulator = document.getElementById('form-simulator');
 
 let accounts = [];
 
@@ -44,12 +45,14 @@ function openModal(editAccount) {
     formLabel.value = editAccount.label;
     formUsername.value = editAccount.username;
     formPassword.value = editAccount.password;
+    formSimulator.value = editAccount.simulatorType || '';
   } else {
     modalTitle.textContent = 'Hesap Ekle';
     formId.value = '';
     formLabel.value = '';
     formUsername.value = '';
     formPassword.value = '';
+    formSimulator.value = '';
   }
   modalOverlay.style.display = 'flex';
   formLabel.focus();
@@ -72,14 +75,18 @@ accountForm.addEventListener('submit', async (e) => {
   const label = formLabel.value.trim();
   const username = formUsername.value.trim();
   const password = formPassword.value;
+  const simulatorType = formSimulator.value || undefined;
 
   if (!label || !username || !password) return;
 
   try {
     if (id) {
-      await api.updateAccount(id, { label, username, password });
+      await api.updateAccount(id, { label, username, password, simulatorType });
     } else {
-      await api.addAccount(username, password, label);
+      const newAccount = await api.addAccount(username, password, label);
+      if (newAccount && simulatorType) {
+        await api.updateAccount(newAccount.id, { simulatorType });
+      }
     }
     closeModal();
     await refreshAccounts();

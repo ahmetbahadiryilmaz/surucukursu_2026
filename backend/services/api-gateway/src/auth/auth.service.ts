@@ -31,8 +31,6 @@ export class AuthService {
       '/docs',
       '/api/v1/auth/login',
       '/api/v1/auth/register',
-      '/api/v1/worker/update-job',
-      '/api/v1/worker/sendtouser'
     ];
 
     return publicRoutes.some(route => 

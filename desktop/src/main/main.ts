@@ -1,8 +1,14 @@
-import { app, BrowserWindow, ipcMain, session } from 'electron';
+import { app, BrowserWindow, ipcMain, session, Menu, dialog, shell } from 'electron';
 import * as path from 'path';
-import { AccountStore, Account } from './account-store';
+import { AccountStore, Account, SimulatorType } from './account-store';
 import { MebbisManager } from './mebbis-manager';
-import { enforceVersionCheck } from './auto-updater';
+import { enforceVersionCheckWithSplash, showWhatsNewIfUpdated, setupAutoUpdater } from './auto-updater';
+
+// Fix "discard virtual memory" crash on Windows
+// These must be set before app.whenReady()
+app.commandLine.appendSwitch('disable-features', 'CalculateNativeWinOcclusion,RendererCodeIntegrity');
+app.commandLine.appendSwitch('disable-gpu-sandbox');
+app.commandLine.appendSwitch('js-flags', '--max-old-space-size=4096');
 
 let mainWindow: BrowserWindow | null = null;
 let accountStore: AccountStore;
@@ -26,8 +32,6 @@ function createMainWindow() {
     },
   });
 
-  mainWindow.removeMenu();
-
   mainWindow.loadFile(path.join(rendererPath, 'index.html'));
 
   mainWindow.on('closed', () => {
@@ -45,8 +49,9 @@ function setupIPC() {
     return accountStore.add(data.username, data.password, data.label);
   });
 
-  ipcMain.handle('accounts:update', async (_event, data: { id: string; username?: string; password?: string; label?: string }) => {
-    return accountStore.update(data.id, data);
+  ipcMain.handle('accounts:update', async (_event, data: { id: string; username?: string; password?: string; label?: string; simulatorType?: string }) => {
+    const { id, simulatorType, ...rest } = data;
+    return accountStore.update(id, { ...rest, simulatorType: simulatorType as SimulatorType | undefined });
   });
 
   ipcMain.handle('accounts:remove', async (_event, id: string) => {
@@ -89,18 +94,51 @@ app.whenReady().then(async () => {
   accountStore = new AccountStore();
   mebbisManager = new MebbisManager();
 
+  // STRICT VERSION GATE — splash window checks version BEFORE main window exists
+  const allowed = await enforceVersionCheckWithSplash();
+  if (!allowed) {
+    // App is being updated or user chose to quit
+    return;
+  }
+
+  // Version is OK — now create the main window
   // Register IPC handlers before creating window so they're ready
   // when the renderer loads and immediately calls accounts:list
   setupIPC();
 
   createMainWindow();
 
-  // STRICT VERSION GATE — must pass before app becomes usable
-  const allowed = await enforceVersionCheck(mainWindow!);
-  if (!allowed) {
-    // App is being updated or user chose to quit
-    return;
-  }
+  // Set up auto-updater for future checks
+  setupAutoUpdater(mainWindow!);
+
+  // Set up application menu with only "Hakkında"
+  const menu = Menu.buildFromTemplate([
+    {
+      label: 'Hakkında',
+      click: () => {
+        if (!mainWindow || mainWindow.isDestroyed()) return;
+        dialog.showMessageBox(mainWindow, {
+          type: 'info',
+          title: 'Hakkında',
+          message: `MTSK Uygulaması\nSürüm: v${app.getVersion()}`,
+          detail: `Web: online.mtsk.app\nWhatsApp: +90 552 187 03 34`,
+          buttons: ['WhatsApp', 'Web Sitesi', 'Kapat'],
+          defaultId: 2,
+          cancelId: 2,
+        }).then((result) => {
+          if (result.response === 0) {
+            shell.openExternal('https://wa.me/905521870334');
+          } else if (result.response === 1) {
+            shell.openExternal('https://online.mtsk.app');
+          }
+        });
+      },
+    },
+  ]);
+  Menu.setApplicationMenu(menu);
+
+  // Show "What's New" dialog on first launch after update
+  showWhatsNewIfUpdated(mainWindow!);
 });
 
 app.on('window-all-closed', () => {

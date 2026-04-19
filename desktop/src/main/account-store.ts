@@ -3,6 +3,8 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { v4 as uuidv4 } from 'uuid';
 
+export type SimulatorType = 'sesim' | 'anarapor';
+
 export interface Account {
   id: string;
   username: string;
@@ -10,6 +12,7 @@ export interface Account {
   label: string;
   isRunning: boolean;
   createdAt: string;
+  simulatorType?: SimulatorType;
 }
 
 export class AccountStore {
@@ -66,12 +69,13 @@ export class AccountStore {
     return account;
   }
 
-  update(id: string, data: Partial<Pick<Account, 'username' | 'password' | 'label'>>): Account | null {
+  update(id: string, data: Partial<Pick<Account, 'username' | 'password' | 'label' | 'simulatorType'>>): Account | null {
     const account = this.accounts.find(a => a.id === id);
     if (!account) return null;
     if (data.username !== undefined) account.username = data.username;
     if (data.password !== undefined) account.password = data.password;
     if (data.label !== undefined) account.label = data.label;
+    if (data.simulatorType !== undefined) account.simulatorType = data.simulatorType;
     this.save();
     return { ...account };
   }

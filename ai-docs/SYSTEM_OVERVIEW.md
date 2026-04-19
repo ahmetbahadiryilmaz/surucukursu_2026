@@ -409,6 +409,26 @@ Interactive tool for testing MEBBIS sessions:
 
 ---
 
+## Desktop App (Electron)
+
+Standalone Windows desktop app for managing multiple MEBBIS accounts with isolated browser sessions and persistent cookies.
+
+**Location:** `desktop/`
+
+**Key Features:**
+- Multiple MEBBIS account management with isolated sessions
+- Auto-login with credential auto-fill
+- Single and batch PDF downloads (Direksiyon Takip, Simulasyon Raporu)
+- Persistent cookie management across restarts
+
+**Update Policy (CRITICAL):** Users can NEVER use the app unless they are on the latest version. Every deployment sets `minimumVersion` in the server's `minimum_version.json` to the new version, blocking all older clients on startup. All updates are mandatory.
+
+**Update server:** `https://online.mtsk.app/desktop-updates/` hosted on `mtsk@ekullanici_yeni`
+
+See `desktop/ai-docs/DESKTOP_APP.md` and `desktop/ai-docs/DESKTOP_UPDATE_DEPLOY.md` for details.
+
+---
+
 ## Security Considerations
 
 1. **Passwords:** Encrypted using `TextEncryptor`
