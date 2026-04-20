@@ -2,14 +2,14 @@ import { useState, useEffect } from "react";
 import { useNavigate, Routes, Route } from "react-router-dom"; 
 import { apiService } from "@/services/api-service"; 
 import { Button } from "@/components/ui/button";
-import { User, ChevronDown, Download, X, Car, Menu } from "lucide-react";
+import { User, ChevronDown, Download, Car, Menu } from "lucide-react";
 import Sidebar from "@/components/sidebars/DrivingSchoolOwnerSidebar";
 import DownloadsSidebar from "@/components/sidebars/DownloadsSidebar";
 import { Sheet, SheetTrigger, SheetContent } from "@/components/ui/sheet";
 import KursBilgileriPage from "./Kurslar";
 import IslemlerTable from "./Islemler";
 import Kursum from "./Kursum";
-import SurucuKursuAyarlari from "./SurucuKursuAyarlari";
+// SurucuKursuAyarlari route removed - component no longer used in Layout
 import StudentsTable from "./Students";
 import AraclarTable from "./Cars/Araclar";
 import SimulasyonRaporlariTable from "./SimulasyonRaporlari"; 

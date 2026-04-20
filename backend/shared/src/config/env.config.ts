@@ -76,6 +76,11 @@ export class EnvironmentVariables {
   @IsOptional()
   WORKER_SERVICE_PORT?: number = 3004;
 
+  @IsNumber()
+  @Type(() => Number)
+  @IsOptional()
+  DESKTOP_SERVICE_PORT?: number = 9506;
+
   @IsString()
   @IsOptional()
   NODE_ENV?: string = 'development';
@@ -283,6 +288,9 @@ export const env = {
       },
       workerService: {
         port: config.WORKER_SERVICE_PORT || 3004,
+      },
+      desktopService: {
+        port: config.DESKTOP_SERVICE_PORT || 9506,
       },
     };
   },

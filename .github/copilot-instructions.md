@@ -32,6 +32,7 @@ Always check these files for context before working on the related area:
 | `desktop/ai-docs/DESKTOP_APP.md` | Electron desktop app: MEBBIS account management, auto-login, cookie persistence, left menu injection | Working on the desktop Electron app, MEBBIS session management |
 | `desktop/ai-docs/DESKTOP_APP_SIMULATOR_MENU_AND_SERVER_CONNECTION.md` | Adding simulator raporu (Sesim/Ana Grup) menu to desktop + server connection + secure auth | Adding simulator report download to desktop app, connecting desktop to backend |
 | `desktop/ai-docs/ELECTRON_CODE_SERVING_FROM_SERVER.md` | Remote renderer code serving: loading desktop UI from server for instant updates, caching, fallback | Implementing dynamic code updates for desktop app, remote renderer loading |
+| `desktop/ai-docs/ENCRYPTED_CODE_UPDATE_SYSTEM.md` | Encrypted code delivery: AES-256-GCM + RSA handshake, device-bound keys, anti-replay, bundle format, NestJS module plan | Working on encrypted code serving, secure template delivery, anti-piracy |
 | `desktop/ai-docs/PDF_TEMPLATE_MANAGEMENT.md` | Direksiyon Takip PDF templates: CSS lives in templates not app code, template naming, update workflow, scaleY logic | Working on PDF generation, modifying template styles, adding new templates |
 | `ai-docs/DELETABLE_CODE.md` | Full inventory of removable backend + frontend code after desktop migration | Cleaning up unused code, understanding what to keep vs remove |
 

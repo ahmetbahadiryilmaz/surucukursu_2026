@@ -90,8 +90,8 @@ const AraclarTable = (): JSX.Element => {
         console.log("❌ Could not find array in response, using test data");
         // Use test data to verify the table works
         carsData = [
-          { id: 1, model: "Test Car 1", plate_number: "TEST001", year: 2020, school_id: 1 },
-          { id: 2, model: "Test Car 2", plate_number: "TEST002", year: 2021, school_id: 1 }
+          { id: 1, model: "Test Car 1", plate_number: "TEST001", year: 2020, school_id: 1, brand: "", car_type: "", status: "", purchase_date: null, last_inspection_date: null, inspection_validity_date: null, driver_count: null, lesson_count: null, excuse_days: null, serial_number: null, start_date: null, last_maintenance_date: null, usage_hours: null, license_validity_date: null, created_at: 0, updated_at: 0 },
+          { id: 2, model: "Test Car 2", plate_number: "TEST002", year: 2021, school_id: 1, brand: "", car_type: "", status: "", purchase_date: null, last_inspection_date: null, inspection_validity_date: null, driver_count: null, lesson_count: null, excuse_days: null, serial_number: null, start_date: null, last_maintenance_date: null, usage_hours: null, license_validity_date: null, created_at: 0, updated_at: 0 }
         ];
       }
       
@@ -113,7 +113,7 @@ const AraclarTable = (): JSX.Element => {
       // Even on error, set some test data to verify the table works
       console.log("Setting test data due to error");
       setAraclar([
-        { id: 1, model: "Error Test Car", plate_number: "ERR001", year: 2020, school_id: 1 }
+        { id: 1, model: "Error Test Car", plate_number: "ERR001", year: 2020, school_id: 1, brand: "", car_type: "", status: "", purchase_date: null, last_inspection_date: null, inspection_validity_date: null, driver_count: null, lesson_count: null, excuse_days: null, serial_number: null, start_date: null, last_maintenance_date: null, usage_hours: null, license_validity_date: null, created_at: 0, updated_at: 0 }
       ]);
     } finally {
       setLoading(false);

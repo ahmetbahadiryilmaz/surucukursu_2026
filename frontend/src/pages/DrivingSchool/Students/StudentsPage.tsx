@@ -218,7 +218,7 @@ const StudentsTable: React.FC<StudentsProps> = ({ onDownload, onJobStart }) => {
       window.addEventListener('pdf-error', handleError);
 
       // Show initial message - display for 100ms
-      toast.info('PDF oluşturuluyor...', { duration: 100 });
+      toast.info('PDF oluşturuluyor...', { autoClose: 100 });
 
     } catch (error) {
       console.error('PDF generation failed:', error);

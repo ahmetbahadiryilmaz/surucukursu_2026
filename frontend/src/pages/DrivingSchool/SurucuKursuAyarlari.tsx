@@ -22,7 +22,7 @@ interface DrivingSchoolSettings {
 }
 
 const SurucuKursuAyarlari = () => {
-  const { user, activeDrivingSchool, isLoading: contextLoading } = drivingSchoolOwnerContext();
+  const { activeDrivingSchool, isLoading: contextLoading } = drivingSchoolOwnerContext();
 
   const [formData, setFormData] = useState<DrivingSchoolSettings>({
     name: "",
@@ -54,7 +54,7 @@ const SurucuKursuAyarlari = () => {
         console.log("Ayarlar çekiliyor, School ID:", schoolId);
         
         // Fetch driving school details
-        const response = await apiService.drivingSchool.get(schoolId.toString());
+        const response = await apiService.drivingSchool.getSettings(schoolId.toString());
         console.log("API Response:", response);
         
         if (response) {
@@ -104,7 +104,7 @@ const SurucuKursuAyarlari = () => {
     try {
       console.log("Ayarlar kaydediliyor:", formData);
       
-      await apiService.drivingSchool.update(schoolId.toString(), formData);
+      await apiService.drivingSchool.updateSettings(schoolId.toString(), formData);
       
       setSavedData(formData);
       setSuccess(true);

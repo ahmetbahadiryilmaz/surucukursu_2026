@@ -66,12 +66,9 @@ export function MebbisCredentialsModal({
           }
         } catch (err) {
           console.error("❌ Failed to fetch credentials:", err);
-          // Fall back to context data
-          if (activeDrivingSchool?.mebbis_username) {
-            setUsername(activeDrivingSchool.mebbis_username);
-          }
-          if (activeDrivingSchool?.mebbis_credentials_locked !== undefined) {
-            setCredentialsLocked(activeDrivingSchool.mebbis_credentials_locked);
+          // Fall back to initialUsername prop
+          if (initialUsername) {
+            setUsername(initialUsername);
           }
         } finally {
           setIsFetchingCreds(false);

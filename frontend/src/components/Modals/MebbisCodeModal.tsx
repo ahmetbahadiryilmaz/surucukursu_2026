@@ -1,5 +1,4 @@
 import { useEffect, useState } from 'react';
-import { apiService } from '@/services/api-service';
 
 interface MebbisCodeModalProps {
   isOpen: boolean;
@@ -12,7 +11,7 @@ interface MebbisCodeModalProps {
 export const MebbisCodeModal = ({
   isOpen,
   onClose,
-  schoolCode,
+  schoolCode: _schoolCode,
   onSuccess,
   onError,
 }: MebbisCodeModalProps) => {
