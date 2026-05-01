@@ -36,7 +36,6 @@ export class UpdateManagerDto {
     @IsBoolean()
     @IsOptional()
     isActive?: boolean;
-}
 
     @ApiProperty({
         description: 'Phone number of the driving school manager',
