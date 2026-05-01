@@ -1,10 +1,9 @@
-import { IsString, IsNotEmpty, Matches } from 'class-validator';
+import { IsString, IsNotEmpty } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 
 export class UpdateProfileDto {
-  @ApiProperty({ example: '5XX-XXX-XX-XX', description: 'Turkish mobile number' })
+  @ApiProperty({ example: '5551234567', description: 'Phone number (any format)' })
   @IsString()
   @IsNotEmpty()
-  @Matches(/^(5\d{2}-\d{3}-\d{2}-\d{2})$/, { message: 'phone must be in format 5XX-XXX-XX-XX' })
   phone: string;
 }
