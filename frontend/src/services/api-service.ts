@@ -127,7 +127,7 @@ class ApiService {
     }
     
     // Default to production
-    return 'https://staging.mtsk.app';
+    return 'https://api.mtsk.app';
   }
 
   // Singleton pattern

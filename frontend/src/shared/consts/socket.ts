@@ -6,7 +6,7 @@ export const SOCKET_CONFIG = {
   // Base URLs for different environments
   DEVELOPMENT: `ws://localhost:${API_GATEWAY_PORT}`,
   STAGING: "wss://test.mtsk.app",
-  PRODUCTION: "wss://staging.mtsk.app",
+  PRODUCTION: "wss://api.mtsk.app",
 
   // Default timeout
   TIMEOUT: 30000,
