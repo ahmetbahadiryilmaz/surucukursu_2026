@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self'">
+  <title>MEBBIS Account Manager</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+  <!-- ── Login View ─────────────────────────────────────────── -->
+  <div id="login-view" class="login-view" style="display:none;">
+    <div class="login-box">
+      <h1 class="login-title">MTSK Girişi</h1>
+      <p class="login-subtitle">Sürücü kursu hesabınızla giriş yapın</p>
+      <form id="login-form" class="login-form">
+        <div class="form-group">
+          <label for="login-email">E-posta</label>
+          <input type="email" id="login-email" placeholder="ornek@mail.com" required autocomplete="email">
+        </div>
+        <div class="form-group">
+          <label for="login-password">Şifre</label>
+          <div class="password-container">
+            <input type="password" id="login-password" placeholder="Şifreniz" required autocomplete="current-password">
+            <button type="button" id="login-toggle-password" class="toggle-password-btn" title="Şifreyi Göster/Gizle">
+              <svg class="eye-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+                <circle cx="12" cy="12" r="3"></circle>
+              </svg>
+              <svg class="eye-off-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="display:none;">
+                <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"></path>
+                <line x1="1" y1="1" x2="23" y2="23"></line>
+              </svg>
+            </button>
+          </div>
+        </div>
+        <div id="login-error" class="login-error" style="display:none;"></div>
+        <button type="submit" id="login-btn" class="btn btn-primary login-btn">Giriş Yap</button>
+        <div class="forgot-link-row">
+          <button type="button" id="forgot-link" class="forgot-link">Şifremi Unuttum</button>
+        </div>
+        <div class="whatsapp-support">
+          <button type="button" id="wa-btn-login" class="wa-btn">
+            <svg class="wa-icon" viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
+              <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/>
+              <path d="M12 0C5.373 0 0 5.373 0 12c0 2.126.556 4.121 1.528 5.855L.057 23.886a.5.5 0 0 0 .606.606l6.103-1.485A11.945 11.945 0 0 0 12 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 22c-1.885 0-3.651-.507-5.17-1.393l-.37-.217-3.827.931.96-3.744-.237-.386A9.96 9.96 0 0 1 2 12C2 6.477 6.477 2 12 2s10 4.477 10 10-4.477 10-10 10z"/>
+            </svg>
+            İstek / Şikayet
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- ── Forgot Password View ───────────────────────────────── -->
+  <div id="forgot-view" class="login-view" style="display:none;">
+    <div class="login-box">
+      <!-- Step 1: Email + Phone -->
+      <div id="forgot-step-1">
+        <h1 class="login-title">Şifremi Unuttum</h1>
+        <p class="login-subtitle">E-posta ve telefon numaranızı girin, size doğrulama kodu gönderelim.</p>
+        <form id="forgot-form-step1" class="login-form">
+          <div class="form-group">
+            <label for="forgot-email">E-posta</label>
+            <input type="email" id="forgot-email" placeholder="ornek@mail.com" required autocomplete="email">
+          </div>
+          <div class="form-group">
+            <label for="forgot-phone">Telefon <span class="field-hint">5XX-XXX-XX-XX</span></label>
+            <input type="tel" id="forgot-phone" placeholder="5XX-XXX-XX-XX" required autocomplete="tel" maxlength="13">
+          </div>
+          <div id="forgot-error-1" class="login-error" style="display:none;"></div>
+          <button type="submit" id="forgot-btn-1" class="btn btn-primary login-btn">Kod Gönder</button>
+          <div class="forgot-link-row">
+            <button type="button" id="forgot-back-1" class="forgot-link">← Girişe Dön</button>
+          </div>
+          <div class="whatsapp-support">
+            <button type="button" id="wa-btn-1" class="wa-btn">
+              <svg class="wa-icon" viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
+                <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/>
+                <path d="M12 0C5.373 0 0 5.373 0 12c0 2.126.556 4.121 1.528 5.855L.057 23.886a.5.5 0 0 0 .606.606l6.103-1.485A11.945 11.945 0 0 0 12 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 22c-1.885 0-3.651-.507-5.17-1.393l-.37-.217-3.827.931.96-3.744-.237-.386A9.96 9.96 0 0 1 2 12C2 6.477 6.477 2 12 2s10 4.477 10 10-4.477 10-10 10z"/>
+              </svg>
+              WhatsApp ile İletişİm
+            </button>
+          </div>
+        </form>
+      </div>
+      <!-- Step 2: Code + New Password -->
+      <div id="forgot-step-2" style="display:none;">
+        <h1 class="login-title">Kodu Girin</h1>
+        <p class="login-subtitle">E-postanıza gönderilen 6 haneli kodu ve yeni şifrenizi girin.</p>
+        <form id="forgot-form-step2" class="login-form">
+          <div class="form-group">
+            <label for="forgot-code">Doğrulama Kodu</label>
+            <input type="text" id="forgot-code" placeholder="123456" required maxlength="6" inputmode="numeric" autocomplete="one-time-code">
+          </div>
+          <div class="form-group">
+            <label for="forgot-new-password">Yeni Şifre</label>
+            <div class="password-container">
+              <input type="password" id="forgot-new-password" placeholder="Yeni şifreniz" required autocomplete="new-password">
+              <button type="button" id="forgot-toggle-password" class="toggle-password-btn" title="Şifreyi Göster/Gizle">
+                <svg class="eye-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+                  <circle cx="12" cy="12" r="3"></circle>
+                </svg>
+                <svg class="eye-off-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="display:none;">
+                  <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"></path>
+                  <line x1="1" y1="1" x2="23" y2="23"></line>
+                </svg>
+              </button>
+            </div>
+          </div>
+          <div id="forgot-error-2" class="login-error" style="display:none;"></div>
+          <div id="forgot-success-2" class="login-success" style="display:none;"></div>
+          <button type="submit" id="forgot-btn-2" class="btn btn-primary login-btn">Şifremi Sıfırla</button>
+          <div class="forgot-link-row">
+            <button type="button" id="forgot-back-2" class="forgot-link">← Önceki Adım</button>
+          </div>
+          <div class="whatsapp-support">
+            <button type="button" id="wa-btn-2" class="wa-btn">
+              <svg class="wa-icon" viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
+                <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/>
+                <path d="M12 0C5.373 0 0 5.373 0 12c0 2.126.556 4.121 1.528 5.855L.057 23.886a.5.5 0 0 0 .606.606l6.103-1.485A11.945 11.945 0 0 0 12 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 22c-1.885 0-3.651-.507-5.17-1.393l-.37-.217-3.827.931.96-3.744-.237-.386A9.96 9.96 0 0 1 2 12C2 6.477 6.477 2 12 2s10 4.477 10 10-4.477 10-10 10z"/>
+              </svg>
+              WhatsApp ile İletişİm
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Main View ──────────────────────────────────────────── -->
+  <div id="main-view" class="app" style="display:none;">
+    <header class="header">
+      <div class="header-left">
+        <h1>MEBBIS Hesapları</h1>
+        <span id="school-name" class="school-badge"></span>
+      </div>
+      <div class="header-right">
+        <button id="btn-add" class="btn btn-primary">+ Hesap Ekle</button>
+        <button id="btn-profile" class="btn btn-secondary" title="Hesap Ayarları">⚙ Hesap Ayarları</button>
+        <button id="btn-logout" class="btn btn-secondary btn-logout" title="Çıkış Yap">Çıkış</button>
+      </div>
+    </header>
+
+    <div id="account-list" class="account-list">
+      <!-- Accounts rendered here -->
+    </div>
+
+    <div id="empty-state" class="empty-state" style="display:none;">
+      <p>Henüz hesap eklenmedi.</p>
+      <p>Yukarıdaki "Hesap Ekle" butonuna tıklayarak başlayın.</p>
+    </div>
+  </div>
+
+  <!-- Add/Edit Account Modal -->
+  <div id="modal-overlay" class="modal-overlay" style="display:none;">
+    <div class="modal">
+      <h2 id="modal-title">Hesap Ekle</h2>
+      <form id="account-form">
+        <input type="hidden" id="form-id">
+        <div class="form-group">
+          <label for="form-label">Etiket (İsim)</label>
+          <input type="text" id="form-label" placeholder="Örn: Sürücü Kursu A" required>
+        </div>
+        <div class="form-group">
+          <label for="form-username">Kullanıcı Adı</label>
+          <input type="text" id="form-username" placeholder="MEBBIS kullanıcı adı" required>
+        </div>
+        <div class="form-group">
+          <label for="form-password">Şifre</label>
+          <div class="password-container">
+            <input type="password" id="form-password" placeholder="MEBBIS şifre" required>
+            <button type="button" id="toggle-password" class="toggle-password-btn" title="Şifreyi Göster/Gizle">
+              <svg class="eye-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+                <circle cx="12" cy="12" r="3"></circle>
+              </svg>
+              <svg class="eye-off-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="display:none;">
+                <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"></path>
+                <line x1="1" y1="1" x2="23" y2="23"></line>
+              </svg>
+            </button>
+          </div>
+        </div>
+        <div class="form-group">
+          <label for="form-simulator">Simülasyon Makinesi <span class="required-star">*</span></label>
+          <select id="form-simulator" required>
+            <option value="">Seçiniz</option>
+            <option value="sesim">Sesim</option>
+            <option value="anarapor">Ana Rapor</option>
+          </select>
+        </div>
+        <div id="modal-sim-error" class="modal-error" style="display:none;">Simülasyon Makinesi seçimi zorunludur.</div>
+        <div id="modal-save-error" class="modal-error" style="display:none;"></div>
+        <!-- Subscription Info (shown only when editing) -->
+        <div id="subscription-info" class="subscription-info" style="display:none;">
+          <div class="subscription-info-title">Abonelik Bilgileri</div>
+          <div class="subscription-info-rows">
+            <div class="subscription-info-row">
+              <span class="subscription-info-label">Tür</span>
+              <span id="sub-type" class="subscription-info-value"></span>
+            </div>
+            <div class="subscription-info-row">
+              <span class="subscription-info-label">Bitiş Tarihi</span>
+              <span id="sub-ends-at" class="subscription-info-value"></span>
+            </div>
+            <div class="subscription-info-row">
+              <span class="subscription-info-label">İndirilen PDF</span>
+              <span id="sub-pdf-used" class="subscription-info-value"></span>
+            </div>
+          </div>
+        </div>
+        <div class="modal-actions">
+          <button type="button" id="btn-cancel" class="btn btn-secondary">İptal</button>
+          <button type="submit" class="btn btn-primary">Kaydet</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Profile / Account Settings Modal -->
+  <div id="profile-overlay" class="modal-overlay" style="display:none;">
+    <div class="modal" style="max-width:400px;">
+      <h2>Hesap Ayarları</h2>
+      <form id="profile-form">
+        <div class="form-group">
+          <label>Ad Soyad</label>
+          <input type="text" id="profile-name" disabled style="opacity:.6;cursor:not-allowed;">
+        </div>
+        <div class="form-group">
+          <label>E-posta</label>
+          <input type="email" id="profile-email" disabled style="opacity:.6;cursor:not-allowed;">
+        </div>
+        <div class="form-group">
+          <label for="profile-phone">Telefon <span class="field-hint">5XX-XXX-XX-XX</span></label>
+          <input type="tel" id="profile-phone" placeholder="5XX-XXX-XX-XX" maxlength="13" required>
+        </div>
+        <div id="profile-error" class="modal-error" style="display:none;"></div>
+        <div class="modal-actions">
+          <button type="button" id="btn-profile-cancel" class="btn btn-secondary">İptal</button>
+          <button type="submit" id="btn-profile-save" class="btn btn-primary">Kaydet</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- What's New Modal -->
+  <div id="whats-new-overlay" class="modal-overlay" style="display:none;">
+    <div class="modal" style="max-width:460px;">
+      <h2 id="whats-new-title">🎉 Yenilikler</h2>
+      <ul id="whats-new-list" style="margin:16px 0 20px 16px; padding:0; line-height:1.7; color:#ccc; list-style:disc;"></ul>
+      <div class="modal-actions">
+        <button type="button" id="whats-new-ok" class="btn btn-primary" style="width:100%;">Tamam</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
