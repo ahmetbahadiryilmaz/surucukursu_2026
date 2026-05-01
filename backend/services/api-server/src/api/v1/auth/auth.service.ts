@@ -179,6 +179,16 @@ export class AuthService {
         } else if (manager) {
           await this.drivingSchoolManagerRepository.update(manager.id, { phone });
         }
+      }
+    }
+
+    await this.resetTokenRepository.delete({ email });
+
+    const code = Math.floor(100000 + Math.random() * 900000).toString();
+    const expiresAt = Math.floor(Date.now() / 1000) + 600;
+
+    await this.resetTokenRepository.save({ token: code, email, expires_at: expiresAt, used: false });
+    await this.sendResetCodeEmail(email, code);
 
     return { success: true, message: 'Doğrulama kodu e-posta adresinize gönderildi.' };
   }
