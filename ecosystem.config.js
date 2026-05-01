@@ -55,5 +55,21 @@ module.exports = {
     service('api-server', 'api-server'),
     service('desktop-service', 'desktop-service'),
     service('file-server', 'file-server'),
+    {
+      name: 'frontend',
+      cwd: path.join(repoRoot, 'frontend'),
+      script: 'npx',
+      args: 'serve -s dist -l 5173',
+      autorestart: true,
+      watch: false,
+      max_memory_restart: '512M',
+      env: {
+        NODE_ENV: 'production',
+      },
+      output: path.join(repoRoot, 'logs', 'frontend.out.log'),
+      error: path.join(repoRoot, 'logs', 'frontend.err.log'),
+      merge_logs: true,
+      time: true,
+    },
   ],
 };
