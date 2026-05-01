@@ -7,7 +7,7 @@ export const API_CONFIG = {
   // Base URLs for different environments
   DEVELOPMENT: `http://localhost:${API_GATEWAY_PORT}/api/v1`,
   STAGING: "https://test.mtsk.app/api/v1", 
-  PRODUCTION: "https://staging.mtsk.app/api/v1",
+  PRODUCTION: "https://mtsk.app/api/v1",
   
   // Default timeout
   TIMEOUT: 30000,
