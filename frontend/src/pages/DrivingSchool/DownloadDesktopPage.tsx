@@ -3,8 +3,16 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Download, Monitor } from "lucide-react";
 
 export default function DownloadDesktopPage() {
-  const handleDownload = () => {
-    window.location.href = "/downloads/SuruckursuSetup.exe";
+  const handleDownload = async () => {
+    try {
+      const res = await fetch('https://mtsk.app/desktop-updates/latest.yml');
+      const text = await res.text();
+      const match = text.match(/^path:\s*(.+)$/m);
+      const filename = match ? match[1].trim() : 'MTSK_APP Setup 1.2.3.exe';
+      window.location.href = `https://mtsk.app/desktop-updates/${encodeURIComponent(filename)}`;
+    } catch {
+      window.location.href = 'https://mtsk.app/desktop-updates/MTSK_APP%20Setup%201.2.3.exe';
+    }
   };
 
   return (
