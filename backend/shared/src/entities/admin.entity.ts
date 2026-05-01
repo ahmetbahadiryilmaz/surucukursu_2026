@@ -11,4 +11,7 @@ export class AdminEntity extends BaseEntity {
 
   @Column()
   password: string;
+
+  @Column({ default: true })
+  is_active: boolean;
 }

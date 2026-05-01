@@ -79,8 +79,8 @@ const DSManagerPage = () => {
         kurum: user.institution || '',
         sehir: user.city || '',
         pozisyon: user.position || 'Manager',
-        durum: user.status === 'active' ? 'Aktif' : 'Pasif',
-        gercekDurum: user.status,
+        durum: user.isActive ? 'Aktif' : 'Pasif',
+        gercekDurum: user.isActive ? 'active' : 'inactive',
         kayitTarihi: user.createdAt || new Date().toISOString()
       }));
       
@@ -128,11 +128,11 @@ const DSManagerPage = () => {
 
   // Manager durumu güncelle
   const toggleManagerStatus = async (managerId: number, currentStatus: string) => {
-    const newStatus = currentStatus === 'active' ? 'inactive' : 'active';
+    const newIsActive = currentStatus !== 'active';
     
     try {
       await apiService.admin.updateDrivingSchoolManager(managerId.toString(), {
-        status: newStatus
+        isActive: newIsActive
       });
       
       // Local state'i güncelle
@@ -140,14 +140,14 @@ const DSManagerPage = () => {
         manager.id === managerId 
           ? { 
               ...manager, 
-              durum: newStatus === 'active' ? 'Aktif' : 'Pasif',
-              gercekDurum: newStatus 
+              durum: newIsActive ? 'Aktif' : 'Pasif',
+              gercekDurum: newIsActive ? 'active' : 'inactive'
             }
           : manager
       );
       
       setManagers(updatedManagers);
-      ToastService.success(`Manager durumu ${newStatus === 'active' ? 'aktif' : 'pasif'} olarak güncellendi`);
+      ToastService.success(`Manager durumu ${newIsActive ? 'aktif' : 'pasif'} olarak güncellendi`);
       
     } catch (error) {
       console.error("Manager durumu güncellenirken hata:", error);

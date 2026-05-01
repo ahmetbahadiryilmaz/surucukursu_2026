@@ -42,5 +42,28 @@ export class AuthController {
     return this.authService.logout(req);
   }
 
+  @Public()
+  @Post('forgot-password')
+  @HttpCode(200)
+  @ApiOperation({ summary: 'Request password reset code' })
+  async forgotPassword(@Body() body: { email: string; phone: string }) {
+    return this.authService.forgotPassword(body.email, body.phone);
+  }
+
+  @Public()
+  @Post('verify-reset-code')
+  @HttpCode(200)
+  @ApiOperation({ summary: 'Verify reset code' })
+  async verifyResetCode(@Body() body: { email: string; code: string }) {
+    return this.authService.verifyResetCode(body.email, body.code);
+  }
+
+  @Public()
+  @Post('reset-password')
+  @HttpCode(200)
+  @ApiOperation({ summary: 'Reset password with code' })
+  async resetPassword(@Body() body: { email: string; code: string; newPassword: string }) {
+    return this.authService.resetPassword(body.email, body.code, body.newPassword);
+  }
 
 }  

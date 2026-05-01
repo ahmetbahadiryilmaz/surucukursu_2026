@@ -1,10 +1,12 @@
-import { Injectable, NotFoundException, ForbiddenException } from '@nestjs/common';
+import { Injectable, NotFoundException, ForbiddenException, ConflictException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import {
   DrivingSchoolEntity,
   DrivingSchoolStudentEntity,
   DrivingSchoolSettingsEntity,
+  DrivingSchoolManagerEntity,
+  DrivingSchoolOwnerEntity,
   SubscriptionEntity,
   TextEncryptor,
 } from '@surucukursu/shared';
@@ -52,6 +54,10 @@ export class DrivingSchoolService {
     private settingsRepository: Repository<DrivingSchoolSettingsEntity>,
     @InjectRepository(SubscriptionEntity)
     private subscriptionRepository: Repository<SubscriptionEntity>,
+    @InjectRepository(DrivingSchoolManagerEntity)
+    private managerRepository: Repository<DrivingSchoolManagerEntity>,
+    @InjectRepository(DrivingSchoolOwnerEntity)
+    private ownerRepository: Repository<DrivingSchoolOwnerEntity>,
   ) {}
 
   async getMySchool(user: { id: number; userType: UserTypes }) {
@@ -63,7 +69,7 @@ export class DrivingSchoolService {
     const school = await this.schoolRepository.findOne({ where: whereClause });
 
     if (!school) {
-      throw new NotFoundException('No driving school found for this account');
+      return null;
     }
 
     const settings = await this.settingsRepository.findOne({
@@ -200,6 +206,61 @@ export class DrivingSchoolService {
             pdfPrintLimit: subscription.pdf_print_limit ?? null,
           }
         : null,
+    };
+  }
+
+  /**
+   * Creates a driving school (and a manager record if needed) for an owner who
+   * has no school yet. Only owners can call this — managers always belong to an
+   * existing school.
+   */
+  async setupMySchool(
+    user: { id: number; userType: UserTypes },
+    name: string,
+  ): Promise<MebbisAccountDto> {
+    if (user.userType !== UserTypes.DRIVING_SCHOOL_OWNER) {
+      throw new ForbiddenException('Only driving school owners can create a school');
+    }
+
+    // Guard: owner must not already have a school
+    const existing = await this.schoolRepository.findOne({ where: { owner_id: user.id } });
+    if (existing) {
+      throw new ConflictException('Driving school already exists for this account');
+    }
+
+    const owner = await this.ownerRepository.findOne({ where: { id: user.id } });
+    if (!owner) throw new NotFoundException('Owner account not found');
+
+    // Reuse or create the manager record (matched by email)
+    let manager = await this.managerRepository.findOne({ where: { email: owner.email } });
+    if (!manager) {
+      manager = this.managerRepository.create({
+        name: owner.name,
+        email: owner.email,
+        password: owner.password,   // same encrypted password
+        phone: owner.phone,
+        is_active: true,
+      });
+      manager = await this.managerRepository.save(manager);
+    }
+
+    const school = this.schoolRepository.create({
+      name,
+      address: '',
+      phone: owner.phone,
+      owner_id: owner.id,
+      manager_id: manager.id,
+    });
+    const saved = await this.schoolRepository.save(school);
+
+    return {
+      id: saved.id,
+      label: saved.name,
+      username: null,
+      password: null,
+      simulatorType: null,
+      subscriptionActive: false,
+      subscription: null,
     };
   }
 

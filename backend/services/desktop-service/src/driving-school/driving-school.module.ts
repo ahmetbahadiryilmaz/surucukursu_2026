@@ -4,6 +4,8 @@ import {
   DrivingSchoolEntity,
   DrivingSchoolStudentEntity,
   DrivingSchoolSettingsEntity,
+  DrivingSchoolManagerEntity,
+  DrivingSchoolOwnerEntity,
   SessionEntity,
   SubscriptionEntity,
 } from '@surucukursu/shared';
@@ -17,6 +19,8 @@ import { AuthModule } from '../auth/auth.module';
       DrivingSchoolEntity,
       DrivingSchoolStudentEntity,
       DrivingSchoolSettingsEntity,
+      DrivingSchoolManagerEntity,
+      DrivingSchoolOwnerEntity,
       SessionEntity,
       SubscriptionEntity,
     ]),

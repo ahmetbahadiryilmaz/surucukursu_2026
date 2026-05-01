@@ -1,5 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsString, IsNotEmpty, IsEmail, IsOptional } from 'class-validator';
+import { IsString, IsNotEmpty, IsEmail, IsOptional, IsBoolean } from 'class-validator';
 
 export class UpdateOwnerDto {
     @ApiProperty({
@@ -36,4 +36,13 @@ export class UpdateOwnerDto {
     @IsNotEmpty()
     @IsOptional()
     phone?: string;
+
+    @ApiProperty({
+        description: 'Active status of the owner',
+        example: true,
+        required: false
+    })
+    @IsBoolean()
+    @IsOptional()
+    isActive?: boolean;
 }

@@ -172,6 +172,21 @@ class ApiService {
       return response.data;
     },
 
+    forgotPassword: async (email: string, phone: string): Promise<any> => {
+      const response = await this.axiosService.post("/auth/forgot-password", { email, phone });
+      return response.data;
+    },
+
+    verifyResetCode: async (email: string, code: string): Promise<any> => {
+      const response = await this.axiosService.post("/auth/verify-reset-code", { email, code });
+      return response.data;
+    },
+
+    resetPasswordWithCode: async (email: string, code: string, newPassword: string): Promise<any> => {
+      const response = await this.axiosService.post("/auth/reset-password", { email, code, newPassword });
+      return response.data;
+    },
+
     logout: async (): Promise<void> => {
       this.clearLocalStorage();
       await this.axiosService.post("/auth/logout");

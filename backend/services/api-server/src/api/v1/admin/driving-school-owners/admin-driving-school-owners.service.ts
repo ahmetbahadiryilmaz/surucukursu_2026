@@ -17,13 +17,14 @@ export class AdminDrivingSchoolOwnersService {
     ) { }
 
     async getAllOwners() {
-        return this.ownerRepository.find({
+        const owners = await this.ownerRepository.find({
             relations: ['DrivingSchool'],
             select: {
                 id: true,
                 name: true,
                 email: true,
                 phone: true,
+                is_active: true,
                 created_at: true,
                 updated_at: true,
                 DrivingSchool: {
@@ -32,6 +33,7 @@ export class AdminDrivingSchoolOwnersService {
                 }
             }
         });
+        return owners.map(o => ({ ...o, isActive: o.is_active }));
     }
 
     async getOwnerById(id: number) {
@@ -106,6 +108,7 @@ export class AdminDrivingSchoolOwnersService {
         if (dto.name !== undefined) updateData.name = dto.name;
         if (dto.email !== undefined) updateData.email = dto.email;
         if (dto.phone !== undefined) updateData.phone = dto.phone;
+        if (dto.isActive !== undefined) updateData.is_active = dto.isActive;
 
         // Only encrypt password if it's provided
         if (dto.password) {

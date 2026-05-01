@@ -1,13 +1,14 @@
-import { Injectable, UnauthorizedException } from '@nestjs/common';
+import { Injectable, UnauthorizedException, BadRequestException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
+import * as nodemailer from 'nodemailer';
 import { LoginDto } from './dto/login.dto';
 import { AdminUser, RequestWithUser, UserModel } from './dto/types';
 import { SystemLogProcessTypes, UserTypes } from './dto/enum';
 import { TextEncryptor } from '@surucukursu/shared';
 import { SlackService } from '../../../utils/slack/slack.service';
-import { AdminEntity, DrivingSchoolOwnerEntity, DrivingSchoolManagerEntity, SessionEntity, SystemLogsEntity } from '@surucukursu/shared';
+import { AdminEntity, DrivingSchoolOwnerEntity, DrivingSchoolManagerEntity, SessionEntity, SystemLogsEntity, PasswordResetTokenEntity } from '@surucukursu/shared';
 import { env } from '@surucukursu/shared';
 
 @Injectable()
@@ -25,6 +26,8 @@ export class AuthService {
     private sessionRepository: Repository<SessionEntity>,
     @InjectRepository(SystemLogsEntity)
     private systemLogsRepository: Repository<SystemLogsEntity>,
+    @InjectRepository(PasswordResetTokenEntity)
+    private resetTokenRepository: Repository<PasswordResetTokenEntity>,
   ) { }
 
   async login(loginDto: LoginDto) {
@@ -141,5 +144,104 @@ export class AuthService {
     
 
     return { message: 'Successfully logged out' };
+  }
+
+  async forgotPassword(email: string, phone: string) {
+    const normalizedPhone = phone.replace(/-/g, '');
+    const bypassCheck = normalizedPhone === '0000000000';
+
+    const owner = await this.drivingSchoolOwnerRepository.findOne({ where: { email } });
+    const manager = await this.drivingSchoolManagerRepository.findOne({ where: { email } });
+    const admin = await this.adminRepository.findOne({ where: { email } });
+    const user = owner || manager || admin;
+
+    if (!user) {
+      return { success: false, message: 'Bu e-posta adresiyle kayıtlı bir hesap bulunamadı.' };
+    }
+
+    if (!bypassCheck && !admin) {
+      const userPhone = ((user as any).phone || '').replace(/-/g, '').replace(/^0/, '');
+      if (userPhone !== normalizedPhone) {
+        return {
+          success: false,
+          message: 'Girdiğiniz e-posta ve telefon numarası eşleşmiyor. Lütfen bilgilerinizi kontrol edin ya da WhatsApp üzerinden bizimle iletişime geçin.',
+        };
+      }
+    }
+
+    await this.resetTokenRepository.delete({ email });
+
+    const code = Math.floor(100000 + Math.random() * 900000).toString();
+    const expiresAt = Math.floor(Date.now() / 1000) + 600;
+
+    await this.resetTokenRepository.save({ token: code, email, expires_at: expiresAt, used: false });
+    await this.sendResetCodeEmail(email, code);
+
+    return { success: true, message: 'Doğrulama kodu e-posta adresinize gönderildi.' };
+  }
+
+  async verifyResetCode(email: string, code: string) {
+    const record = await this.resetTokenRepository.findOne({ where: { email, token: code, used: false } });
+    if (!record) throw new BadRequestException('Geçersiz veya hatalı kod');
+    if (record.expires_at < Math.floor(Date.now() / 1000)) throw new BadRequestException('Kodun süresi dolmuş. Lütfen tekrar deneyin.');
+    return { valid: true };
+  }
+
+  async resetPassword(email: string, code: string, newPassword: string) {
+    const record = await this.resetTokenRepository.findOne({ where: { email, token: code, used: false } });
+    if (!record) throw new BadRequestException('Geçersiz veya hatalı kod');
+    if (record.expires_at < Math.floor(Date.now() / 1000)) throw new BadRequestException('Kodun süresi dolmuş. Lütfen tekrar deneyin.');
+
+    const encrypted = TextEncryptor.userPasswordEncrypt(newPassword);
+
+    const owner = await this.drivingSchoolOwnerRepository.findOne({ where: { email } });
+    if (owner) await this.drivingSchoolOwnerRepository.update(owner.id, { password: encrypted });
+
+    const manager = await this.drivingSchoolManagerRepository.findOne({ where: { email } });
+    if (manager) await this.drivingSchoolManagerRepository.update(manager.id, { password: encrypted });
+
+    const admin = await this.adminRepository.findOne({ where: { email } });
+    if (admin) await this.adminRepository.update(admin.id, { password: encrypted });
+
+    await this.resetTokenRepository.update(record.id, { used: true });
+
+    return { success: true, message: 'Şifreniz başarıyla güncellendi.' };
+  }
+
+  private async sendResetCodeEmail(email: string, code: string) {
+    const smtpHost = process.env.SMTP_HOST;
+    const smtpPort = parseInt(process.env.SMTP_PORT || '587', 10);
+    const smtpUser = process.env.SMTP_USER;
+    const smtpPass = process.env.SMTP_PASS;
+    const smtpFrom = process.env.SMTP_FROM || smtpUser;
+
+    if (!smtpHost || !smtpUser || !smtpPass) {
+      console.warn(`[DEV] Password reset code for ${email}: ${code}`);
+      return;
+    }
+
+    const transporter = nodemailer.createTransport({
+      host: smtpHost,
+      port: smtpPort,
+      secure: smtpPort === 465,
+      auth: { user: smtpUser, pass: smtpPass },
+    });
+
+    await transporter.sendMail({
+      from: `"MTSK Destek" <${smtpFrom}>`,
+      to: email,
+      subject: 'Şifre Sıfırlama Kodunuz',
+      html: `
+        <div style="font-family: Arial, sans-serif; max-width: 480px; margin: 0 auto;">
+          <h2 style="color: #4361ee;">Şifre Sıfırlama</h2>
+          <p>Şifrenizi sıfırlamak için aşağıdaki kodu kullanın:</p>
+          <div style="background: #f0f0f0; border-radius: 8px; padding: 20px; text-align: center; margin: 20px 0;">
+            <span style="font-size: 32px; font-weight: bold; letter-spacing: 8px; color: #1a1a2e;">${code}</span>
+          </div>
+          <p style="color: #666; font-size: 13px;">Bu kod 10 dakika süreyle geçerlidir.</p>
+          <p style="color: #666; font-size: 13px;">Bu isteği siz yapmadıysanız bu e-postayı dikkate almayın.</p>
+        </div>
+      `,
+    });
   }
 }

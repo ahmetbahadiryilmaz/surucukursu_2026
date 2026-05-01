@@ -16,6 +16,9 @@ export class DrivingSchoolOwnerEntity extends BaseEntity {
   @Column()
   phone: string;
 
+  @Column({ default: true })
+  is_active: boolean;
+
   @OneToMany(() => DrivingSchoolEntity, school => school.owner)
   DrivingSchool: DrivingSchoolEntity[];
 }

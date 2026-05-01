@@ -26,6 +26,18 @@ export class DrivingSchoolController {
     return this.drivingSchoolService.getMyStudents(req.user);
   }
 
+  @Post('me/setup')
+  @ApiOperation({ summary: 'Create a driving school for an owner who has none yet' })
+  @ApiResponse({ status: 201, description: 'Driving school created' })
+  @ApiResponse({ status: 403, description: 'Only owners can create a school' })
+  @ApiResponse({ status: 409, description: 'School already exists' })
+  async setupMySchool(
+    @Req() req: any,
+    @Body() body: { name: string },
+  ) {
+    return this.drivingSchoolService.setupMySchool(req.user, body.name);
+  }
+
   @Get('me/mebbis-accounts')
   @ApiOperation({ summary: 'List MEBBIS accounts (one per school) with credentials' })
   @ApiResponse({ status: 200, description: 'MEBBIS accounts returned' })

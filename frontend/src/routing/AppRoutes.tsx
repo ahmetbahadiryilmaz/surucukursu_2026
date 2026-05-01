@@ -3,6 +3,7 @@ import { default as AdminLayout } from "@/pages/Admin/Layout";
 import { default as DrivingSchoolLayout } from "@/pages/DrivingSchool/Layout";
 import LoginPage from "@/pages/(Auth)/Login";
 import Logout from "@/pages/(Auth)/Logout";
+import ForgotPasswordPage from "@/pages/(Auth)/ForgotPassword/ForgotPasswordPage";
 import ProtectedRoute from "@/routing/guards/ProtectedRoute";
 import { UserTypes } from "@/shared/enums";
 
@@ -23,6 +24,7 @@ export const AppRoutes = () => {
   return (
     <Routes>
       <Route path="/" element={<LoginPage />} />
+      <Route path="/forgot-password" element={<ForgotPasswordPage />} />
       <Route path="/admin/*" element={<AdminRoute />} />
       <Route path="/driving-school/*" element={<DrivingSchoolRoute />} />
       <Route path="/logout" element={<Logout />} />

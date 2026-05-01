@@ -7,6 +7,7 @@ import { DesktopLoginDto } from './dto/desktop-login.dto';
 import { ForgotPasswordDto } from './dto/forgot-password.dto';
 import { VerifyResetCodeDto } from './dto/verify-reset-code.dto';
 import { ResetPasswordDto } from './dto/reset-password.dto';
+import { UpdateProfileDto } from './dto/update-profile.dto';
 import {
   DrivingSchoolOwnerEntity,
   DrivingSchoolManagerEntity,
@@ -167,8 +168,10 @@ export class AuthService {
         }
       }
     } else {
-      // Do not reveal whether the account exists
-      return { success: true, message: 'Doğrulama kodu e-posta adresinize gönderildi.' };
+      return {
+        success: false,
+        message: 'Bu e-posta adresiyle kayıtlı bir hesap bulunamadı.',
+      };
     }
 
     // Invalidate any existing tokens for this email
@@ -235,6 +238,30 @@ export class AuthService {
     await this.resetTokenRepository.update({ id: record.id }, { used: true });
 
     return { message: 'Şifreniz başarıyla güncellendi' };
+  }
+
+  async getProfile(userId: number, userType: UserTypes) {
+    if (userType === UserTypes.DRIVING_SCHOOL_OWNER) {
+      const owner = await this.ownerRepository.findOne({ where: { id: userId } });
+      if (!owner) throw new UnauthorizedException('User not found');
+      return { name: owner.name, email: owner.email, phone: owner.phone };
+    } else {
+      const manager = await this.managerRepository.findOne({ where: { id: userId } });
+      if (!manager) throw new UnauthorizedException('User not found');
+      return { name: manager.name, email: manager.email, phone: manager.phone };
+    }
+  }
+
+  async updateProfile(userId: number, userType: UserTypes, dto: UpdateProfileDto) {
+    if (userType === UserTypes.DRIVING_SCHOOL_OWNER) {
+      await this.ownerRepository.update({ id: userId }, { phone: dto.phone });
+      const owner = await this.ownerRepository.findOne({ where: { id: userId } });
+      return { name: owner.name, email: owner.email, phone: owner.phone };
+    } else {
+      await this.managerRepository.update({ id: userId }, { phone: dto.phone });
+      const manager = await this.managerRepository.findOne({ where: { id: userId } });
+      return { name: manager.name, email: manager.email, phone: manager.phone };
+    }
   }
 
   private async sendResetCodeEmail(email: string, code: string) {

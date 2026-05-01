@@ -15,13 +15,14 @@ export class AdminDrivingSchoolManagersService {
     ) { }
 
     async getAllManagers() {
-        return this.managerRepository.find({
+        const managers = await this.managerRepository.find({
             relations: ['schools'],
             select: {
                 id: true,
                 name: true,
                 email: true,
                 phone: true,
+                is_active: true,
                 created_at: true,
                 updated_at: true,
                 schools: {
@@ -30,6 +31,7 @@ export class AdminDrivingSchoolManagersService {
                 }
             }
         });
+        return managers.map(m => ({ ...m, isActive: m.is_active }));
     }
 
     async getManagerById(id: number) {
@@ -91,6 +93,7 @@ export class AdminDrivingSchoolManagersService {
         if (dto.name !== undefined) updateData.name = dto.name;
         if (dto.email !== undefined) updateData.email = dto.email;
         if (dto.phone !== undefined) updateData.phone = dto.phone;
+        if (dto.isActive !== undefined) updateData.is_active = dto.isActive;
 
         // Only encrypt password if it's provided
         if (dto.password) {

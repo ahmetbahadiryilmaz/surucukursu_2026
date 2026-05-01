@@ -109,8 +109,8 @@ const DSOwnerTable = () => {
           kurum: owner.company || "Belirtilmemiş",
           sehir: owner.city || "Belirtilmemiş",
           subeSayisi: owner.branchCount || 0,
-          durum: "Aktif", // Pasif olanları da Aktif göster
-          gercekDurum: isActive ? "Aktif" : "Pasif", // Gerçek durumu sakla
+          durum: isActive ? "Aktif" : "Pasif",
+          gercekDurum: isActive ? "Aktif" : "Pasif",
           kayitTarihi: owner.createdAt || new Date().toISOString()
         };
       });
