@@ -4,14 +4,14 @@ import https from 'https';
 import http from 'http';
 import * as fs from 'fs';
 import * as path from 'path';
-import { IS_DEV, API_BASE_URL } from './config';
+import { IS_DEV, API_BASE_URL, UPDATES_BASE_URL } from './config';
 
 const VERSION_CHECK_URL = IS_DEV
   ? `${API_BASE_URL}/desktop/desktop-service/version`
-  : `${API_BASE_URL}/desktop-updates/minimum_version.json`;
+  : `${UPDATES_BASE_URL}/desktop-updates/minimum_version.json`;
 const UPDATE_BASE_URL = IS_DEV
   ? `${API_BASE_URL}/desktop/desktop-service`
-  : `${API_BASE_URL}/desktop-updates`;
+  : `${UPDATES_BASE_URL}/desktop-updates`;
 
 /**
  * Changelog entries — add a new key for every deployed version.

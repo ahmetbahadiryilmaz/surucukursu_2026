@@ -115,25 +115,10 @@ document.getElementById('wa-btn-login').addEventListener('click', () => api.open
 document.getElementById('wa-btn-1').addEventListener('click', () => api.openExternal(WA_URL));
 document.getElementById('wa-btn-2').addEventListener('click', () => api.openExternal(WA_URL));
 
-// Phone auto-format: insert dashes as user types → 5XX-XXX-XX-XX
-// Note: 000-000-00-00 can be typed freely as a bypass code
+// Phone: digits only, max 10 (5XXXXXXXXX). 0000000000 acts as bypass code.
 document.getElementById('forgot-phone').addEventListener('input', (e) => {
   const input = /** @type {HTMLInputElement} */ (e.target);
-  const digits = input.value.replace(/\D/g, '').slice(0, 10);
-  // Don't auto-format if it starts with 000 (bypass mode)
-  if (digits.startsWith('000')) {
-    let formatted = digits;
-    if (digits.length > 3) formatted = digits.slice(0, 3) + '-' + digits.slice(3);
-    if (digits.length > 6) formatted = digits.slice(0, 3) + '-' + digits.slice(3, 6) + '-' + digits.slice(6);
-    if (digits.length > 8) formatted = digits.slice(0, 3) + '-' + digits.slice(3, 6) + '-' + digits.slice(6, 8) + '-' + digits.slice(8);
-    input.value = formatted;
-    return;
-  }
-  let formatted = digits;
-  if (digits.length > 3) formatted = digits.slice(0, 3) + '-' + digits.slice(3);
-  if (digits.length > 6) formatted = digits.slice(0, 3) + '-' + digits.slice(3, 6) + '-' + digits.slice(6);
-  if (digits.length > 8) formatted = digits.slice(0, 3) + '-' + digits.slice(3, 6) + '-' + digits.slice(6, 8) + '-' + digits.slice(8);
-  input.value = formatted;
+  input.value = input.value.replace(/\D/g, '').slice(0, 10);
 });
 
 let forgotEmail = '';
@@ -147,9 +132,9 @@ document.getElementById('forgot-form-step1').addEventListener('submit', async (e
 
   if (!email || !phone) return;
 
-  // Validate phone format (allow 000-000-00-00 as bypass)
-  if (!/^(000-000-00-00|5\d{2}-\d{3}-\d{2}-\d{2})$/.test(phone)) {
-    errorEl.textContent = 'Telefon numarası 5XX-XXX-XX-XX formatında olmalıdır.';
+  // Validate phone format (10 digits starting with 5; allow 0000000000 as bypass)
+  if (!/^(0000000000|5\d{9})$/.test(phone)) {
+    errorEl.textContent = 'Telefon 10 haneli ve 5 ile başlamalıdır (5XXXXXXXXX).';
     errorEl.style.display = 'block';
     return;
   }
@@ -382,6 +367,11 @@ const profileEmailEl   = document.getElementById('profile-email');
 const profilePhoneEl   = document.getElementById('profile-phone');
 const profileErrorEl   = document.getElementById('profile-error');
 
+profilePhoneEl.addEventListener('input', (e) => {
+  const input = /** @type {HTMLInputElement} */ (e.target);
+  input.value = input.value.replace(/\D/g, '').slice(0, 10);
+});
+
 document.getElementById('btn-profile').addEventListener('click', async () => {
   profileErrorEl.style.display = 'none';
   profileNameEl.value  = '';
@@ -411,6 +401,11 @@ profileForm.addEventListener('submit', async (e) => {
   profileErrorEl.style.display = 'none';
   const phone = profilePhoneEl.value.trim();
   if (!phone) return;
+  if (!/^5\d{9}$/.test(phone)) {
+    profileErrorEl.textContent = 'Telefon 10 haneli ve 5 ile başlamalıdır (5XXXXXXXXX).';
+    profileErrorEl.style.display = 'block';
+    return;
+  }
   const saveBtn = document.getElementById('btn-profile-save');
   saveBtn.disabled = true;
   try {
