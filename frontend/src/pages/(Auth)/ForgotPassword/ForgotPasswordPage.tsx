@@ -28,6 +28,10 @@ export default function ForgotPasswordPage() {
   const handleStep1 = async (e: React.FormEvent) => {
     e.preventDefault();
     setError1(null);
+    if (!/^(0000000000|5\d{9})$/.test(phone)) {
+      setError1("Telefon 10 haneli ve 5 ile başlamalıdır (5XXXXXXXXX).");
+      return;
+    }
     setLoading1(true);
     try {
       const result = await ApiService.authentication.forgotPassword(email, phone);
@@ -92,11 +96,13 @@ export default function ForgotPasswordPage() {
                   <Input
                     id="phone"
                     type="tel"
-                    placeholder="5XX-XXX-XX-XX"
+                    placeholder="5XXXXXXXXX"
                     value={phone}
-                    onChange={(e) => setPhone(e.target.value)}
+                    onChange={(e) => setPhone(e.target.value.replace(/\D/g, "").slice(0, 10))}
                     required
-                    maxLength={13}
+                    maxLength={10}
+                    inputMode="numeric"
+                    pattern="[0-9]*"
                   />
                 </div>
                 {error1 && (

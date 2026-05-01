@@ -7,9 +7,9 @@ export class ForgotPasswordDto {
   @IsNotEmpty()
   email: string;
 
-  @ApiProperty({ example: '5XX-XXX-XX-XX', description: 'Turkish mobile number without leading zero, or 000-000-00-00 to bypass check' })
+  @ApiProperty({ example: '5551234567', description: '10-digit Turkish mobile number (5XXXXXXXXX), or 0000000000 to bypass check' })
   @IsString()
   @IsNotEmpty()
-  @Matches(/^(000-000-00-00|5\d{2}-\d{3}-\d{2}-\d{2})$/, { message: 'phone must be in format 5XX-XXX-XX-XX' })
+  @Matches(/^(0000000000|5\d{9})$/, { message: 'Telefon 10 haneli ve 5 ile başlamalıdır (5XXXXXXXXX).' })
   phone: string;
 }
