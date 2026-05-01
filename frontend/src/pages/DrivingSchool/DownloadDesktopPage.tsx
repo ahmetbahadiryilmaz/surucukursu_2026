@@ -1,12 +1,34 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Download, Monitor, ChevronDown, ChevronUp, ShieldAlert } from "lucide-react";
+import { Download, Monitor, ShieldAlert, Sparkles } from "lucide-react";
+
+interface VersionInfo {
+  version?: string;
+  whatsNew?: string;
+  downloadUrl?: string;
+}
 
 export default function DownloadDesktopPage() {
-  const [showSmartScreen, setShowSmartScreen] = useState(false);
+  const [info, setInfo] = useState<VersionInfo | null>(null);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const res = await fetch('https://api.mtsk.app/desktop/desktop-service/version');
+        const data = await res.json();
+        setInfo(data);
+      } catch {
+        setInfo({});
+      }
+    })();
+  }, []);
 
   const handleDownload = async () => {
+    if (info?.downloadUrl) {
+      window.location.href = info.downloadUrl;
+      return;
+    }
     try {
       const res = await fetch('https://mtsk.app/desktop-updates/latest.yml');
       const text = await res.text();
@@ -33,6 +55,25 @@ export default function DownloadDesktopPage() {
             </CardDescription>
           </CardHeader>
           <CardContent className="flex flex-col items-center gap-4 pb-8">
+            {info?.version && (
+              <div className="w-full bg-muted/50 border rounded-lg p-4 flex flex-col gap-2">
+                <div className="flex items-center justify-between flex-wrap gap-2">
+                  <span className="text-sm text-muted-foreground">Mevcut Sürüm</span>
+                  <span className="inline-flex items-center gap-1 bg-primary/10 text-primary font-semibold px-2.5 py-0.5 rounded-md text-sm">
+                    v{info.version}
+                  </span>
+                </div>
+                {info.whatsNew && (
+                  <div className="flex items-start gap-2 pt-2 border-t">
+                    <Sparkles className="w-4 h-4 text-primary shrink-0 mt-0.5" />
+                    <div className="flex-1">
+                      <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-1">Yenilikler</p>
+                      <p className="text-sm text-foreground">{info.whatsNew}</p>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
             <Button size="lg" onClick={handleDownload} className="gap-2 px-8 py-6 text-base">
               <Download className="w-5 h-5" />
               Masaüstü Uygulamasını İndir
@@ -43,54 +84,43 @@ export default function DownloadDesktopPage() {
           </CardContent>
         </Card>
 
-        {/* SmartScreen warning help */}
+        {/* SmartScreen warning help — always visible */}
         <Card className="shadow-sm border-amber-200 bg-amber-50 dark:bg-amber-950/20 dark:border-amber-800">
           <CardContent className="pt-4 pb-4">
-            <button
-              onClick={() => setShowSmartScreen(v => !v)}
-              className="w-full flex items-center justify-between gap-3 text-left"
-            >
-              <div className="flex items-center gap-2 text-amber-700 dark:text-amber-400 font-medium text-sm">
-                <ShieldAlert className="w-4 h-4 shrink-0" />
-                "Windows kişisel bilgisayarınızı korudu" uyarısı çıkarsa ne yapmalıyım?
-              </div>
-              {showSmartScreen
-                ? <ChevronUp className="w-4 h-4 text-amber-600 shrink-0" />
-                : <ChevronDown className="w-4 h-4 text-amber-600 shrink-0" />}
-            </button>
-
-            {showSmartScreen && (
-              <div className="mt-4 flex flex-col gap-4 text-sm text-muted-foreground">
-                <p>
-                  Uygulama henüz Microsoft tarafından tanınan bir sertifikaya sahip olmadığından
-                  Windows SmartScreen bu uyarıyı gösterebilir. Güvenle çalıştırabilirsiniz.
-                </p>
-                <div className="flex flex-col gap-3">
-                  <div className="flex items-start gap-3">
-                    <span className="bg-amber-500 text-white text-xs font-bold rounded-full w-5 h-5 flex items-center justify-center shrink-0 mt-0.5">1</span>
-                    <div>
-                      <p className="font-medium text-foreground">Uyarı ekranında <span className="text-blue-600 underline">"Ek bilgi"</span> bağlantısına tıklayın.</p>
-                      <img
-                        src="https://cdn.deneyapkart.org/media/uploads/2021/12/22/image-20211222151741-1.png"
-                        alt="SmartScreen Ek bilgi adımı"
-                        className="mt-2 rounded border max-w-sm w-full"
-                      />
-                    </div>
+            <div className="flex items-center gap-2 text-amber-700 dark:text-amber-400 font-medium text-sm mb-3">
+              <ShieldAlert className="w-4 h-4 shrink-0" />
+              "Windows kişisel bilgisayarınızı korudu" uyarısı çıkarsa ne yapmalıyım?
+            </div>
+            <div className="flex flex-col gap-4 text-sm text-muted-foreground">
+              <p>
+                Uygulama henüz Microsoft tarafından tanınan bir sertifikaya sahip olmadığından
+                Windows SmartScreen bu uyarıyı gösterebilir. Güvenle çalıştırabilirsiniz.
+              </p>
+              <div className="flex flex-col gap-3">
+                <div className="flex items-start gap-3">
+                  <span className="bg-amber-500 text-white text-xs font-bold rounded-full w-5 h-5 flex items-center justify-center shrink-0 mt-0.5">1</span>
+                  <div>
+                    <p className="font-medium text-foreground">Uyarı ekranında <span className="text-blue-600 underline">"Ek bilgi"</span> bağlantısına tıklayın.</p>
+                    <img
+                      src="https://cdn.deneyapkart.org/media/uploads/2021/12/22/image-20211222151741-1.png"
+                      alt="SmartScreen Ek bilgi adımı"
+                      className="mt-2 rounded border max-w-sm w-full"
+                    />
                   </div>
-                  <div className="flex items-start gap-3">
-                    <span className="bg-amber-500 text-white text-xs font-bold rounded-full w-5 h-5 flex items-center justify-center shrink-0 mt-0.5">2</span>
-                    <div>
-                      <p className="font-medium text-foreground">Açılan ekranda <span className="font-semibold">"Yine de çalıştır"</span> düğmesine tıklayın.</p>
-                      <img
-                        src="https://cdn.deneyapkart.org/media/uploads/2021/12/22/image-20211222151742-2.png"
-                        alt="SmartScreen Yine de çalıştır adımı"
-                        className="mt-2 rounded border max-w-sm w-full"
-                      />
-                    </div>
+                </div>
+                <div className="flex items-start gap-3">
+                  <span className="bg-amber-500 text-white text-xs font-bold rounded-full w-5 h-5 flex items-center justify-center shrink-0 mt-0.5">2</span>
+                  <div>
+                    <p className="font-medium text-foreground">Açılan ekranda <span className="font-semibold">"Yine de çalıştır"</span> düğmesine tıklayın.</p>
+                    <img
+                      src="https://cdn.deneyapkart.org/media/uploads/2021/12/22/image-20211222151742-2.png"
+                      alt="SmartScreen Yine de çalıştır adımı"
+                      className="mt-2 rounded border max-w-sm w-full"
+                    />
                   </div>
                 </div>
               </div>
-            )}
+            </div>
           </CardContent>
         </Card>
       </div>
