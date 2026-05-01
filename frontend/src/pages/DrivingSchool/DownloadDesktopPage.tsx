@@ -5,7 +5,7 @@ import { Download, Monitor, ShieldAlert, Sparkles } from "lucide-react";
 
 interface VersionInfo {
   version?: string;
-  whatsNew?: string;
+  whatsNew?: string | string[];
   downloadUrl?: string;
 }
 
@@ -63,15 +63,24 @@ export default function DownloadDesktopPage() {
                     v{info.version}
                   </span>
                 </div>
-                {info.whatsNew && (
-                  <div className="flex items-start gap-2 pt-2 border-t">
-                    <Sparkles className="w-4 h-4 text-primary shrink-0 mt-0.5" />
-                    <div className="flex-1">
-                      <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-1">Yenilikler</p>
-                      <p className="text-sm text-foreground">{info.whatsNew}</p>
+                {info.whatsNew && (() => {
+                  const items = Array.isArray(info.whatsNew)
+                    ? info.whatsNew
+                    : info.whatsNew.split(/\r?\n+/).filter(Boolean);
+                  return (
+                    <div className="flex items-start gap-2 pt-2 border-t">
+                      <Sparkles className="w-4 h-4 text-primary shrink-0 mt-0.5" />
+                      <div className="flex-1">
+                        <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-2">Yenilikler</p>
+                        <ul className="text-sm text-foreground space-y-1.5 list-disc list-outside pl-4 marker:text-primary">
+                          {items.map((item, i) => (
+                            <li key={i}>{item}</li>
+                          ))}
+                        </ul>
+                      </div>
                     </div>
-                  </div>
-                )}
+                  );
+                })()}
               </div>
             )}
             <Button size="lg" onClick={handleDownload} className="gap-2 px-8 py-6 text-base">
