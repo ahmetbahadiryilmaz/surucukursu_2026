@@ -88,7 +88,7 @@ const KurslarPage: React.FC = () => {
         district_id: kurs.district_id ? kurs.district_id.toString() : '',
         subscription_type: kurs.subscription?.type || 'demo',
         subscription_duration: 'monthly', // Not used in edit mode
-        subscription_ends_at: kurs.subscription?.ends_at ? new Date(kurs.subscription.ends_at).toISOString().split('T')[0] : ''
+        subscription_ends_at: kurs.subscription?.ends_at ? new Date(Number(kurs.subscription.ends_at) * 1000).toISOString().split('T')[0] : ''
       });
       setModalError(null);
       setIsEditOpen(true);

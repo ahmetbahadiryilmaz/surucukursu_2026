@@ -155,12 +155,6 @@ export class DashboardService {
         port: env.services.desktopService.port || DEFAULT_PORTS.DESKTOP_SERVICE,
       },
       {
-        type: ServiceType.FRONTEND,
-        name: 'Frontend',
-        host: local,
-        port: intEnv('FRONTEND_PORT', DEFAULT_PORTS.FRONTEND),
-      },
-      {
         type: ServiceType.DATABASE,
         name: 'Database (MySQL)',
         host: this.normalizeHost(env.database.host) || local,

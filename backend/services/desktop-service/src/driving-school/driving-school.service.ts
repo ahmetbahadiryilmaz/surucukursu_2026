@@ -30,7 +30,7 @@ export interface MebbisAccountDto {
  */
 function isSubscriptionActive(sub: SubscriptionEntity | null | undefined): boolean {
   if (!sub) return false;
-  if (sub.type !== 'paid') return false;
+  if (sub.type !== 'paid' && sub.type !== 'unlimited') return false;
   if (sub.ends_at == null) return true;
   return sub.ends_at > Math.floor(Date.now() / 1000);
 }
