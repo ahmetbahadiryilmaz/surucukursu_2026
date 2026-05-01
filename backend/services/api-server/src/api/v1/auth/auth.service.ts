@@ -159,23 +159,26 @@ export class AuthService {
       return { success: false, message: 'Bu e-posta adresiyle kayıtlı bir hesap bulunamadı.' };
     }
 
-    if (!bypassCheck && !admin) {
-      const userPhone = ((user as any).phone || '').replace(/-/g, '').replace(/^0/, '');
-      if (userPhone !== normalizedPhone) {
-        return {
-          success: false,
-          message: 'Girdiğiniz e-posta ve telefon numarası eşleşmiyor. Lütfen bilgilerinizi kontrol edin ya da WhatsApp üzerinden bizimle iletişime geçin.',
-        };
+    if (!admin) {
+      const rawStoredPhone = ((user as any).phone || '').replace(/-/g, '').replace(/^0/, '');
+      const isZeroPhone = !rawStoredPhone || /^0+$/.test(rawStoredPhone);
+
+      if (!bypassCheck && !isZeroPhone) {
+        if (rawStoredPhone !== normalizedPhone) {
+          return {
+            success: false,
+            message: `Telefon numarası eşleşmiyor. Kayıtlı numaranızın son 4 hanesi: ****${rawStoredPhone.slice(-4)}`,
+          };
+        }
       }
-    }
 
-    await this.resetTokenRepository.delete({ email });
-
-    const code = Math.floor(100000 + Math.random() * 900000).toString();
-    const expiresAt = Math.floor(Date.now() / 1000) + 600;
-
-    await this.resetTokenRepository.save({ token: code, email, expires_at: expiresAt, used: false });
-    await this.sendResetCodeEmail(email, code);
+      // If stored phone is zero/empty, update it to the entered phone
+      if (isZeroPhone && !bypassCheck) {
+        if (owner) {
+          await this.drivingSchoolOwnerRepository.update(owner.id, { phone });
+        } else if (manager) {
+          await this.drivingSchoolManagerRepository.update(manager.id, { phone });
+        }
 
     return { success: true, message: 'Doğrulama kodu e-posta adresinize gönderildi.' };
   }

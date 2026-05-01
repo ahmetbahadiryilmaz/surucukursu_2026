@@ -198,6 +198,35 @@ GET http://localhost:9504/public/logo.png
 
 ---
 
+## Git / Version Control
+
+### What is tracked by git (sent to GitHub)
+
+| Path | Tracked? | Notes |
+|------|----------|-------|
+| `backend/` | ✅ Yes | All NestJS services, shared entities |
+| `frontend/` | ✅ Yes | React SPA |
+| `ai-docs/` | ❌ No | Gitignored — local only |
+| `desktop/` | ❌ No | Gitignored — local only (see below) |
+| `backup/` | ❌ No | Gitignored — local only |
+| `mockserver/` | ❌ No | Gitignored — local only |
+| `tests/` | ❌ No | Gitignored — local only |
+| `backend/storage/` | ❌ No | Gitignored — runtime files |
+
+### Desktop folder — local only, never push to GitHub
+
+**`desktop/` is intentionally excluded from git.** Reasons:
+- Contains large binary assets (`release/`, `build/`, `.exe` files)
+- Contains sensitive MEBBIS session responses in `responses/`
+- Electron build artifacts and `node_modules` would bloat the repo
+- The built `.exe` is distributed separately via `desktop-updates/` on the server
+
+**To work on the desktop app**, restore the `desktop/` folder from a backup or another machine. The source lives only on developer machines.
+
+**DO NOT** add `desktop/` back to git tracking. If you need to share desktop source changes, transfer files manually.
+
+---
+
 ## Environment Variables
 
 ### Required

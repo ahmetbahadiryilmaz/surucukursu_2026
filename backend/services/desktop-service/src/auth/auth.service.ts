@@ -157,21 +157,32 @@ export class AuthService {
     const manager = await this.managerRepository.findOne({ where: { email: dto.email } });
     const user = owner || manager;
 
-    if (user) {
-      if (!bypassCheck) {
-        const userPhone = (user.phone || '').replace(/-/g, '').replace(/^0/, '');
-        if (userPhone !== normalizedPhone) {
-          return {
-            success: false,
-            message: 'Girdiğiniz e-posta ve telefon numarası eşleşmiyor. Lütfen bilgilerinizi kontrol edin ya da WhatsApp üzerinden bizimle iletişime geçin.',
-          };
-        }
-      }
-    } else {
+    if (!user) {
       return {
         success: false,
         message: 'Bu e-posta adresiyle kayıtlı bir hesap bulunamadı.',
       };
+    }
+
+    const rawStoredPhone = (user.phone || '').replace(/-/g, '').replace(/^0/, '');
+    const isZeroPhone = !rawStoredPhone || /^0+$/.test(rawStoredPhone);
+
+    if (!bypassCheck && !isZeroPhone) {
+      if (rawStoredPhone !== normalizedPhone) {
+        return {
+          success: false,
+          message: `Telefon numarası eşleşmiyor. Kayıtlı numaranızın son 4 hanesi: ****${rawStoredPhone.slice(-4)}`,
+        };
+      }
+    }
+
+    // If stored phone is zero/empty, update it to the entered phone
+    if (isZeroPhone && !bypassCheck) {
+      if (owner) {
+        await this.ownerRepository.update({ id: owner.id }, { phone: dto.phone });
+      } else if (manager) {
+        await this.managerRepository.update({ id: manager.id }, { phone: dto.phone });
+      }
     }
 
     // Invalidate any existing tokens for this email
