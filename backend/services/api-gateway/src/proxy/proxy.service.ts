@@ -79,8 +79,8 @@ export class ProxyService {
         validateStatus: () => true // Don't throw on HTTP error status codes
       };
 
-      if (serviceName === 'files') {
-        // Stream binary responses (PDFs, images, etc.) so proxy can pipe them
+      if (serviceName === 'files' || serviceName === 'desktop') {
+        // Stream binary responses (PDFs, images, encrypted payloads, etc.) so proxy can pipe them
         axiosOptions.responseType = 'stream';
         // CRITICAL: Disable text encoding to preserve binary data integrity
         axiosOptions.responseEncoding = null;
