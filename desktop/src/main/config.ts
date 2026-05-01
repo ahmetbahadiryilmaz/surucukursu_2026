@@ -18,3 +18,26 @@ export const API_BASE_URL = IS_DEV
 export const UPDATES_BASE_URL = IS_DEV
   ? 'http://127.0.0.1:9501'
   : 'https://mtsk.app';
+
+/**
+ * Shared desktop ↔ server secrets.
+ * Must match DESKTOP_KEY / DESKTOP_HMAC_SECRET in backend/.env.
+ *
+ * Used for any AES-256-GCM payload + HMAC-SHA256 signed request between the
+ * desktop app and the backend (encrypted templates today, plus any future
+ * desktop-only encrypted endpoints). Rotating these requires shipping a new
+ * desktop build AND updating the backend env at the same time.
+ */
+export const DESKTOP_KEY_HEX =
+  '4a391941f894909f4d734e928468af71db7ef39576728068f5be8a4499472bab';
+export const DESKTOP_HMAC_SECRET =
+  'b8c44c162f5891a1b5fcb079fcb42189042f4a3c230906d57c361d5feedcb8d7';
+
+/**
+ * Endpoint that returns AES-256-GCM encrypted template bytes.
+ * In dev the API gateway proxies /desktop/desktop-service/* to the desktop service;
+ * in prod the gateway exposes /templates/* directly.
+ */
+export const ENCRYPTED_TEMPLATE_URL = IS_DEV
+  ? `${API_BASE_URL}/desktop/desktop-service/templates/encrypted`
+  : `${API_BASE_URL}/templates/encrypted`;

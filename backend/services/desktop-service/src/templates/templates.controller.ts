@@ -1,22 +1,23 @@
 import {
   Controller,
-  Get,
-  Param,
+  Post,
+  Body,
   Res,
-  NotFoundException,
+  HttpCode,
+  HttpException,
+  HttpStatus,
   Logger,
+  BadRequestException,
 } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiParam, ApiResponse } from '@nestjs/swagger';
+import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
 import { FastifyReply } from 'fastify';
 import * as fs from 'fs';
 import * as path from 'path';
 import { Public } from '../common/decorators/public.decorator';
+import { encryptPayload, verifySignedRequest } from './template-crypto';
 
 // Templates are stored in backend/storage/templates/.
 // Walk upward from this file's location until we find a `storage/templates` folder.
-// This works regardless of whether the service is running via ts-node from
-// `backend/services/desktop-service/src/...` or from compiled output under
-// `backend/dist/desktop-service/services/desktop-service/src/...`.
 function resolveTemplatesBase(): string {
   let dir = __dirname;
   for (let i = 0; i < 10; i++) {
@@ -26,91 +27,117 @@ function resolveTemplatesBase(): string {
     if (parent === dir) break;
     dir = parent;
   }
-  // Fallback to old hardcoded path so error messages stay informative
   return path.resolve(__dirname, '..', '..', '..', '..', '..', 'storage', 'templates');
 }
 
 const TEMPLATES_BASE = resolveTemplatesBase();
+const TEMPLATES_BASE_RESOLVED = path.resolve(TEMPLATES_BASE);
+
+// Whitelist of allowed template path roots. Everything else is rejected.
+// Keeps parity with the previous GET endpoints:
+//   direksiyon-takip/:filename
+//   simulator/sesim/:filename
+//   simulator/anagrup/:scenario/:filename
+//   ek4/:filename
+const ALLOWED_PATH_PATTERN =
+  /^(direksiyon-takip|simulator\/sesim|simulator\/anagrup\/[^\/]+|ek4)\/[^\/]+\.html$/;
+
+interface EncryptedTemplateRequest {
+  path: string;
+  timestamp: number;
+  nonce: string;
+  signature: string;
+}
 
 @ApiTags('Desktop Templates')
 @Controller('templates')
 export class TemplatesController {
   private readonly logger = new Logger(TemplatesController.name);
 
-  private sendTemplate(filePath: string, res: FastifyReply) {
-    if (!fs.existsSync(filePath)) {
-      throw new NotFoundException(`Template not found: ${path.basename(filePath)}`);
+  @Public()
+  @Post('encrypted')
+  @HttpCode(200)
+  @ApiOperation({
+    summary:
+      'Return the requested template file encrypted with AES-256-GCM. Body must be HMAC-signed.',
+  })
+  @ApiResponse({ status: 200, description: 'Binary encrypted payload' })
+  @ApiResponse({ status: 400, description: 'Invalid request' })
+  @ApiResponse({ status: 401, description: 'Bad signature / replay / expired' })
+  @ApiResponse({ status: 404, description: 'Template not found' })
+  async getEncrypted(
+    @Body() body: EncryptedTemplateRequest,
+    @Res() res: FastifyReply,
+  ) {
+    const hmacSecret = process.env.DESKTOP_HMAC_SECRET;
+    const aesKey = process.env.DESKTOP_KEY;
+
+    if (!hmacSecret || !aesKey) {
+      this.logger.error(
+        'DESKTOP_KEY or DESKTOP_HMAC_SECRET is not configured',
+      );
+      throw new HttpException(
+        'Encrypted templates not configured',
+        HttpStatus.SERVICE_UNAVAILABLE,
+      );
     }
 
-    // Security: ensure resolved path is still within the templates base directory
+    if (!body || typeof body !== 'object') {
+      throw new BadRequestException('Invalid body');
+    }
+
+    // Normalize path: forward slashes only, no leading slash, no traversal.
+    const requestedPath = String(body.path || '').replace(/\\/g, '/').replace(/^\/+/, '');
+    if (requestedPath.includes('..') || !ALLOWED_PATH_PATTERN.test(requestedPath)) {
+      throw new BadRequestException('Invalid template path');
+    }
+
+    const verify = verifySignedRequest({
+      path: requestedPath,
+      timestamp: Number(body.timestamp),
+      nonce: String(body.nonce || ''),
+      signature: String(body.signature || ''),
+      hmacSecret,
+    });
+    if (!verify.ok) {
+      this.logger.warn(
+        `Rejected encrypted template request: ${(verify as { reason: string }).reason}`,
+      );
+      throw new HttpException('Unauthorized', HttpStatus.UNAUTHORIZED);
+    }
+
+    const filePath = path.join(TEMPLATES_BASE, requestedPath);
     const resolved = path.resolve(filePath);
-    if (!resolved.startsWith(path.resolve(TEMPLATES_BASE))) {
-      throw new NotFoundException('Template not found');
+    if (!resolved.startsWith(TEMPLATES_BASE_RESOLVED + path.sep) && resolved !== TEMPLATES_BASE_RESOLVED) {
+      throw new BadRequestException('Invalid template path');
     }
 
-    const content = fs.readFileSync(resolved, 'utf-8');
-    res.type('text/html; charset=utf-8').send(content);
-  }
+    if (!fs.existsSync(resolved)) {
+      throw new HttpException('Template not found', HttpStatus.NOT_FOUND);
+    }
 
-  @Public()
-  @Get('direksiyon-takip/:filename')
-  @ApiOperation({ summary: 'Serve a direksiyon-takip HTML template' })
-  @ApiParam({ name: 'filename', example: '16n.html' })
-  @ApiResponse({ status: 200, description: 'HTML template returned' })
-  @ApiResponse({ status: 404, description: 'Template not found' })
-  getDireksiyonTakipTemplate(
-    @Param('filename') filename: string,
-    @Res() res: FastifyReply,
-  ) {
-    const filePath = path.join(TEMPLATES_BASE, 'direksiyon-takip', filename);
-    this.logger.debug(`Serving direksiyon-takip template: ${filename}`);
-    return this.sendTemplate(filePath, res);
-  }
+    let plaintext: Buffer;
+    try {
+      plaintext = fs.readFileSync(resolved);
+    } catch (err: any) {
+      this.logger.error(`Failed to read template ${requestedPath}: ${err.message}`);
+      throw new HttpException('Read error', HttpStatus.INTERNAL_SERVER_ERROR);
+    }
 
-  @Public()
-  @Get('simulator/sesim/:filename')
-  @ApiOperation({ summary: 'Serve a Sesim simulator HTML template' })
-  @ApiParam({ name: 'filename', example: 'sesim.html' })
-  @ApiResponse({ status: 200, description: 'HTML template returned' })
-  @ApiResponse({ status: 404, description: 'Template not found' })
-  getSesimTemplate(
-    @Param('filename') filename: string,
-    @Res() res: FastifyReply,
-  ) {
-    const filePath = path.join(TEMPLATES_BASE, 'simulator', 'sesim', filename);
-    this.logger.debug(`Serving sesim template: ${filename}`);
-    return this.sendTemplate(filePath, res);
-  }
+    let encrypted: Buffer;
+    try {
+      encrypted = encryptPayload(plaintext, aesKey);
+    } catch (err: any) {
+      this.logger.error(`Encryption failed: ${err.message}`);
+      throw new HttpException('Encryption failed', HttpStatus.INTERNAL_SERVER_ERROR);
+    }
 
-  @Public()
-  @Get('simulator/anagrup/:scenario/:filename')
-  @ApiOperation({ summary: 'Serve an Ana Grup simulator HTML template for a scenario' })
-  @ApiParam({ name: 'scenario', example: 'ALGI VE REFLEKS SİMÜLASYONU' })
-  @ApiParam({ name: 'filename', example: 'anagrup.html' })
-  @ApiResponse({ status: 200, description: 'HTML template returned' })
-  @ApiResponse({ status: 404, description: 'Template not found' })
-  getAnagrupTemplate(
-    @Param('scenario') scenario: string,
-    @Param('filename') filename: string,
-    @Res() res: FastifyReply,
-  ) {
-    const filePath = path.join(TEMPLATES_BASE, 'simulator', 'anagrup', scenario, filename);
-    this.logger.debug(`Serving anagrup template: ${scenario}/${filename}`);
-    return this.sendTemplate(filePath, res);
-  }
-
-  @Public()
-  @Get('ek4/:filename')
-  @ApiOperation({ summary: 'Serve an Ek-4 form HTML template' })
-  @ApiParam({ name: 'filename', example: 'ek4.html' })
-  @ApiResponse({ status: 200, description: 'HTML template returned' })
-  @ApiResponse({ status: 404, description: 'Template not found' })
-  getEk4Template(
-    @Param('filename') filename: string,
-    @Res() res: FastifyReply,
-  ) {
-    const filePath = path.join(TEMPLATES_BASE, 'ek4', filename);
-    this.logger.debug(`Serving ek4 template: ${filename}`);
-    return this.sendTemplate(filePath, res);
+    this.logger.debug(
+      `Served encrypted template: ${requestedPath} (${plaintext.length} -> ${encrypted.length} bytes)`,
+    );
+    res
+      .header('Content-Type', 'application/octet-stream')
+      .header('Cache-Control', 'no-store')
+      .send(encrypted);
   }
 }

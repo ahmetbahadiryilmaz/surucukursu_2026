@@ -2,40 +2,9 @@ import { app, BrowserWindow, session, dialog, shell } from 'electron';
 import { Account } from './account-store';
 import * as path from 'path';
 import * as fs from 'fs';
-import * as https from 'https';
-import * as http from 'http';
 import { getCodeLoader } from './remote-code-loader';
-import { IS_DEV, API_BASE_URL } from './config';
+import { fetchEncryptedTemplate } from './template-fetcher';
 
-const TEMPLATE_BASE_URL = IS_DEV
-  ? `${API_BASE_URL}/desktop/desktop-service/templates/direksiyon-takip`
-  : `${API_BASE_URL}/templates/direksiyon-takip`;
-const SIMULATOR_TEMPLATE_BASE_URL = IS_DEV
-  ? `${API_BASE_URL}/desktop/desktop-service/templates/simulator`
-  : `${API_BASE_URL}/templates/simulator`;
-const EK4_TEMPLATE_BASE_URL = IS_DEV
-  ? `${API_BASE_URL}/desktop/desktop-service/templates/ek4`
-  : `${API_BASE_URL}/templates/ek4`;
-
-// Pick http or https module based on URL scheme (dev uses http, prod uses https)
-function httpGetText(url: string, timeoutMs = 15000): Promise<string> {
-  const client = url.startsWith('https:') ? https : http;
-  return new Promise((resolve, reject) => {
-    const req = client.get(url, { timeout: timeoutMs }, (res) => {
-      if (res.statusCode !== 200) {
-        reject(new Error(`HTTP ${res.statusCode} for ${url}`));
-        res.resume();
-        return;
-      }
-      res.setEncoding('utf-8');
-      let data = '';
-      res.on('data', (chunk: string) => { data += chunk; });
-      res.on('end', () => resolve(data));
-    });
-    req.on('error', reject);
-    req.on('timeout', () => { req.destroy(); reject(new Error(`Timeout fetching ${url}`)); });
-  });
-}
 
 interface RunningAccount {
   account: Account;
@@ -1324,11 +1293,12 @@ export class MebbisManager {
   }
 
   private fetchSimulatorTemplate(templateName: string): Promise<string> {
-    // EK4 has its own endpoint (/templates/ek4/:filename), not under /templates/simulator/
-    const isEk4 = templateName.startsWith('ek4/');
-    const base = isEk4 ? EK4_TEMPLATE_BASE_URL : SIMULATOR_TEMPLATE_BASE_URL;
-    const sub = isEk4 ? templateName.replace(/^ek4\//, '') : templateName;
-    return httpGetText(`${base}/${sub}`);
+    // EK4 lives under ek4/, everything else under simulator/.
+    // The encrypted-templates endpoint validates the path itself.
+    const relPath = templateName.startsWith('ek4/')
+      ? templateName
+      : `simulator/${templateName}`;
+    return fetchEncryptedTemplate(relPath);
   }
 
   private async generatePdfFromHtml(html: string): Promise<Buffer> {
@@ -1911,7 +1881,7 @@ export class MebbisManager {
   private pendingSimulatorReport: { tc: string; simulationType: string; account: Account } | null = null;
 
   private fetchTemplate(templateName: string): Promise<string> {
-    return httpGetText(`${TEMPLATE_BASE_URL}/${encodeURIComponent(templateName)}`);
+    return fetchEncryptedTemplate(`direksiyon-takip/${templateName}`);
   }
 
   // ==================== BATCH DİREKSİYON TAKİP / SİMÜLATÖR ====================
