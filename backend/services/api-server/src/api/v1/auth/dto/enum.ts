@@ -1,0 +1,16 @@
+export enum UserTypes {
+    SUPER_ADMIN = -1 ,//'SUPER_ADMIN',
+    ADMIN =  -2,//'ADMIN',
+    DRIVING_SCHOOL_OWNER = 2,// 'DRIVING_SCHOOL_OWNER',
+    DRIVING_SCHOOL_MANAGER = 3,//'DRIVING_SCHOOL_MANAGER'
+}
+export enum SystemLogProcessTypes{
+    LOGIN = 0,
+    LOGOUT = 1,
+    FORGOT_PASSWORD = 2,
+    RESET_PASSWORD = 3,
+    CHANGE_PASSWORD = 4,
+    UPDATE_PROFILE = 5,
+    UPDATE_EMAIL = 6,
+    UPDATE_PHONE = 7,   
+}

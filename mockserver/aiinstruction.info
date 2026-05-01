@@ -1,0 +1,24 @@
+
+Method	URL	Payload (JSON)	Possible Response Codes	Description
+GET	https://mebbis.meb.gov.tr/default.aspx	{}	200 (success), 302 (redirect), 403 (forbidden), 500 (error)	Initial login page load to retrieve form data and hidden inputs.
+POST	https://mebbis.meb.gov.tr/default.aspx	{"__VIEWSTATE": "value", "__EVENTVALIDATION": "value", "txtKullaniciAd": "username", "txtSifre": "password", "btnGiris": "Giriş"}	200 (success), 302 (redirect), 403 (forbidden), 500 (error)	Submits login credentials to authenticate user.
+GET	https://mebbis.meb.gov.tr/index.aspx	{}	200 (success), 302 (redirect), 403 (forbidden), 500 (error)	Redirect page after successful login.
+GET	https://mebbis.meb.gov.tr/main.aspx	{}	200 (success), 302 (redirect), 403 (forbidden), 500 (error)	Main dashboard page after login.
+GET	https://mebbis.meb.gov.tr/SKT/skt00001.aspx	{}	200 (success), 302 (redirect), 403 (forbidden), 500 (error)	Accesses the SKT module main page for session validation.
+GET	https://mebbis.meb.gov.tr/SKT/skt04002.aspx	{}	200 (success), 302 (redirect), 403 (forbidden), 500 (error)	Loads the page for retrieving training records.
+POST	https://mebbis.meb.gov.tr/SKT/skt04002.aspx	{"__VIEWSTATE": "value", "__EVENTVALIDATION": "value", "hdnKayitSec": "", "hiddenKaydet": "", "hdnKayitNoSilmeIcin": "", "cmbIl": "value", "cmbIlce": "value", "cmbKurum": "value", "cmbDonemi": "value", "btnListeleGrid": "Listele", ...other hidden inputs...}	200 (success), 302 (redirect), 403 (forbidden), 500 (error)	Submits form to list training records for selected period and filters.
+GET/POST	mebbis.meb.gov.tr pages via curl (uses saved cookie)	{} for GET; form data similar to login for POST	200 (success), 302 (redirect), 403 (forbidden), 500 (error)	General access to various Mebbis pages using saved session cookies.
+GET	https://mebbis.meb.gov.tr/default.aspx?NoSession	{}	200 (success), 302 (redirect), 403 (forbidden), 500 (error)	Loads login page without session for new login attempt.
+POST	https://mebbis.meb.gov.tr/default.aspx?NoSession	{"__VIEWSTATE": "value", "__EVENTVALIDATION": "value", "txtKullaniciAd": "username", "txtSifre": "password", "btnGiris": "Giriş"}	200 (success), 302 (redirect), 403 (forbidden), 500 (error)	Submits login without session.
+GET	https://mebbis.meb.gov.tr/main.aspx?ntk=1	{}	200 (success), 302 (redirect), 403 (forbidden), 500 (error)	Loads main page with notification token.
+GET/POST	https://mebbisyd.meb.gov.tr/...	{} for GET; {"notificationToken": "token", "deviceId": "id"} for POST	200 (success), 400 (bad request), 401 (unauthorized), 500 (error)	Handles notification-based login flow.
+POST	https://mebbisyd.meb.gov.tr/...	{"code": "verificationCode", "sessionId": "id"}	200 (success), 400 (bad request), 401 (unauthorized), 500 (error)	Completes login with verification code.
+GET	mebbis (host used for session check via cookies)	{}	200 (success), 302 (redirect), 403 (forbidden), 500 (error)	Checks if user is logged in using cookies.
+GET	https://mebbisyd.meb.gov.tr/SKT/skt00001.aspx	{}	200 (success), 302 (redirect), 403 (forbidden), 500 (error)	Accesses SKT module on mebbisyd subdomain.
+GET	https://mebbisyd.meb.gov.tr/SKT/skt02006.aspx	{}	200 (success), 302 (redirect), 403 (forbidden), 500 (error)	Loads page for direct AKB list retrieval.
+POST	https://mebbisyd.meb.gov.tr/SKT/skt02006.aspx	{"__VIEWSTATE": "value", "__EVENTVALIDATION": "value", "hdnKayitSec": "", "hiddenKaydet": "", "hdnKayitNoSilmeIcin": "", "txtTcKimlikNo": "", "cmbEgitimDonemi": 1, "cmbGrubu": -1, "cmbSubesi": -1, "cmbOgrenciDurumu": "0", "cmbDurumu": "4", ...other hidden inputs...}	200 (success), 302 (redirect), 403 (forbidden), 500 (error)	Submits form to retrieve direct AKB list with filters.
+GET	https://mebbisyd.meb.gov.tr/SKT/skt02006.aspx	{}	200 (success), 302 (redirect), 403 (forbidden), 500 (error)	Loads page for certificate winners retrieval.
+POST	https://mebbisyd.meb.gov.tr/SKT/skt02006.aspx	{"__VIEWSTATE": "value", "__EVENTVALIDATION": "value", "hdnKayitSec": "", "hiddenKaydet": "", "hdnKayitNoSilmeIcin": "", "txtTcKimlikNo": "", "cmbGrubu": -1, "cmbSubesi": -1, "cmbOgrenciDurumu": "5", "cmbDurumu": "4", "cmbEgitimDonemi": "periodId", ...other hidden inputs...}	200 (success), 302 (redirect), 403 (forbidden), 500 (error)	Submits form to list certificate winners for selected periods.
+GET	https://mebbisyd.meb.gov.tr/SKT/skt02009.aspx	{}	200 (success), 302 (redirect), 403 (forbidden), 500 (error)	Loads page for individual student info retrieval.
+POST	https://mebbisyd.meb.gov.tr/SKT/skt02009.aspx	{"__VIEWSTATE": "value", "__EVENTVALIDATION": "value", "hdnKayitSec": "", "hiddenKaydet": "", "hdnKayitNoSilmeIcin": "", "txtTcKimlikNo": "tc", "ImageButton1.x": "35", "ImageButton1.y": "13", ...other hidden inputs...}	200 (success), 302 (redirect), 403 (forbidden), 500 (error)	Submits TC number to retrieve individual student details.
+ 

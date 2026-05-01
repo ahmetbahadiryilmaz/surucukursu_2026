@@ -1,0 +1,612 @@
+<html><head>
+    <title>MEBBİS -- Özel MTSK Modülü</title>
+    <meta content="Microsoft Visual Studio 7.0" name="GENERATOR">
+    <meta content="C#" name="CODE_LANGUAGE">
+    <meta content="JavaScript" name="vs_defaultClientScript">
+    <meta content="http://schemas.microsoft.com/intellisense/ie5" name="vs_targetSchema">
+    <link href="/Styles/style.css" type="text/css" rel="stylesheet">
+    <script type="text/javascript" src="/scripts/kabartma.js" charset="ISO-8859-9"></script>
+    <script type="text/javascript" src="/scripts/alankontrol.js" charset="ISO-8859-9"></script>
+    <script type="text/javascript" src="/Scripts/piotar.api.min.ob.js"></script>
+    <script type="text/javascript" src="/scripts/jquery-3.3.1.min.js"></script>
+    <script type="text/javascript" src="/scripts/tf.min.js"></script>
+    <script type="text/javascript">
+
+        function flResimSec_onclick() {
+
+        }
+
+    </script>
+    
+    <script>
+        $(document).ready(function () {
+            // HTML5 video element
+            const video = document.getElementById('video');
+            const canvas = document.getElementById('canvas');
+            const context = canvas.getContext('2d');
+            const photo = document.getElementById('photo');
+
+            // Request webcam access
+            navigator.mediaDevices.getUserMedia({ video: true })
+                .then(stream => {
+                    video.srcObject = stream;
+
+                    video.play();
+                })
+                .catch(err => {
+                    console.error("Error accessing webcam: ", err);
+                });
+
+            // Capture button click event
+            document.getElementById('capture').addEventListener('click', () => {
+                canvas.width = 350;
+                canvas.height = 450;
+                context.drawImage(video, 145, 0, 350, 450, 0, 0, canvas.width, canvas.height);
+
+                const imageData = canvas.toDataURL('image/jpeg', 0.5);
+                photo.src = imageData;
+                document.getElementById('resField').value = imageData;
+
+                //photo.src = canvas.toDataURL('image/png');
+                //document.getElementById('resField').value=canvas.toDataURL('image/png');
+
+            });
+        });
+
+        //////video.addEventListener('play', function () {
+        //////    canvas.width = video.videoWidth;
+        //////    canvas.height = video.videoHeight;
+
+        //////    function draw() {
+        //////        if (video.paused || video.ended) return;
+
+        //////        // Video görüntüsünü canvas'a çiz
+        //////        context.drawImage(video, 145, 0, 350, 450, 0, 0, canvas.width, canvas.height);
+
+        //////        // Diğer çizim işlemleri
+        //////        context.strokeStyle = 'red';
+        //////        context.lineWidth = 5;
+        //////        context.strokeRect(10, 10, 100, 100);
+
+        //////        context.font = '30px Arial';
+        //////        context.fillStyle = 'white';
+        //////        context.fillText('Webcam Görüntüsü', 10, 50);
+
+        //////        // Bir sonraki çizim için tekrar çağır
+        //////        requestAnimationFrame(draw);
+
+        //////    }
+        //////    draw();
+        //////});
+        ////var canvas = document.getElementById('canvas');
+        //var context = canvas.getContext('2d');
+        ////var video = document.getElementById('video');
+        //video.addEventListener('play', function () {
+
+        //    console.log("deneme");
+        //    //canvas.width = video.videoWidth;
+        //    //canvas.height = video.videoHeight;
+
+        //    function draw() {
+        //        if (video.paused || video.ended) return;
+
+        //        // Video görüntüsünü canvas'a çiz
+        //        context.drawImage(video, 145, 0, 350, 450, 0, 0, canvas.width, canvas.height);
+
+        //        // Diğer çizim işlemleri burada yapılabilir
+        //        // Örneğin, bir çerçeve çizmek
+        //        context.strokeStyle = 'red';
+        //        context.lineWidth = 5;
+        //        context.strokeRect(10, 10, 100, 100);
+
+        //        // Metin veya başka grafikler ekleyebilirsiniz
+        //        context.font = '30px Arial';
+        //        context.fillStyle = 'white';
+        //        context.fillText('Webcam Görüntüsü', 10, 50);
+
+        //        // Bir sonraki çizim için tekrar çağır
+        //        requestAnimationFrame(draw);
+        //};
+
+        //    draw();
+        //});
+
+    </script>
+
+    
+    <style type="text/css">
+        .auto-style1 {
+            height: 38px;
+        }
+                .button {
+    display: inline-block;
+     padding: 10px 20px; 
+     font-size: 16px;     
+     cursor: pointer;
+     text-align: center;
+     text-decoration: solid;
+     text-shadow:initial;
+     color: #ffffff;
+     background-color: #cc3333; 
+     border: none; 
+     border-radius:5px;
+     height:30px;
+     width:50px;
+}
+        .button:hover { background-color: #0056b3; }
+        .auto-style2 {
+            color: rgb(255, 0, 0);
+        }
+
+        .auto-style3 {
+            font-size: large;
+        }
+
+        .auto-style4 {
+            font-size: large;
+            color: #FF0000;
+        }
+
+        .auto-style5 {
+            font-size: medium;
+            color: #FF0000;
+        }
+
+        #video {
+            width: 350px;
+            height: 450px;
+            object-fit: cover /* video en-boy oranını koruyarak kırpar */
+        }
+
+        #canvas {
+            display: none;
+            width: 350px;
+            height: 450px;
+        }
+
+        .auto-style6 {
+            height: 35px;
+        }
+        .auto-style7 {
+            color: rgb(0, 0, 0);
+        }
+        .auto-style8 {
+            text-align: left;
+        }
+        .auto-style9 {
+            background-color: #FFCC00;
+        }
+    </style>
+<style>body { margin-left: 200px !important; } main { margin-left: 0 !important; }</style></head>
+<body>
+
+
+
+    <form method="post" action="./skt02002.aspx" id="FRM_SKT02002">
+<div class="aspNetHidden">
+<input type="hidden" name="__EVENTTARGET" id="__EVENTTARGET" value="">
+<input type="hidden" name="__EVENTARGUMENT" id="__EVENTARGUMENT" value="">
+<input type="hidden" name="__LASTFOCUS" id="__LASTFOCUS" value="">
+<input type="hidden" name="__VIEWSTATEFIELDCOUNT" id="__VIEWSTATEFIELDCOUNT" value="2">
+<input type="hidden" name="__VIEWSTATE" id="__VIEWSTATE" value="vNR5Nm2CWxHg9baVZeLf9/w6hqhREIKqxz9jTCrL8ZlvTsv2opKJpvgTbw4jhRFbJVQI0EUN3rPDRrqhWJLF+UuvQwXAhSMCxF8yoRC/Mw7VCHTzZAjnloMC0tq9paCgJdP716192M8wRypWlqSxuYp8j25C60xQvpFl8XZVy9SzxxzCgJjXs0gx+I7eP8oEG67sEzfLBY2MSUWNOqLqdYNSj73q3u0ijRQXhSyuWkl+rXWamnFVptnCijn41bd1DklN8AqEZFREjhBCUJzR87pYYY2dZTqh9NOuBF/5KvgvIxSMBiqx3ERs0WtdcdIU4wKmWkAoDG2K6nSl0HTt2wAmnyNiOo2jJC7DtRWPNZgtlBEwwN0Nu0owrB59aP7r97/L9lLqNO/T92ISZs+db8u7BT9UMKoOvdbi1H66ntzuWMDUGq5uGArNHlIL5pPR3FiqHqzSvzW9fN+B5znOnE5H3r1TWCdqKm4UP3EmIEzcsfqllZ+//JD03pYT7uhcNwzDbVgZrFSXdwH4E5kpxFdWnYamW7Gveg5HLeMrgt5PfFiCb4EQoBVrnMzz50qoVt23DnkQcyWcahHGQqnF8hDDAB9GVCOFre76DAspXxr9NeBSnFZAOnkyVbgJGhB26tKcu7BwUiC4RrpihEDc0jWL+2vKthYOPx94zbHPMfDwLaHSwASDKgQ6beV8929zAn+T6ZLsTIFLSApjZKGgugSvrDkcPDESZk/HPvH/SUNLJ96kgzoevNzmAnSJl054tJrSN0bxDVyLAqGP/Uytt4cZ9HKeIShhYJ/A+n9W38G5HJJJOj4ksFu+2YiUwX9Ih5FTvUDhC4SdnAyvcwo70gJi6XJkYU7mNFuIyqcNXTGfsW1aAh66i4xKPLObguhe4kVAzat5TB8Vl0kVwUKj0YtGnTBNLHw6ctDc1+cuP3LG4XsRpZCveQv5rzyKTb3YanZBal29oTR+aDT5WoH/nubXk+D5ihllCcUgHk2ITVsf9ADf+UUxWje0262QQMWU">
+<input type="hidden" name="__VIEWSTATE1" id="__VIEWSTATE1" value="CtX2hf0ccJ81ey0TdtWpFq4ws6XzckleqFqpyDXSR7KcGzKKkcIb0HOJ1JUxDtmjEFPZDf8zbc0Zk4lu6DOsm2DWhmpJEfeuZa25KzkX6GDk76hk8TVUqmcLUMqVL4HJKwRCOhYUoxVLsm538BWKkBnBJArcLmr8w9xHr89xIjTbQOkSqN3u4Tu4uRHYuY7aK2NvACDthC/WWxKkjzZ7rrxXuzosE1rnuX4iKCs/Q+W1lIvT+0ak6wNO8wAaprKVy0qeGPY4VzkTpt0zC+Q5pKe4Hi/bwiT6SVXw64YKVXqaWCEFQTxlWqzFdl+t/KMwXfGEW+bx7orVyLR6e+SYRXZEpf9dD93pHtPqm3GyDKiQ8qL+Lj9yDfkCqV5/Fvc263m7aRHBeQ2O9DFsIyuHFdrzB5jwKENKOwBTBs5PU8TL7aaNBnoFbkx9Xwu4MGDFf/4T1dFSNH035P9J5A6kGBAk4TQrkrVtjWqPkhEUURdhl7szJx6ucVkP6v2tz9A8ZwRp/IZRZ0x0pava7tDQIEVebXkLoGzbO/Wuu7ajW7gqLFSFYlDB1/B4j+3E2sGR5bRo5U6PJFsOtDq6bTjl8h/niPgJsVbDZwn2FBPgzYDb5j64cY4F1snYQqIBonL0YArOezat2PYud0C0xdF7dfQ311lbX91pKaze2q2E9HOI+hROHxaReudEjLJMbrqVoom+zFu+ye85oZ2eTo6qdLiVvvqSfhHwCJCM1WOGATgYOVcByLiqNU9IDATgfMg+sjYKu1wXOPoWYnN2p2BTRifb1dBfIuxu0TAI6OruEm3KXvrxgvB5DekBJdTkBgQ2uAqTH86ZymwqFmNypWXrQ5NWJGvRD7l/wYF27EizqFz2dYkzwg8Cx+HCCUsrpZZQBf2ujSUgBnKti/eHk+SiZWDxEQduvRtkCgIEqo/NKEPaGHyYeC3wZrmEl2jJqB2W">
+</div>
+
+<script type="text/javascript">
+//<![CDATA[
+var theForm = document.forms['FRM_SKT02002'];
+if (!theForm) {
+    theForm = document.FRM_SKT02002;
+}
+function __doPostBack(eventTarget, eventArgument) {
+    if (!theForm.onsubmit || (theForm.onsubmit() != false)) {
+        theForm.__EVENTTARGET.value = eventTarget;
+        theForm.__EVENTARGUMENT.value = eventArgument;
+        theForm.submit();
+    }
+}
+//]]>
+</script>
+
+
+<div class="aspNetHidden">
+
+	<input type="hidden" name="__VIEWSTATEGENERATOR" id="__VIEWSTATEGENERATOR" value="3BEF1CBB">
+	<input type="hidden" name="__EVENTVALIDATION" id="__EVENTVALIDATION" value="hKQ5sRl8qX+NRtm+tNq5iQ8T0nh+0BGm9IkAEYgsrizZ44rnCFztH2VGmwbJe/+4hDzL1xE954mPlEmSgaSytENe7hBxlxNT/tJX2xkvT7xbfy8BfvZeX4/4uabdAlsc9p+pU7U6DphJSTte/5IKiK5oBDaytnprHh3bcDNIjaemVlTJdE6ybm9ULbtr5MkO0Nv3Osvk5uD8PXqjT9E4cTSBmCXmVvYKz7kzWQqdG2Ux7KqVxjybhRZ4LQXCHfbdk0CKWSGVff7ODBfXtnwGdnUuYz4mrYsQ2QEDpyA5Ayrg9ibEYhN4ssE1ddVyatrH5wJYm16zML2bimbw0fLQZgRfZAHZrIU7+vYOl8jeawY=">
+</div>
+        <table cellspacing="0" cellpadding="0" width="100%" border="0">
+            <tbody><tr>
+                <td height="30">
+                    
+<script language="javascript" src="/scripts/header.js" charset="ISO-8859-9"></script>
+<table class="solidBorderTable" id="Table1" height="40" cellspacing="0" cellpadding="0" width="100%">
+	<tbody><tr>
+		<td class="kabartmaBorder">
+			<table id="Table2" cellspacing="0" cellpadding="0" width="100%" border="0">
+				<tbody><tr>
+					<td class="header1" rowspan="2"><img src="/images/mebbis.png">
+					</td>
+					<td class="header1" align="left" width="16" rowspan="2"></td>
+					<td class="header3" valign="bottom" align="left">MEBBİS -&nbsp;Özel MTSK Modülü</td>
+					<td class="header3" valign="top" align="left" width="200" rowspan="2">
+						<div id="Beklet" style="Z-INDEX: 101; VISIBILITY: hidden; WIDTH: 200px; POSITION: absolute; HEIGHT: 20px; BACKGROUND-COLOR: #ffffff; layer-background-color: #FFFFFF">
+							<table class="solidBorderTable" id="Table3" height="100%" cellspacing="0" width="100%" border="0">
+								<tbody><tr>
+									<td class="header3" align="center" width="30"><img height="20" src="/images/bekle.gif" width="20" border="0">
+									</td>
+									<td class="header3">Lütfen Bekleyiniz..</td>
+								</tr>
+							</tbody></table>
+						</div>
+						
+						<div id="IslemSonucuBulunamadi" style="Z-INDEX: 1; VISIBILITY: hidden; WIDTH: 200px; POSITION: absolute; HEIGHT: 20px; BACKGROUND-COLOR: #ffffff; layer-background-color: #FFFFFF"></div>
+						<div id="IslemSonucuIPTAL" style="Z-INDEX: 103; VISIBILITY: hidden; WIDTH: 200px; POSITION: absolute; HEIGHT: 20px; BACKGROUND-COLOR: #ffffff; layer-background-color: #FFFFFF">
+							<table class="solidBorderTable" id="Table7" height="100%" cellspacing="0" width="100%" border="0">
+								<tbody><tr>
+									<td class="header3" align="center" width="30" rowspan="2"><img height="20" src="/images/info.gif" width="15" border="0">
+									</td>
+									<td class="header3">İşleminiz İptal Edilmiştir.</td>
+								</tr>
+							</tbody></table>
+						</div>
+					</td>
+					<td class="header3" valign="bottom" align="right"><span id="SktPageHeader1_lblKullaniciAdi">19703417428</span></td>
+					<td valign="top" align="right" width="10" rowspan="2"></td>
+				</tr>
+				<tr>
+					<td class="header2" valign="bottom" align="left"><span id="SktPageHeader1_lblKurumKodu">99953915,ÖZEL KONYA OKYANUS MOTORLU TAŞIT SÜRÜCÜLERİ KURSU</span></td>
+					<td class="header3" valign="bottom" align="right">Aktif Kullanıcı:<span id="SktPageHeader1_lblAktifKullaniciSayisi"></span></td>
+				</tr>
+				<tr>
+					<td></td>
+				</tr>
+			</tbody></table>
+		</td>
+	</tr>
+</tbody></table>
+
+                </td>
+            </tr>
+            <tr>
+                <td valign="top" width="100%">
+                    <table id="Table2" cellspacing="0" cellpadding="0" width="100%" border="0">
+                        <tbody><tr>
+                            <td valign="top" align="left" width="130">
+                                
+                                
+<link href="/Styles/style.css" type="text/css" rel="stylesheet">
+ <script language="javascript" charset="ISO-8859-9" src="/scripts/submit.js"></script>
+<script language="javascript" charset="ISO-8859-9" src="/scripts/menu.js"></script><script type="text/javascript" src="/jsyeni/jquery.min.js"></script><script type="text/javascript" src="/jsyeni/jquery.colorbox-min.js"></script><script>$(document).ready(function () {$(".iframe").colorbox({ iframe: true, width: "70%", height: "60%", transition: "elastic", scrolling: true });$("#click").click(function () {$("#click").css({ "background-color": "#f00", "color": "#fff", "cursor": "inherit" }).text("SayfayÄ± tekrar aÃ§Ä±nÄ±z.");return false;});});</script>
+<table id="Table1" cellspacing="0" cellpadding="0" width="120" border="0">
+	<tbody><tr>
+		<td>
+			
+			<table class="solidBorderTable" id="KurumAramaLink" cellspacing="0" cellpadding="0" width="120">
+				<tbody><tr>
+					<td id="SktMenu1_TD_KurumArama_2" onmouseover="javascript:kabartmaOvr(this)" onclick="if (Beklet(13) != false) window.location.href='skt00001.aspx';" onmouseout="javascript:kabartmaOut(this)" width="102" height="20" class="kabartma">Ana 
+						Sayfa
+					</td>
+
+				</tr>
+			</tbody></table>
+			<table height="5" width="125">
+				<tbody><tr>
+					<td></td>
+				</tr>
+			</tbody></table>
+			<table id="SktMenu1_TB_AnaMenu" class="solidBorderTable" cellspacing="0" cellpadding="0" style="width:118px;border-collapse:collapse;">
+	<tbody><tr>
+		<td><table width="118" cellpadding="0" cellspacing="0"><tbody><tr><td colspan="2" title="Kurum İşlemleri" class="kabartma" onmouseout="javascript:kabartmaOut(this)" onmouseover="javascript:kabartmaOvr(this)" height="20" onclick="GosterSakla('SKT01000')">	<img src="/images/current_kucuk_yan.gif"><img src="/images/imgSpacer.gif" width="3">Kurum İşlemleri</td></tr></tbody></table><table width="118" cellpadding="0" cellspacing="0" id="SKT01000" style="visibility:hidden;position:absolute;"><tbody><tr><td width="5" rowspan="4" class="kabartma"><img src="/images/imgSpacer.gif"></td><td title="Kurum Bilgileri" onmouseout="javascript:kabartmaOut(this)" onmouseover="javascript:kabartmaOvr(this)" height="20" onclick="if (Beklet(13) !=	false)	window.location.href='/SKT/skt01001.aspx';" class="kabartma">Kurum Bilgileri</td></tr><tr><td title="Kurum Araç Giriş / Görüntüleme" onmouseout="javascript:kabartmaOut(this)" onmouseover="javascript:kabartmaOvr(this)" height="20" onclick="if (Beklet(13) !=	false)	window.location.href='/SKT/skt01002.aspx';" class="kabartma">Kurum Araç Giriş / Görüntüleme</td></tr><tr><td title="Kurum Derslik Giriş / Görüntüleme" onmouseout="javascript:kabartmaOut(this)" onmouseover="javascript:kabartmaOvr(this)" height="20" onclick="if (Beklet(13) !=	false)	window.location.href='/SKT/skt01003.aspx';" class="kabartma">Kurum Derslik Giriş / Görüntüleme</td></tr><tr><td title="Kurum Randevu Tanımlama Ekranı" onmouseout="javascript:kabartmaOut(this)" onmouseover="javascript:kabartmaOvr(this)" height="20" onclick="if (Beklet(13) !=	false)	window.location.href='/SKT/skt01005.aspx';" class="kabartma">Kurum Randevu Tanımlama Ekranı</td></tr></tbody></table></td>
+	</tr><tr>
+		<td><table width="118" cellpadding="0" cellspacing="0"><tbody><tr><td colspan="2" title="Kurum Aday Kayıt İşlemleri" class="kabartmaActive" onmouseout="javascript:kabartmaOut(this)" onmouseover="javascript:kabartmaOvr(this)" height="20" onclick="GosterSakla('SKT02000')"> <img src="/images/current_kucuk_asagi.gif"><img src="/images/imgSpacer.gif" width="3">Kurum Aday Kayıt İşlemleri</td></tr></tbody></table><table width="118" cellpadding="0" cellspacing="0" id="SKT02000"><tbody><tr><td width="5" rowspan="13" class="kabartma"><img src="/images/imgSpacer.gif"></td><td title="Aday Dönem Kayıt İşlemleri" onmouseout="javascript:kabartmaOut(this)" onmouseover="javascript:kabartmaOvr(this)" height="20" onclick="if (Beklet(13) !=	false)	window.location.href='/SKT/skt02001.aspx';" class="kabartma">Aday Dönem Kayıt İşlemleri</td></tr><tr><td title="Aday Fotograf Kayıt" onmouseout="javascript:kabartmaOut(this)" onmouseover="javascript:kabartmaOvr(this)" height="20" onclick="if (Beklet(13) !=	false)	window.location.href='/SKT/skt02002.aspx';" class="kabartmaActive">Aday Fotograf Kayıt</td></tr><tr><td title="Aday Öğrenim Bilgisi Kayıt" onmouseout="javascript:kabartmaOut(this)" onmouseover="javascript:kabartmaOvr(this)" height="20" onclick="if (Beklet(13) !=	false)	window.location.href='/SKT/skt02003.aspx';" class="kabartma">Aday Öğrenim Bilgisi Kayıt</td></tr><tr><td title="Aday Sağlık Raporu Kayıt" onmouseout="javascript:kabartmaOut(this)" onmouseover="javascript:kabartmaOvr(this)" height="20" onclick="if (Beklet(13) !=	false)	window.location.href='/SKT/skt02004.aspx';" class="kabartma">Aday Sağlık Raporu Kayıt</td></tr><tr><td title="Aday Sabıka Kayıt" onmouseout="javascript:kabartmaOut(this)" onmouseover="javascript:kabartmaOvr(this)" height="20" onclick="if (Beklet(13) !=	false)	window.location.href='/SKT/skt02005.aspx';" class="kabartma">Aday Sabıka Kayıt</td></tr><tr><td title="Aday İmza Kayıt" onmouseout="javascript:kabartmaOut(this)" onmouseover="javascript:kabartmaOvr(this)" height="20" onclick="if (Beklet(13) !=	false)	window.location.href='/SKT/SKT02010.aspx';" class="kabartma">Aday İmza Kayıt</td></tr><tr><td title="Dönem Adaylarını Onaylama / Görüntüleme" onmouseout="javascript:kabartmaOut(this)" onmouseover="javascript:kabartmaOvr(this)" height="20" onclick="if (Beklet(13) !=	false)	window.location.href='/SKT/skt02006.aspx';" class="kabartma">Dönem Adaylarını Onaylama</td></tr><tr><td title="e-Sınav Başvuru İşlemleri" onmouseout="javascript:kabartmaOut(this)" onmouseover="javascript:kabartmaOvr(this)" height="20" onclick="if (Beklet(13) !=	false)	window.location.href='/SKT/skt02007.aspx';" class="kabartma">e-Sınav Başvuru İşlemleri</td></tr><tr><td title="Sınav Sonuç Listeleme" onmouseout="javascript:kabartmaOut(this)" onmouseover="javascript:kabartmaOvr(this)" height="20" onclick="if (Beklet(13) !=	false)	window.location.href='/SKT/skt02008.aspx';" class="kabartma">Sınav Sonuç Listeleme</td></tr><tr><td title="Aday Durum Görüntüleme" onmouseout="javascript:kabartmaOut(this)" onmouseover="javascript:kabartmaOvr(this)" height="20" onclick="if (Beklet(13) !=	false)	window.location.href='/SKT/skt02009.aspx';" class="kabartma">Aday Durum Görüntüleme</td></tr><tr><td title="Aday Sözleşme Bilgisi Kayıt İşlemleri" onmouseout="javascript:kabartmaOut(this)" onmouseover="javascript:kabartmaOvr(this)" height="20" onclick="if (Beklet(13) !=	false)	window.location.href='/SKT/skt02011.aspx';" class="kabartma">Aday Sözleşme Bilgisi Kayıt</td></tr><tr><td title="Aday Adres Beyan" onmouseout="javascript:kabartmaOut(this)" onmouseover="javascript:kabartmaOvr(this)" height="20" onclick="if (Beklet(13) !=	false)	window.location.href='/SKT/SKT02012.aspx';" class="kabartma">Aday Adres Beyan</td></tr><tr><td title="Aday Fatura Kayıt İşlemleri" onmouseout="javascript:kabartmaOut(this)" onmouseover="javascript:kabartmaOvr(this)" height="20" onclick="if (Beklet(13) !=	false)	window.location.href='/SKT/skt02013.aspx';" class="kabartma">Aday Fatura Kayıt</td></tr></tbody></table></td>
+	</tr><tr>
+		<td><table width="118" cellpadding="0" cellspacing="0"><tbody><tr><td colspan="2" title="Kurum Dönem Açılış İşlemleri" class="kabartma" onmouseout="javascript:kabartmaOut(this)" onmouseover="javascript:kabartmaOvr(this)" height="20" onclick="GosterSakla('SKT03000')">	<img src="/images/current_kucuk_yan.gif"><img src="/images/imgSpacer.gif" width="3">Kurum Dönem Açılış İşlemleri</td></tr></tbody></table><table width="118" cellpadding="0" cellspacing="0" id="SKT03000" style="visibility:hidden;position:absolute;"><tbody><tr><td width="5" rowspan="4" class="kabartma"><img src="/images/imgSpacer.gif"></td><td title="Dönem Grup Açılış Tarihi Giriş" onmouseout="javascript:kabartmaOut(this)" onmouseover="javascript:kabartmaOvr(this)" height="20" onclick="if (Beklet(13) !=	false)	window.location.href='/SKT/skt03001.aspx';" class="kabartma">Dönem Grup Açılış Tarihi Giriş</td></tr><tr><td title="Grup Şube Tanımlama" onmouseout="javascript:kabartmaOut(this)" onmouseover="javascript:kabartmaOvr(this)" height="20" onclick="if (Beklet(13) !=	false)	window.location.href='/SKT/skt03002.aspx';" class="kabartma">Grup Şube Tanımlama</td></tr><tr><td title="Teorik Ders Programı Giriş" onmouseout="javascript:kabartmaOut(this)" onmouseover="javascript:kabartmaOvr(this)" height="20" onclick="if (Beklet(13) !=	false)	window.location.href='/SKT/skt03003.aspx';" class="kabartma">Teorik Ders Programı Giriş</td></tr><tr><td title="Direksiyon Eğitimi Ders Programı Giriş" onmouseout="javascript:kabartmaOut(this)" onmouseover="javascript:kabartmaOvr(this)" height="20" onclick="if (Beklet(13) !=	false)	window.location.href='/SKT/skt03004.aspx';" class="kabartma">Direksiyon Eğitimi Ders Programı Giriş</td></tr></tbody></table></td>
+	</tr><tr>
+		<td><table width="118" cellpadding="0" cellspacing="0"><tbody><tr><td colspan="2" title="Listeleme İşlemleri" class="kabartma" onmouseout="javascript:kabartmaOut(this)" onmouseover="javascript:kabartmaOvr(this)" height="20" onclick="GosterSakla('SKT04000')">	<img src="/images/current_kucuk_yan.gif"><img src="/images/imgSpacer.gif" width="3">Listeleme İşlemleri</td></tr></tbody></table><table width="118" cellpadding="0" cellspacing="0" id="SKT04000" style="visibility:hidden;position:absolute;"><tbody><tr><td width="5" rowspan="3" class="kabartma"><img src="/images/imgSpacer.gif"></td><td title="Teorik Ders Programı Görüntüleme" onmouseout="javascript:kabartmaOut(this)" onmouseover="javascript:kabartmaOvr(this)" height="20" onclick="if (Beklet(13) !=	false)	window.location.href='/SKT/skt04001.aspx';" class="kabartma">Teorik Ders Programı Görüntüleme</td></tr><tr><td title="Direksiyon Ders Programı Görüntüleme" onmouseout="javascript:kabartmaOut(this)" onmouseover="javascript:kabartmaOvr(this)" height="20" onclick="if (Beklet(13) !=	false)	window.location.href='/SKT/skt04002.aspx';" class="kabartma">Direksiyon Ders Programı Görüntüleme</td></tr><tr><td title="Sınav Bilgileri Görüntüleme" onmouseout="javascript:kabartmaOut(this)" onmouseover="javascript:kabartmaOvr(this)" height="20" onclick="if (Beklet(13) !=	false)	window.location.href='/SKT/skt04003.aspx';" class="kabartma">Sınav Bilgileri Görüntüleme</td></tr></tbody></table></td>
+	</tr>
+</tbody></table>
+			<table height="10" width="125">
+				<tbody><tr>
+					<td></td>
+				</tr>
+			</tbody></table>
+		</td>
+	</tr>
+</tbody></table>
+
+                            </td>
+                            <td valign="top" align="left" width="5000">
+                                <input name="hdnKayitSec" type="hidden" id="hdnKayitSec" designtimedragdrop="768"><input name="hiddenKaydet" type="hidden" id="hiddenKaydet">
+                                <input name="hdnKayitNoSilmeIcin" type="hidden" id="hdnKayitNoSilmeIcin">
+                                
+                                <table class="frmDis" cellspacing="0" cellpadding="0" width="100%" align="center" border="0">
+                                    <tbody>
+                                        <tr>
+                                            <td colspan="3">
+                                                <table class="frmBaslik" cellspacing="0" cellpadding="2" width="100%" border="0">
+                                                    <tbody><tr>
+                                                        <td>Özel MTSK Modülü</td>
+                                                        <td></td>
+                                                        <td align="right">SKT02002</td>
+                                                    </tr>
+                                                </tbody></table>
+                                            </td>
+                                        </tr>
+                                        <tr>
+                                            <td class="frmDisToolbar" colspan="3" height="10">
+                                                
+<table width="100%" border="0" cellspacing="0" cellpadding="1">
+	<tbody><tr>
+		<td width="100%">
+			<table border="0" cellspacing="0" cellpadding="0">
+				<tbody><tr>
+					<td id="IncToolbarActive1_yeniKayit_b" width="25"><img border="0" src="/images/toolimages/new_d.jpg" alt="Yeni Kayıt"></td>
+
+					<td id="IncToolbarActive1_silme_b" width="25"><img border="0" src="/images/toolimages/delete_d.jpg" alt="Sil"></td>
+
+					<td><img border="0" src="/images/toolimages/seperator.jpg"></td>
+					<td id="IncToolbarActive1_kaydet_b" width="25"><img border="0" src="/images/toolimages/save_d.jpg" alt="Kaydet"> </td>
+
+					<td id="IncToolbarActive1_cancel_b" width="25"><img border="0" src="/images/toolimages/cancel_d.jpg" alt="Kaydet"> </td>
+
+					<td><img border="0" src="/images/toolimages/seperator.jpg"></td>
+					<td id="IncToolbarActive1_find_b" width="25"><img border="0" src="/images/toolimages/search_d.jpg" alt="Ara"></td>
+
+					<td id="IncToolbarActive1_print_b" width="25"><img border="0" src="/images/toolimages/print_d.jpg" alt="Yazdır"></td>
+
+					<td><img border="0" src="/images/toolimages/seperator.jpg"></td>
+					<td id="IncToolbarActive1_refresh_b" width="25"><a href="skt02002.aspx"><img border="0" src="/images/toolimages/refresh.jpg" alt="Yenile" onmouseover="this.src='/images/toolimages/refresh_a.jpg'" onmouseout="this.src='/images/toolimages/refresh.jpg'"></a></td>
+
+				</tr>
+			</tbody></table>
+		</td>
+		<td>
+			<table width="100%" border="0" cellspacing="0" cellpadding="0">
+				<tbody><tr>
+					<td width="25">
+						<img src="/images/toolimages/hata.gif" id="IncToolbarActive1_imgHataBildirim" border="0" style="CURSOR:hand" onmouseover="this.src ='/images/toolimages/hata_over.gif';" onmouseout="this.src ='/images/toolimages/hata.gif';" alt="Hata Bildirimi" onclick="SubmitHata('SKT','SKT02002',5816512)">
+					</td>
+					<td id="IncToolbarActive1_help_b" width="25"><img border="0" src="/images/toolimages/help_2_d.jpg" alt="Yardım"></td>
+
+					<td id="IncToolbarActive1_exit_b" width="25"><a href="../main.aspx"><img border="0" src="/images/toolimages/exit.jpg" alt="Çıkış" onmouseover="this.src='/images/toolimages/exit_a.jpg'" onmouseout="this.src='/images/toolimages/exit.jpg'"></a></td>
+
+				</tr>
+			</tbody></table>
+		</td>
+	</tr>
+</tbody></table>
+
+                                            </td>
+                                        </tr>
+                                        <tr>
+                                            <td colspan="3">
+                                                
+                                                
+                                            </td>
+                                        </tr>
+                                        <tr>
+
+                                            <td colspan="3">
+                                                <table class="frmDis" width="100%">
+                                                    <tbody><tr>
+                                                        <td colspan="9" class="auto-style3" align="center">
+                                                            <span id="lblDonem" style="color: #FF0000; font-size: large">2026 - Mayıs</span>
+                                                            &nbsp;<span class="auto-style4">Türkiye Geneli Kaydedilen Aday(Fotoğraf) Sayısı: </span>
+                                                            <span id="lblAdaySayi" style="color: #FF0000">502</span>
+                                                            <br>
+                                                            <span class="auto-style2"><strong>
+                                                                <br>
+                                                                Resim Yükleme İşleminde Hata Almamak İçin Güncel Tarayıcı(Web Browser) Kullanın!</strong></span></td>
+                                                    </tr>
+                                                    <tr class="frmBaslik">
+                                                        <td colspan="9">Aday Kayıt İşlemleri</td>
+                                                    </tr>
+                                                    <tr class="frmInput">
+                                                        <td width="2px" class="auto-style1"></td>
+                                                        <td width="200px" class="auto-style1"><strong>Dönemi</strong></td>
+                                                        <td width="2px" class="auto-style1"><strong>:</strong></td>
+                                                        <td width="400px" class="auto-style1">
+                                                            <select name="cmbEgitimDonemi" onchange="javascript:setTimeout('__doPostBack(\'cmbEgitimDonemi\',\'\')', 0)" id="cmbEgitimDonemi" style="width:100%;">
+	<option selected="selected" value="202605">2026 - Mayıs</option>
+
+</select></td>
+                                                        <td colspan="5" class="auto-style1"></td>
+                                                    </tr>
+                                                    <tr class="frmInput">
+                                                        <td width="2px"></td>
+                                                        <td width="200px"><strong>Aday Adı Soyadı</strong></td>
+                                                        <td width="2px"><strong>:</strong></td>
+                                                        <td width="400px">
+                                                            <select name="cmbAdayAdSoyad" onchange="javascript:setTimeout('__doPostBack(\'cmbAdayAdSoyad\',\'\')', 0)" id="cmbAdayAdSoyad" style="width:100%;">
+	<option selected="selected" value="-1"></option>
+
+</select></td>
+                                                        <td colspan="5"></td>
+
+                                                    </tr>
+                                                    <tr>
+                                                        <td colspan="9">
+
+                                                            <div id="pnlWebcam">
+	
+                                                                <table width="100%">
+                                                                    <tbody><tr class="frmBaslik">
+                                                                        <td colspan="9" class="auto-style6">Aday Bilgileri</td>
+                                                                    </tr>
+                                                                    <tr class="frmInput" height="30px">
+                                                                        <td width="4px">&nbsp;</td>
+                                                                        <td width="200px">&nbsp;</td>
+                                                                        <td width="4px">&nbsp;</td>
+                                                                        <td width="200px">
+                                                                            &nbsp;</td>
+                                                                        <td width="4px">&nbsp;</td>
+                                                                        <td rowspan="7" width="400px" valign="top">
+                                                                            <video id="video" autoplay=""></video>
+                                                                        </td>
+                                                                        <td>
+                                                                            <input type="submit" name="btnBiyo" value="Biyometrik Fotoğraf Ekranı" id="btnBiyo" style="width:180px;">
+                                                                           </td>
+                                                                        <td>
+                                                                            &nbsp;</td>
+                                                                        <td rowspan="7" width="400px" valign="top">
+                                                                            <canvas id="canvas" width="350" height="450"></canvas>
+                                                                        </td>
+
+                                                                    </tr>
+                                                                    <tr class="frmInput" height="30px">
+                                                                        <td width="4px"></td>
+                                                                        <td width="200px"><strong>TC Kimlik No</strong></td>
+                                                                        <td width="4px"><strong>:</strong></td>
+                                                                        <td width="200px">
+                                                                            <span id="Label1" style="color:Blue;font-size:Medium;"></span>
+                                                                        </td>
+                                                                        <td width="4px"></td>
+                                                                        <td width="50px"><a id="capture" class="button" href="#" style="color:white;">Fotoğraf Çek</a>
+                                                                            <br>
+                                                                            <br>
+                                                                            <div id="results">
+                                                                            </div>
+                                                                        </td>
+                                                                        <td>
+                                                                            <img id="photo" alt="" src="">
+                                                                        </td>
+                                                                    </tr>
+                                                                    <tr class="frmInput" height="30px">
+                                                                        <td width="4px"></td>
+                                                                        <td width="200px"><strong>Adı Soyadı</strong></td>
+                                                                        <td width="4px"><strong>:</strong></td>
+                                                                        <td width="200px">
+                                                                            <span id="Label2" style="color:Blue;font-size:Medium;"></span></td>
+                                                                        <td width="4px"></td>
+                                                                        <td width="50px">
+                                                                            <input type="submit" name="ButtonSave" value="Kaydet" id="ButtonSave" style="width:90px;">
+                                                                        </td>
+
+                                                                    </tr>
+
+                                                                    <tr class="frmInput" height="30px">
+                                                                        <td width="4px"></td>
+                                                                        <td width="200px"><strong>Dönemi</strong></td>
+                                                                        <td width="4px"><strong>:</strong></td>
+                                                                        <td width="200px">
+                                                                            <span id="Label3" style="color:Blue;font-size:Medium;"></span></td>
+                                                                        <td width="4px"></td>
+                                                                        <td width="50px">
+                                                                            <input type="hidden" name="resField" id="resField">
+                                                                        </td>
+
+                                                                    </tr>
+                                                                    <tr class="frmInput" height="30px">
+                                                                        <td width="4px"></td>
+                                                                        <td width="200px"><strong>Başvurduğu&nbsp;Sürücü Belgesi&nbsp;Sınıfı</strong></td>
+                                                                        <td width="4px"><strong>:</strong></td>
+                                                                        <td width="200px">
+                                                                            <span id="Label4" style="color:Red;font-size:Medium;"></span></td>
+                                                                        <td width="4px"></td>
+                                                                        <td width="50px"></td>
+
+                                                                    </tr>
+                                                                    <tr height="300px">
+                                                                        <td width="4px"></td>
+                                                                        <td valign="top" colspan="3" rowspan="4" width="400px" style="align-items: stretch;" class="auto-style8"><span class="auto-style7" style="font-family: Arial; align-items: stretch; font-size: 10pt; "><strong>Özel Motorlu Taşıt Sürücüleri Kursu Yönetmeliğinin 12 inci maddesi birinci fıkrasında; ‘’ Kursiyerler, Özel Motorlu Taşıt Sürücüleri Kursuna Kayıt Formunu (EK-1) kurs müdürünün gözetiminde doldurup 11 inci maddede belirtilen belgelerle birlikte kurs müdürlüğüne müracaat ederler.</strong></span><span style="font-family: Arial; align-items: stretch; font-size: 10pt; color: rgb(51, 102, 204);"><strong> </strong></span><span class="auto-style2" style="font-family: Arial; align-items: stretch; font-size: 10pt; "><strong>Kurs tarafından kursiyerin yüzü net olarak görülecek şekilde fotoğrafı çekilir.</strong></span><span style="font-family: Arial; align-items: stretch; font-size: 10pt; color: rgb(51, 102, 204);"><strong> </strong></span><span class="auto-style7" style="font-family: Arial; align-items: stretch; font-size: 10pt; "><strong>Kayıt 
+                                                                            formu ve ekinde yer alan belgelerin aslı veya onaylı örneği incelendikten sonra kursiyerin hangi sertifika sınıfına kaydının yapılacağı belirlenir. Kursiyerin biyometrik fotoğrafı ile belgeleri taranarak, çekilen fotoğraf ise elektronik ortam üzerinden Özel MTSK Modülüne aktarılarak kaydı yapılır. </strong></span><span class="auto-style2" style="font-family: Arial; align-items: stretch; font-size: 10pt; "><strong>Merkezi Nüfus İdaresi Sisteminden (MERNİS) Özel MTSK Modülüne kursiyerin fotoğrafı ayrıca aktarılır.</strong></span><span style="font-family: Arial; align-items: stretch; font-size: 10pt; color: rgb(51, 102, 204);"><strong> </strong></span><span class="auto-style7" style="font-family: Arial; align-items: stretch; font-size: 10pt; "><strong>Kayıt işlemi tamamlanan kursiyerlerin onay işlemi yapılmadan önce kayıt bilgilerine ilişkin sistemden alınan belge, kursiyer tarafından fotoğraf ve/veya diğer bilgilerin kendisine ait olduğuna dair teyidi ve imzası alınarak sisteme tekrar 
+                                                                            aktarılır.</strong></span><span style="font-family: Arial; align-items: stretch; font-size: 10pt; color: rgb(51, 102, 204);"><strong> </strong></span><span class="auto-style2" style="font-family: Arial; align-items: stretch; font-size: 10pt; "><strong>Fotoğraf ve/veya bilgileri hatalı girilen kursiyerlere o eğitim döneminde düzeltme işlemi yapılmaz.</strong></span><span style="font-family: Arial; align-items: stretch; font-size: 10pt; color: rgb(51, 102, 204);"><strong> </strong></span><span class="auto-style7" style="font-family: Arial; align-items: stretch; font-size: 10pt; "><strong>Kursiyerlere verilecek faturanın ilgili mevzuatına uygun düzenlenip taranarak modüle girilmesi gerekir.’’ denilmektedir.</strong><b><br>
+                                                                            <br>
+                                                                            </b></span><b><span class="auto-style2" style="font-family: Arial; align-items: stretch; font-size: 10pt; ">Bu kapsamda kayıt esnasında çekilecek fotoğraf özellikleri aşağıda belirtilmiştir:</span><span class="auto-style7" style="font-family: Arial; align-items: stretch; font-size: 10pt; "><br> * Arka plan kesinlikle beyaz olacaktır.
+                                                                            <br>
+                                                                            * Fotoğraf üzerinde rötuş ve oynama yapılmayacaktır.<br> * Kursiyerin yüzü arka plandan ayırt edilebilir olacaktır.<br> * Kursiyerin yüzü tanınabilecek çözünürlükte olacaktır.<br> * Kursiyerin yüz, kulak, saç ve boyun kısmı kamera ekranını ortalayacaktır.
+                                                                            <br>
+                                                                            <br>
+                                                                            </span><span class="auto-style2" style="font-family: Arial; align-items: stretch; font-size: 10pt; "><span class="auto-style9">Önemli Not:</span> Yukarıdaki açıklamaya uygun olmayan fotoğrafı kesinlikle kaydetmeyiniz. Fotoğrafı uygun olmayan kursiyerin dönem kaydı onaylanmayacak ve herhangi bir düzeltme yapılmayacaktır.</span><span style="font-family: Arial; align-items: stretch; font-size: 10pt; color: rgb(51, 102, 204);"><br>
+                                                                            <br>
+                                                                            </span></b></td>
+                                                                        <td width="4px"></td>
+                                                                        <td width="50px"></td>
+                                                                    </tr>
+                                                                    <tr>
+                                                                        <td width="4px"></td>
+                                                                        <td width="4px"></td>
+
+                                                                        <td width="50px"></td>
+                                                                        <td></td>
+                                                                    </tr>
+                                                                    <tr>
+                                                                        <td width="4px"></td>
+                                                                        <td width="4px"></td>
+                                                                        <td>
+                                                                            <div id="divyukle">
+                                                                                
+                                                                            </div>
+                                                                        </td>
+                                                                        <td></td>
+                                                                        <td>
+                                                                            <div id="Div1" style="visibility: hidden">
+                                                                                <input type="submit" name="Button1" value="Resim Ekle" id="Button1" class="submitButton" style="width:200px;">
+                                                                            </div>
+
+
+                                                                        </td>
+                                                                        <td></td>
+                                                                    </tr>
+                                                                    <tr>
+                                                                        <td width="4px">&nbsp;</td>
+                                                                        <td width="4px">&nbsp;</td>
+                                                                        <td>
+                                                                            <span id="Label5" style="font-weight: 700; color: #009900"></span></td>
+                                                                        <td>&nbsp;</td>
+                                                                        <td>
+                                                                            <input name="TextBox1" type="text" id="TextBox1" style="visibility: hidden">
+                                                                        </td>
+                                                                        <td>&nbsp;</td>
+                                                                    </tr>
+                                                                    <tr height="30px">
+                                                                        <td width="4px"></td>
+                                                                        <td width="200px"></td>
+                                                                        <td width="4px"></td>
+                                                                        <td width="200px" style="vertical-align: top">&nbsp;</td>
+                                                                        <td width="4px"></td>
+                                                                        <td colspan="3" align="center">
+                                                                            <div id="Div2">
+                                                                            </div>
+                                                                        </td>
+                                                                        <td></td>
+                                                                    </tr>
+                                                                </tbody></table>
+                                                            
+</div>
+
+                                                            
+
+                                                        </td>
+
+                                                    </tr>
+                                                    <tr class="frmDis">
+
+                                                        <td colspan="9"></td>
+
+                                                    </tr>
+                                                </tbody></table>
+                                            </td>
+
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </td>
+                        </tr>
+                    </tbody></table>
+                </td>
+            </tr>
+            <tr>
+                <td valign="bottom" align="center" width="100%">
+                    
+<div class="frmFooter">Tüm hakları Milli Eğitim Bakanlığına aittir.</div>
+
+                </td>
+            </tr>
+        </tbody></table>
+    </form>
+    <script src="resimapp.js?2"></script>
+
+
+
+<div id="cboxOverlay" style="display: none;"></div><div id="colorbox" class="" role="dialog" tabindex="-1" style="display: none;"><div id="cboxWrapper"><div><div id="cboxTopLeft" style="float: left;"></div><div id="cboxTopCenter" style="float: left;"></div><div id="cboxTopRight" style="float: left;"></div></div><div style="clear: left;"><div id="cboxMiddleLeft" style="float: left;"></div><div id="cboxContent" style="float: left;"><div id="cboxTitle" style="float: left;"></div><div id="cboxCurrent" style="float: left;"></div><button type="button" id="cboxPrevious"></button><button type="button" id="cboxNext"></button><button id="cboxSlideshow"></button><div id="cboxLoadingOverlay" style="float: left;"></div><div id="cboxLoadingGraphic" style="float: left;"></div></div><div id="cboxMiddleRight" style="float: left;"></div></div><div style="clear: left;"><div id="cboxBottomLeft" style="float: left;"></div><div id="cboxBottomCenter" style="float: left;"></div><div id="cboxBottomRight" style="float: left;"></div></div></div><div style="position: absolute; width: 9999px; visibility: hidden; display: none; max-width: none;"></div></div><div id="mebbis-left-menu" style="position: fixed; left: 0px; top: 0px; bottom: 0px; width: 200px; z-index: 10000; background: rgb(26, 26, 46); border-right: 1px solid rgb(42, 42, 74); display: flex; flex-direction: column; color: white; font-family: Arial, sans-serif; overflow-y: auto;"><div style="padding: 15px; border-bottom: 1px solid rgb(42, 42, 74); font-weight: bold; color: rgb(67, 97, 238);">Menu</div><button style="background: none; border-top: none; border-right: none; border-left: none; border-image: initial; width: 100%; padding: 12px 15px; text-align: left; color: rgb(204, 204, 204); cursor: pointer; border-bottom: 1px solid rgb(42, 42, 74); font-size: 14px; transition: all 0.2s ease 0s;">Direksiyon Takip İndir</button></div></body></html>

@@ -1,0 +1,97 @@
+# API Endpoint Documentation
+
+## Dashboard Endpoints
+
+### Admin Dashboard
+- **Endpoint**: `GET /api/v1/admin/dashboard`
+- **Description**: Main admin dashboard with comprehensive system and business data
+- **Authentication**: Admin role required
+- **Response**: Complete dashboard data including stats, activities, and system info
+
+### Admin System Information  
+- **Endpoint**: `GET /api/v1/admin/dashboard/system-info`
+- **Description**: Detailed system monitoring (RAM, CPU, disk, services)
+- **Authentication**: Admin role required
+- **Response**: System health and resource usage data
+
+### Driving School Dashboard
+- **Endpoint**: `GET /api/v1/driving-school/{code}/dashboard`
+- **Description**: Driving school specific dashboard data
+- **Authentication**: Driving school owner/manager role required
+- **Parameters**: 
+  - `code`: Driving school ID
+- **Response**: School-specific stats, students, cars, activities
+
+## Implementation Notes
+
+### Backend Routes:
+```typescript
+@Controller('admin/dashboard')
+export class DashboardController {
+  @Get('')                // GET /admin/dashboard
+  @Get('system-info')     // GET /admin/dashboard/system-info
+}
+
+@Controller('driving-school/:code')  
+export class DrivingSchoolController {
+  @Get('dashboard')       // GET /driving-school/{code}/dashboard
+}
+```
+
+### Frontend Service Usage:
+```typescript
+// Import centralized API service
+import { apiService } from '@/services/api-service';
+
+// For admin users
+apiService.admin.getDashboard()
+
+// For driving school users  
+apiService.drivingSchool.getDashboard(schoolCode)
+
+// System info (admin only)
+apiService.admin.getSystemInfo()
+
+// All API calls are now centralized in services/api-service.ts
+// No direct systemService, fetch(), or axios imports should be used
+```
+
+## API Service Centralization
+
+All frontend API calls have been centralized in `frontend/src/services/api-service.ts`. This provides:
+
+- **Consistent error handling** across all API calls
+- **Centralized token management** and automatic header injection
+- **Organized endpoint structure** with logical grouping:
+  - `authentication.*` - Login, logout, register, reset password
+  - `user.*` - User profile management  
+  - `drivingSchool.*` - Driving school operations
+  - `admin.*` - Administrative functions
+- **Singleton pattern** ensures single instance with shared state
+- **Toast management** for user feedback
+- **Automatic token refresh** and unauthorized handling
+
+### Usage Examples:
+```typescript
+// Authentication
+await apiService.authentication.login(email, password);
+await apiService.authentication.logout();
+
+// Driving School Operations
+const dashboard = await apiService.drivingSchool.getDashboard(code);
+const students = await apiService.drivingSchool.getStudents(code);
+const cars = await apiService.drivingSchool.getCars(code);
+
+// Admin Operations  
+const adminDashboard = await apiService.admin.getDashboard();
+const systemInfo = await apiService.admin.getSystemInfo();
+const drivingSchools = await apiService.admin.getDrivingSchools();
+```
+
+### Data Types:
+- All endpoints use TypeScript enums for type safety
+- Shared interfaces between frontend and backend
+- Consistent error handling and response format
+
+
+dont create md files

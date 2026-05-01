@@ -1,0 +1,30 @@
+import { BaseEntity } from './base.entity';
+import { DrivingSchoolStudentEntity } from './driving-school-student.entity';
+import { DrivingSchoolCarEntity } from './driving-school-car.entity';
+import { DrivingSchoolManagerEntity } from './driving-school-manager.entity';
+import { DrivingSchoolOwnerEntity } from './driving-school-owner.entity';
+import { DrivingSchoolSettingsEntity } from './driving-school-settings.entity';
+import { CityEntity } from './city.entity';
+import { DistrictEntity } from './district.entity';
+import { SubscriptionEntity } from './subscription.entity';
+export declare class DrivingSchoolEntity extends BaseEntity {
+    name: string;
+    address: string;
+    phone: string;
+    mebbis_username?: string;
+    mebbis_password?: string;
+    mebbis_credentials_locked: boolean;
+    manager_id: number;
+    owner_id: number;
+    city_id?: number;
+    district_id?: number;
+    created_by?: number;
+    students: DrivingSchoolStudentEntity[];
+    cars: DrivingSchoolCarEntity[];
+    manager: DrivingSchoolManagerEntity;
+    owner: DrivingSchoolOwnerEntity;
+    city: CityEntity;
+    district: DistrictEntity;
+    settings: DrivingSchoolSettingsEntity;
+    subscription: SubscriptionEntity;
+}
