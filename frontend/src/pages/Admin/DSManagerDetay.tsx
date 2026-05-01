@@ -4,7 +4,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { 
   ArrowLeft, Mail, Phone, Building2, Calendar, 
-  Clock, MapPin, Edit, Trash2
+  Clock, MapPin, Edit, Trash2, School
 } from "lucide-react";
 import { apiService } from '../../services/api-service'; // API servisimizi import ediyoruz
 
@@ -20,6 +20,7 @@ export type ManagerDetail = {
   city: string;
   joinDate: string;
   lastLogin: string;
+  schools: Array<{ id: number; name: string }>;
   activities: Array<{
     date: string;
     action: string;
@@ -31,7 +32,7 @@ const DSManagerDetay: React.FC = () => {
   const navigate = useNavigate();
   const [manager, setManager] = useState<ManagerDetail | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
-  const [activeTab, setActiveTab] = useState<'activities'>('activities');
+  const [activeTab, setActiveTab] = useState<'schools' | 'activities'>('schools');
   const [error, setError] = useState<string | null>(null);
   // Ekran boyutu durumu
   const [isMobile, setIsMobile] = useState<boolean>(window.innerWidth < 768);
@@ -69,8 +70,7 @@ const DSManagerDetay: React.FC = () => {
             city: managerData.city || "Belirtilmemiş",
             joinDate: managerData.createdAt || new Date().toISOString(),
             lastLogin: managerData.lastLogin || new Date().toISOString(),
-            // Aktiviteler için şimdilik standart veriler kullanıyoruz
-            // API'de aktivite verisi varsa burası güncellenecek
+            schools: Array.isArray(managerData.schools) ? managerData.schools : [],
             activities: managerData.activities || [
               { date: new Date().toISOString(), action: "Sisteme giriş yapıldı" },
               { date: new Date(Date.now() - 86400000).toISOString(), action: "Profil güncellendi" }
@@ -283,6 +283,16 @@ const DSManagerDetay: React.FC = () => {
               <div className="flex space-x-2">
                 <button
                   className={`px-3 md:px-4 py-2 text-xs md:text-sm font-medium ${
+                    activeTab === "schools"
+                      ? "border-b-2 border-primary text-primary"
+                      : "text-muted-foreground hover:text-foreground"
+                  }`}
+                  onClick={() => setActiveTab("schools")}
+                >
+                  Sürücü Kursları ({manager.schools.length})
+                </button>
+                <button
+                  className={`px-3 md:px-4 py-2 text-xs md:text-sm font-medium ${
                     activeTab === "activities"
                       ? "border-b-2 border-primary text-primary"
                       : "text-muted-foreground hover:text-foreground"
@@ -296,25 +306,53 @@ const DSManagerDetay: React.FC = () => {
             
             {/* İçerik */}
             <div className="mt-4">
-              <>
-                <h3 className="text-base md:text-lg font-medium mb-3 md:mb-4">Son Aktiviteler</h3>
-                <div className="space-y-3 md:space-y-4">
-                  {manager.activities.length > 0 ? (
-                    manager.activities.map((activity, index) => (
-                      <div key={index} className="flex items-start border-b pb-3">
-                        <div className="flex-1">
-                          <p className="font-medium text-sm md:text-base">{activity.action}</p>
-                          <p className="text-xs md:text-sm text-muted-foreground">{formatDate(activity.date)}</p>
+              {activeTab === 'schools' && (
+                <>
+                  <h3 className="text-base md:text-lg font-medium mb-3 md:mb-4">Bağlı Sürücü Kursları</h3>
+                  <div className="space-y-2">
+                    {manager.schools.length > 0 ? (
+                      manager.schools.map((school) => (
+                        <div
+                          key={school.id}
+                          className="flex items-center justify-between border rounded-lg px-4 py-3 hover:bg-muted/50 transition-colors cursor-pointer"
+                          onClick={() => navigate('/admin/kurslar')}
+                        >
+                          <div className="flex items-center gap-3">
+                            <School className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+                            <span className="text-sm font-medium">{school.name}</span>
+                          </div>
+                          <span className="text-xs text-muted-foreground">#{school.id}</span>
                         </div>
+                      ))
+                    ) : (
+                      <div className="text-center py-8 text-muted-foreground text-sm">
+                        Bu yöneticiye bağlı sürücü kursu bulunmuyor.
                       </div>
-                    ))
-                  ) : (
-                    <div className="text-center py-4 text-muted-foreground text-sm md:text-base">
-                      Henüz aktivite kaydı bulunmuyor.
-                    </div>
-                  )}
-                </div>
-              </>
+                    )}
+                  </div>
+                </>
+              )}
+              {activeTab === 'activities' && (
+                <>
+                  <h3 className="text-base md:text-lg font-medium mb-3 md:mb-4">Son Aktiviteler</h3>
+                  <div className="space-y-3 md:space-y-4">
+                    {manager.activities.length > 0 ? (
+                      manager.activities.map((activity, index) => (
+                        <div key={index} className="flex items-start border-b pb-3">
+                          <div className="flex-1">
+                            <p className="font-medium text-sm md:text-base">{activity.action}</p>
+                            <p className="text-xs md:text-sm text-muted-foreground">{formatDate(activity.date)}</p>
+                          </div>
+                        </div>
+                      ))
+                    ) : (
+                      <div className="text-center py-4 text-muted-foreground text-sm md:text-base">
+                        Henüz aktivite kaydı bulunmuyor.
+                      </div>
+                    )}
+                  </div>
+                </>
+              )}
             </div>
           </CardContent>
         </Card>
