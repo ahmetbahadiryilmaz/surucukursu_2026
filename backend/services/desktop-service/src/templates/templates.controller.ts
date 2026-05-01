@@ -14,7 +14,7 @@ import { FastifyReply } from 'fastify';
 import * as fs from 'fs';
 import * as path from 'path';
 import { Public } from '../common/decorators/public.decorator';
-import { encryptPayload, verifySignedRequest } from './template-crypto';
+import { encryptPayload, verifySignedRequest } from '../common/crypto/desktop-crypto';
 
 // Templates are stored in backend/storage/templates/.
 // Walk upward from this file's location until we find a `storage/templates` folder.

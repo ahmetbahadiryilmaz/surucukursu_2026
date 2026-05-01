@@ -1,57 +1,41 @@
 /**
  * RemoteCodeLoader
+ * ────────────────
+ * Downloads and caches scripts (and optionally renderer files) from the
+ * desktop-service backend so they can be updated without rebuilding the exe.
  *
- * Downloads and caches code files (scripts, renderer) from the static server
- * so they can be updated without rebuilding or reinstalling the exe.
+ * SECURITY
+ *   All traffic uses the encrypted desktop channel:
+ *     - POST /desktop-code/manifest  → encrypted JSON {files:{path:sha256}}
+ *     - POST /desktop-code/file      → encrypted file bytes
+ *   Requests are HMAC-signed and server-validated. See
+ *   `desktop-crypto-client.ts` for the wire format.
  *
- * HOW IT WORKS
- * ─────────────
- * 1.  On app startup, call `sync()` — it fetches a `manifest.json` from the server.
- * 2.  The manifest lists every file path and its SHA-256 hash.
- * 3.  For each file where the local hash differs (or the file is missing), it downloads
- *     the new version, verifies its hash, and writes it to the local cache.
- * 4.  Call `getScript(filename)` to read a cached JS file as a string.
- * 5.  If the file is not in cache (e.g. first launch with no network), returns null.
+ * SERVER LAYOUT  (backend/storage/desktop-code/)
+ *   scripts/<name>.js
+ *   renderer/<file>            (optional, future)
  *
- * SERVER STRUCTURE  (https://mtsk.app/desktop-code/)
- * ──────────────────────────────────────────────────────────
- *   manifest.json          ← version + per-file SHA-256 hashes
- *   scripts/
- *     left-menu.js         ← MEBBIS page left-menu injection
- *     (add more scripts here as needed)
+ * UPDATING SCRIPTS (no exe rebuild required):
+ *   scp -r desktop\remote-code\scripts ^
+ *       mtsk@ekullanici_yeni:/home/mtsk/mtsk.app/backend/storage/desktop-code/
+ *   The backend rescans the folder on each manifest request — no restart needed.
  *
- * UPDATING A SCRIPT
- * ─────────────────
- * 1. Edit the script file locally (e.g. scripts/left-menu.js).
- * 2. Compute its SHA-256:  node -e "const c=require('crypto'),f=require('fs');
- *    console.log(c.createHash('sha256').update(f.readFileSync('scripts/left-menu.js')).digest('hex'))"
- * 3. Update manifest.json with the new hash and bump the version string.
- * 4. SCP both files to the server:
- *    scp scripts/left-menu.js manifest.json \
- *        mtsk@ekullanici_yeni:/home/mtsk/mtsk.app/desktop-code/scripts/
- *    scp manifest.json mtsk@ekullanici_yeni:/home/mtsk/mtsk.app/desktop-code/
- * 5. All desktop apps fetch the update on next startup. No reinstall needed.
- *
- * LOCAL CACHE LOCATION  (%AppData%/mebbis-desktop/code-cache/)
+ * LOCAL CACHE: %AppData%/mebbis-desktop/code-cache/
  */
 
 import { app } from 'electron';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as crypto from 'crypto';
-import https from 'https';
 import type { BrowserWindow } from 'electron';
-import { IS_DEV, API_BASE_URL } from './config';
-
-const CODE_SERVER_BASE = `${API_BASE_URL}/desktop-code`;
-const MANIFEST_URL = `${CODE_SERVER_BASE}/manifest.json`;
-const FETCH_TIMEOUT_MS = 15_000;
+import { IS_DEV, DESKTOP_CODE_BASE_URL } from './config';
+import {
+  postSignedBinary,
+  decryptPayload,
+  signRequestBody,
+} from './desktop-crypto-client';
 
 interface CodeManifest {
-  /** Human-readable version, e.g. "r1.0.0".  Bump whenever files change. */
-  version: string;
-  /** ISO timestamp, informational only */
-  updatedAt?: string;
   /** Map of relative path → hex SHA-256 hash */
   files: Record<string, string>;
 }
@@ -59,7 +43,6 @@ interface CodeManifest {
 class RemoteCodeLoader {
   private cacheDir: string;
   private manifestPath: string;
-  private cachedManifestVersion: string | null = null;
 
   constructor() {
     this.cacheDir = path.join(app.getPath('userData'), 'code-cache');
@@ -67,9 +50,6 @@ class RemoteCodeLoader {
     if (!fs.existsSync(this.cacheDir)) {
       fs.mkdirSync(this.cacheDir, { recursive: true });
     }
-    // Preload local manifest version for fast reads
-    const local = this.readLocalManifest();
-    this.cachedManifestVersion = local?.version ?? null;
   }
 
   // ─────────────────────────────────────────────────────────────
@@ -77,9 +57,9 @@ class RemoteCodeLoader {
   // ─────────────────────────────────────────────────────────────
 
   /**
-   * Fetches the server manifest and downloads any files whose hash has changed.
-   * Safe to call on every startup; skips already-current files.
-   * Never throws — silently falls back to cached files if the server is unreachable.
+   * Pulls the encrypted manifest, downloads any files whose hash differs from
+   * the local cache, and persists them. Never throws — silently falls back to
+   * cached files if the server is unreachable.
    */
   async sync(): Promise<void> {
     if (IS_DEV) {
@@ -88,61 +68,58 @@ class RemoteCodeLoader {
     }
     try {
       console.log('[CodeLoader] Checking for code updates...');
-      const manifest = await this.fetchJson<CodeManifest>(MANIFEST_URL);
+      const manifest = await this.fetchManifest();
 
       if (!manifest.files || typeof manifest.files !== 'object') {
         throw new Error('Manifest missing "files" map');
       }
 
       let updatedCount = 0;
+      const wantedPaths = new Set<string>();
 
       for (const [relPath, expectedHash] of Object.entries(manifest.files)) {
-        // Security: prevent path traversal
         const safePath = relPath.replace(/\.\./g, '').replace(/^\/+/, '');
+        wantedPaths.add(safePath);
         const localPath = path.join(this.cacheDir, safePath.replace(/\//g, path.sep));
 
-        // Skip if local hash already matches
         if (fs.existsSync(localPath)) {
           const localHash = this.hashFileContent(localPath);
           if (localHash === expectedHash) continue;
         }
 
-        // Download file
-        const fileUrl = `${CODE_SERVER_BASE}/${safePath}`;
-        let content: string;
+        let content: Buffer;
         try {
-          content = await this.fetchText(fileUrl);
+          content = await this.fetchFile(safePath);
         } catch (dlErr: any) {
           console.warn(`[CodeLoader] Failed to download ${safePath}: ${dlErr.message}`);
           continue;
         }
 
-        // Verify hash before writing
         const actualHash = crypto.createHash('sha256').update(content).digest('hex');
         if (actualHash !== expectedHash) {
-          console.warn(`[CodeLoader] Hash mismatch for ${safePath} — skipping (expected ${expectedHash}, got ${actualHash})`);
+          console.warn(
+            `[CodeLoader] Hash mismatch for ${safePath} (expected ${expectedHash}, got ${actualHash}) — skipped.`,
+          );
           continue;
         }
 
-        // Write to cache
         const dir = path.dirname(localPath);
-        if (!fs.existsSync(dir)) {
-          fs.mkdirSync(dir, { recursive: true });
-        }
-        fs.writeFileSync(localPath, content, 'utf-8');
+        if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+        fs.writeFileSync(localPath, content);
         updatedCount++;
         console.log(`[CodeLoader] Updated: ${safePath}`);
       }
 
-      // Persist manifest (marks this version as locally known)
-      fs.writeFileSync(this.manifestPath, JSON.stringify(manifest, null, 2), 'utf-8');
-      this.cachedManifestVersion = manifest.version;
+      // Prune cached files that are no longer in the manifest (server-side delete propagates).
+      this.pruneCache(wantedPaths);
 
-      if (updatedCount > 0) {
-        console.log(`[CodeLoader] Sync complete — ${updatedCount} file(s) updated. Code version: ${manifest.version}`);
-      } else {
-        console.log(`[CodeLoader] Already up to date. Code version: ${manifest.version}`);
-      }
+      fs.writeFileSync(this.manifestPath, JSON.stringify(manifest, null, 2), 'utf-8');
+
+      console.log(
+        updatedCount > 0
+          ? `[CodeLoader] Sync complete — ${updatedCount} file(s) updated.`
+          : `[CodeLoader] Already up to date.`,
+      );
     } catch (err: any) {
       console.warn(`[CodeLoader] Sync failed: ${err.message}. Using cached files.`);
     }
@@ -150,8 +127,6 @@ class RemoteCodeLoader {
 
   /**
    * Returns the contents of a cached script as a string, or null if not cached.
-   *
-   * @param relativePath  e.g. "scripts/left-menu.js"
    */
   getScript(relativePath: string): string | null {
     const safePath = relativePath.replace(/\.\./g, '').replace(/^\/+/, '');
@@ -165,8 +140,7 @@ class RemoteCodeLoader {
   }
 
   /**
-   * Returns the absolute path to a cached renderer file (e.g. "renderer/index.html"),
-   * or null if not cached. Main window loads from this path when available.
+   * Returns the absolute path to a cached renderer file, or null if not cached.
    */
   getRendererPath(filename = 'renderer/index.html'): string | null {
     const safePath = filename.replace(/\.\./g, '').replace(/^\/+/, '');
@@ -176,26 +150,8 @@ class RemoteCodeLoader {
 
   /**
    * UNIFIED INJECTION HELPER (use this for every remotely-updateable script).
-   *
-   * Picks the remote (cached) script if available, otherwise uses the supplied
-   * hardcoded fallback. Substitutes any `__KEY__` placeholders with
-   * `JSON.stringify(params[key])` so values can be safely embedded.
-   *
-   * Example:
-   *   await loader.runScriptOrFallback(win, 'scripts/auto-fill-login.js', FALLBACK_JS, {
-   *     USERNAME: account.username,
-   *     PASSWORD: account.password,
-   *   });
-   *
-   *   // Inside auto-fill-login.js:
-   *   //   usernameField.value = __USERNAME__;
-   *   //   passwordField.value = __PASSWORD__;
-   *
-   * @param win          Target BrowserWindow (skipped if destroyed).
-   * @param scriptName   Relative path inside the bundle (e.g. "scripts/foo.js").
-   * @param fallbackJs   Hardcoded JS executed when the remote file is not cached.
-   * @param params       Map of placeholder name -> value. Each value is JSON.stringify'd.
-   * @returns            The result of executeJavaScript, or undefined on error.
+   * Picks the cached script if available, otherwise uses the supplied fallback.
+   * Substitutes any `__KEY__` placeholders with `JSON.stringify(params[key])`.
    */
   async runScriptOrFallback(
     win: BrowserWindow,
@@ -204,11 +160,9 @@ class RemoteCodeLoader {
     params: Record<string, unknown> = {},
   ): Promise<unknown> {
     if (win.isDestroyed()) return undefined;
-
     const remote = this.getScript(scriptName);
     const source = remote ?? fallbackJs;
     const finalScript = this.substituteParams(source, params);
-
     try {
       return await win.webContents.executeJavaScript(finalScript);
     } catch (err: any) {
@@ -217,10 +171,10 @@ class RemoteCodeLoader {
     }
   }
 
-  /**
-   * Replaces every occurrence of `__KEY__` with `JSON.stringify(params[KEY])`.
-   * Keys not present in params are left untouched.
-   */
+  // ─────────────────────────────────────────────────────────────
+  // PRIVATE
+  // ─────────────────────────────────────────────────────────────
+
   private substituteParams(source: string, params: Record<string, unknown>): string {
     if (!params || Object.keys(params).length === 0) return source;
     return source.replace(/__([A-Z0-9_]+)__/g, (match, key: string) => {
@@ -231,70 +185,66 @@ class RemoteCodeLoader {
     });
   }
 
-  // ─────────────────────────────────────────────────────────────
-  // PRIVATE HELPERS
-  // ─────────────────────────────────────────────────────────────
-
-  private readLocalManifest(): CodeManifest | null {
+  private async fetchManifest(): Promise<CodeManifest> {
+    const body = signRequestBody('__manifest__');
+    const encrypted = await postSignedBinary(`${DESKTOP_CODE_BASE_URL}/manifest`, body);
+    const plaintext = decryptPayload(encrypted).toString('utf-8');
     try {
-      return JSON.parse(fs.readFileSync(this.manifestPath, 'utf-8'));
+      return JSON.parse(plaintext) as CodeManifest;
     } catch {
-      return null;
+      throw new Error('Invalid manifest JSON');
     }
+  }
+
+  private async fetchFile(relPath: string): Promise<Buffer> {
+    const body = signRequestBody(relPath);
+    const encrypted = await postSignedBinary(`${DESKTOP_CODE_BASE_URL}/file`, body);
+    return decryptPayload(encrypted);
   }
 
   private hashFileContent(filePath: string): string {
     try {
-      const content = fs.readFileSync(filePath, 'utf-8');
-      return crypto.createHash('sha256').update(content).digest('hex');
+      return crypto.createHash('sha256').update(fs.readFileSync(filePath)).digest('hex');
     } catch {
       return '';
     }
   }
 
-  private fetchRaw(url: string, redirectsLeft = 5): Promise<string> {
-    return new Promise((resolve, reject) => {
-      const req = https.get(url, { timeout: FETCH_TIMEOUT_MS }, (res) => {
-        if ((res.statusCode === 301 || res.statusCode === 302) && res.headers.location) {
-          if (redirectsLeft <= 0) {
-            reject(new Error(`Too many redirects for ${url}`));
-            return;
+  private pruneCache(wantedPaths: Set<string>) {
+    const walk = (absDir: string, relDir: string) => {
+      let entries: fs.Dirent[];
+      try {
+        entries = fs.readdirSync(absDir, { withFileTypes: true });
+      } catch {
+        return;
+      }
+      for (const ent of entries) {
+        const abs = path.join(absDir, ent.name);
+        const rel = relDir ? `${relDir}/${ent.name}` : ent.name;
+        if (ent.isDirectory()) {
+          walk(abs, rel);
+        } else if (ent.isFile()) {
+          if (rel === 'manifest.json') continue;
+          if (!wantedPaths.has(rel)) {
+            try {
+              fs.unlinkSync(abs);
+              console.log(`[CodeLoader] Pruned stale cache: ${rel}`);
+            } catch {
+              // ignore
+            }
           }
-          res.resume(); // discard body
-          resolve(this.fetchRaw(res.headers.location, redirectsLeft - 1));
-          return;
         }
-        if (res.statusCode !== 200) {
-          reject(new Error(`HTTP ${res.statusCode} for ${url}`));
-          return;
-        }
-        let data = '';
-        res.on('data', (chunk: string) => { data += chunk; });
-        res.on('end', () => resolve(data));
-      });
-      req.on('error', reject);
-      req.on('timeout', () => { req.destroy(); reject(new Error('Timeout')); });
-    });
-  }
-
-  private fetchJson<T>(url: string): Promise<T> {
-    return this.fetchRaw(url).then((data) => {
-      try { return JSON.parse(data) as T; }
-      catch { throw new Error(`Invalid JSON from ${url}`); }
-    });
-  }
-
-  private fetchText(url: string): Promise<string> {
-    return this.fetchRaw(url);
+      }
+    };
+    walk(this.cacheDir, '');
   }
 }
 
-// Module-level singleton — created lazily after app.whenReady()
 let _instance: RemoteCodeLoader | null = null;
 
 /**
  * Returns the singleton RemoteCodeLoader instance.
- * Must be called after Electron's app.whenReady() (so app.getPath() works).
+ * Must be called after Electron's app.whenReady().
  */
 export function getCodeLoader(): RemoteCodeLoader {
   if (!_instance) _instance = new RemoteCodeLoader();

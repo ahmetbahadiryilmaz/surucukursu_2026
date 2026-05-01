@@ -7,6 +7,7 @@ import { VersionModule } from './version/version.module';
 import { DrivingSchoolModule } from './driving-school/driving-school.module';
 import { ActivityLogModule } from './activity-log/activity-log.module';
 import { TemplatesModule } from './templates/templates.module';
+import { DesktopCodeModule } from './desktop-code/desktop-code.module';
 import { validate, getApiServerDatabaseConfig } from '@surucukursu/shared';
 import {
   AdminEntity,
@@ -59,6 +60,7 @@ import {
     DrivingSchoolModule,
     ActivityLogModule,
     TemplatesModule,
+    DesktopCodeModule,
     HealthModule,
   ],
 })

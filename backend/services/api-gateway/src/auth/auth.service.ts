@@ -37,6 +37,7 @@ export class AuthService {
       '/desktop/desktop-service/auth/reset-password',
       '/desktop/desktop-service/version',
       '/desktop/desktop-service/templates',
+      '/desktop/desktop-service/desktop-code',
     ];
 
     return publicRoutes.some(route => 

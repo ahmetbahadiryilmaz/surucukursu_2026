@@ -38,6 +38,14 @@ export const DESKTOP_HMAC_SECRET =
  * In dev the API gateway proxies /desktop/desktop-service/* to the desktop service;
  * in prod the gateway exposes /templates/* directly.
  */
-export const ENCRYPTED_TEMPLATE_URL = IS_DEV
-  ? `${API_BASE_URL}/desktop/desktop-service/templates/encrypted`
-  : `${API_BASE_URL}/templates/encrypted`;
+/**
+ * Endpoint that returns AES-256-GCM encrypted template bytes.
+ * The API gateway proxies /desktop/* to the desktop service in both dev and
+ * prod, so the path is the same in both environments.
+ */
+export const ENCRYPTED_TEMPLATE_URL = `${API_BASE_URL}/desktop/desktop-service/templates/encrypted`;
+
+/**
+ * Base for encrypted desktop-code endpoints (/manifest, /file).
+ */
+export const DESKTOP_CODE_BASE_URL = `${API_BASE_URL}/desktop/desktop-service/desktop-code`;
