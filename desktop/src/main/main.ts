@@ -71,6 +71,7 @@ function setupIPC() {
     if (!token || !user) return null;
     try {
       const school = await apiClient.getMySchool(token).catch(() => null);
+      if (school?.name) authStore.setSavedSchoolName(school.name);
       return { user, school };
     } catch {
       authStore.clear();
@@ -79,10 +80,23 @@ function setupIPC() {
   });
 
   ipcMain.handle('auth:login', async (_event, email: string, password: string) => {
-    const result = await apiClient.login(email, password);
-    authStore.save(result.token, result.user);
-    const school = await apiClient.getMySchool(result.token).catch(() => null);
-    return { user: result.user, school };
+    try {
+      const result = await apiClient.login(email, password);
+      authStore.save(result.token, result.user);
+      const school = await apiClient.getMySchool(result.token).catch(() => null);
+      if (school?.name) authStore.setSavedSchoolName(school.name);
+      return { user: result.user, school };
+    } catch (err: any) {
+      const raw = String(err?.message || '');
+      // Map common backend errors to user-friendly Turkish messages
+      if (/invalid credentials/i.test(raw) || /unauthorized/i.test(raw)) {
+        throw new Error('E-posta veya şifre hatalı. Lütfen bilgilerinizi kontrol edip tekrar deneyin.');
+      }
+      if (/timed out|ECONN|network|fetch failed/i.test(raw)) {
+        throw new Error('Sunucuya ulaşılamıyor. Lütfen internet bağlantınızı kontrol edip tekrar deneyin.');
+      }
+      throw new Error(raw || 'Giriş başarısız. Lütfen tekrar deneyin.');
+    }
   });
 
   ipcMain.handle('auth:logout', async () => {
@@ -95,6 +109,7 @@ function setupIPC() {
   });
 
   ipcMain.handle('auth:get-saved-email', () => authStore.getSavedEmail());
+  ipcMain.handle('auth:get-saved-school', () => authStore.getSavedSchoolName());
 
   ipcMain.handle('auth:forgot-password', async (_event, email: string, phone: string) => {
     try {

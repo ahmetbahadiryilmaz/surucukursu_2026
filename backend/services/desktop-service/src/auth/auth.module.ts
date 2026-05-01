@@ -6,6 +6,7 @@ import {
   DrivingSchoolManagerEntity,
   SessionEntity,
   PasswordResetTokenEntity,
+  SystemLogsEntity,
   env,
 } from '@surucukursu/shared';
 import { AuthController } from './auth.controller';
@@ -19,6 +20,7 @@ import { DesktopAuthGuard } from '../common/guards/desktop-auth.guard';
       DrivingSchoolManagerEntity,
       SessionEntity,
       PasswordResetTokenEntity,
+      SystemLogsEntity,
     ]),
     JwtModule.register({
       secret: env.jwt.secret,

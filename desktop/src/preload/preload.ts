@@ -7,6 +7,7 @@ contextBridge.exposeInMainWorld('mebbisAPI', {
   // Auth
   authCheck: () => ipcRenderer.invoke('auth:check'),
   authGetSavedEmail: () => ipcRenderer.invoke('auth:get-saved-email'),
+  authGetSavedSchool: () => ipcRenderer.invoke('auth:get-saved-school'),
   authLogin: (email: string, password: string) => ipcRenderer.invoke('auth:login', email, password),
   authLogout: () => ipcRenderer.invoke('auth:logout'),
   authForgotPassword: (email: string, phone: string) => ipcRenderer.invoke('auth:forgot-password', email, phone),

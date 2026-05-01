@@ -13,6 +13,7 @@ interface AuthData {
   token: string;
   user: AuthUser;
   savedEmail?: string;
+  savedSchoolName?: string;
 }
 
 export class AuthStore {
@@ -35,7 +36,8 @@ export class AuthStore {
   }
 
   save(token: string, user: AuthUser) {
-    this.data = { token, user, savedEmail: user.email };
+    const savedSchoolName = this.data?.savedSchoolName;
+    this.data = { token, user, savedEmail: user.email, savedSchoolName };
     try {
       fs.writeFileSync(this.filePath, JSON.stringify(this.data, null, 2), 'utf-8');
     } catch {
@@ -43,12 +45,27 @@ export class AuthStore {
     }
   }
 
+  setSavedSchoolName(name: string | null | undefined) {
+    if (!name) return;
+    if (!this.data) {
+      this.data = { token: '', user: null as any, savedSchoolName: name };
+    } else {
+      this.data.savedSchoolName = name;
+    }
+    try {
+      fs.writeFileSync(this.filePath, JSON.stringify(this.data, null, 2), 'utf-8');
+    } catch { /* ignore */ }
+  }
+
   clear() {
     const savedEmail = this.data?.savedEmail ?? this.data?.user?.email ?? null;
-    this.data = savedEmail ? { token: '', user: null as any, savedEmail } : null;
+    const savedSchoolName = this.data?.savedSchoolName ?? null;
+    this.data = savedEmail || savedSchoolName
+      ? { token: '', user: null as any, savedEmail: savedEmail || undefined, savedSchoolName: savedSchoolName || undefined }
+      : null;
     try {
-      if (savedEmail) {
-        fs.writeFileSync(this.filePath, JSON.stringify({ savedEmail }, null, 2), 'utf-8');
+      if (this.data) {
+        fs.writeFileSync(this.filePath, JSON.stringify(this.data, null, 2), 'utf-8');
       } else {
         fs.unlinkSync(this.filePath);
       }
@@ -65,5 +82,9 @@ export class AuthStore {
 
   getSavedEmail(): string | null {
     return this.data?.savedEmail ?? null;
+  }
+
+  getSavedSchoolName(): string | null {
+    return this.data?.savedSchoolName ?? null;
   }
 }

@@ -3,6 +3,16 @@
 /** @type {typeof window.mebbisAPI} */
 const api = /** @type {any} */ (window).mebbisAPI;
 
+/**
+ * Strip Electron IPC wrapper from error messages.
+ * "Error invoking remote method 'auth:login': Error: <real msg>" -> "<real msg>"
+ */
+function cleanError(err) {
+  const raw = err?.message || '';
+  const m = raw.match(/Error invoking remote method '[^']+':\s*(?:Error:\s*)?(.+)$/);
+  return (m ? m[1] : raw).trim();
+}
+
 // ── Views ──────────────────────────────────────────────────────
 const loginView  = document.getElementById('login-view');
 const forgotView = document.getElementById('forgot-view');
@@ -77,7 +87,7 @@ loginForm.addEventListener('submit', async (e) => {
     await refreshAccounts();
     await maybeShowWhatsNew();
   } catch (err) {
-    loginErrorEl.textContent   = err?.message || 'Giriş başarısız. E-posta veya şifre hatalı.';
+    loginErrorEl.textContent   = cleanError(err) || 'Giriş başarısız. E-posta veya şifre hatalı.';
     loginErrorEl.style.display = 'block';
   } finally {
     loginBtn.disabled    = false;
@@ -104,16 +114,25 @@ document.getElementById('forgot-back-2').addEventListener('click', () => {
 
 // WhatsApp support buttons
 const WA_NUMBER = '905521870334';
-const WA_MESSAGE = encodeURIComponent(
-  'Merhaba, ben Sürücü Kursu ... adına yazıyorum. Şifremi sıfırlayamıyorum, yardımcı olabilir misiniz?'
-);
-const WA_URL = `https://wa.me/${WA_NUMBER}?text=${WA_MESSAGE}`;
+
+function buildForgotPwWaUrl(schoolName) {
+  const intro = schoolName
+    ? `Merhaba, ben Sürücü Kursu ${schoolName} adına yazıyorum.`
+    : 'Merhaba,';
+  const text = `${intro} Şifremi sıfırlayamıyorum, yardımcı olabilir misiniz?`;
+  return `https://wa.me/${WA_NUMBER}?text=${encodeURIComponent(text)}`;
+}
 
 const WA_COMPLAINT_URL = `https://wa.me/${WA_NUMBER}?text=${encodeURIComponent('Merhaba, bir istek veya şikayetim var. Yardımcı olabilir misiniz?')}`;
 
+async function openForgotPwWa() {
+  const schoolName = await api.authGetSavedSchool().catch(() => null);
+  api.openExternal(buildForgotPwWaUrl(schoolName));
+}
+
 document.getElementById('wa-btn-login').addEventListener('click', () => api.openExternal(WA_COMPLAINT_URL));
-document.getElementById('wa-btn-1').addEventListener('click', () => api.openExternal(WA_URL));
-document.getElementById('wa-btn-2').addEventListener('click', () => api.openExternal(WA_URL));
+document.getElementById('wa-btn-1').addEventListener('click', openForgotPwWa);
+document.getElementById('wa-btn-2').addEventListener('click', openForgotPwWa);
 
 // Phone: digits only, max 10 (5XXXXXXXXX). 0000000000 acts as bypass code.
 document.getElementById('forgot-phone').addEventListener('input', (e) => {
@@ -354,7 +373,7 @@ accountForm.addEventListener('submit', async (e) => {
   } catch (err) {
     console.error('Save error:', err);
     const saveErrorEl = document.getElementById('modal-save-error');
-    saveErrorEl.textContent = err?.message || 'Bir hata oluştu. Lütfen tekrar deneyin.';
+    saveErrorEl.textContent = cleanError(err) || 'Bir hata oluştu. Lütfen tekrar deneyin.';
     saveErrorEl.style.display = 'block';
   }
 });
@@ -384,7 +403,7 @@ document.getElementById('btn-profile').addEventListener('click', async () => {
     profileEmailEl.value = p.email || '';
     profilePhoneEl.value = p.phone || '';
   } catch (err) {
-    profileErrorEl.textContent = 'Profil yüklenemedi: ' + (err?.message || 'Bilinmeyen hata');
+    profileErrorEl.textContent = 'Profil yüklenemedi: ' + (cleanError(err) || 'Bilinmeyen hata');
     profileErrorEl.style.display = 'block';
   }
 });
@@ -412,7 +431,7 @@ profileForm.addEventListener('submit', async (e) => {
     await api.profileUpdate(phone);
     profileOverlay.style.display = 'none';
   } catch (err) {
-    profileErrorEl.textContent = err?.message || 'Kaydetme başarısız. Lütfen tekrar deneyin.';
+    profileErrorEl.textContent = cleanError(err) || 'Kaydetme başarısız. Lütfen tekrar deneyin.';
     profileErrorEl.style.display = 'block';
   } finally {
     saveBtn.disabled = false;

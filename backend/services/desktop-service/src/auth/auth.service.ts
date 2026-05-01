@@ -13,6 +13,7 @@ import {
   DrivingSchoolManagerEntity,
   SessionEntity,
   PasswordResetTokenEntity,
+  SystemLogsEntity,
   TextEncryptor,
   env,
 } from '@surucukursu/shared';
@@ -22,6 +23,10 @@ enum UserTypes {
   DRIVING_SCHOOL_OWNER = 2,
   DRIVING_SCHOOL_MANAGER = 3,
 }
+
+// Mirrors api-server's SystemLogProcessTypes.LOGIN (= 0) so the admin
+// “İşlemler Geçmişi” page renders desktop logins as "Sistem Girişi".
+const SYSTEM_LOG_PROCESS_LOGIN = 0;
 
 @Injectable()
 export class AuthService {
@@ -37,6 +42,8 @@ export class AuthService {
     private sessionRepository: Repository<SessionEntity>,
     @InjectRepository(PasswordResetTokenEntity)
     private resetTokenRepository: Repository<PasswordResetTokenEntity>,
+    @InjectRepository(SystemLogsEntity)
+    private systemLogsRepository: Repository<SystemLogsEntity>,
   ) {}
 
   private isRetryableDbError(error: unknown): boolean {
@@ -103,7 +110,7 @@ export class AuthService {
     }
 
     if (!userId || !userType) {
-      throw new UnauthorizedException('Invalid credentials');
+      throw new UnauthorizedException('E-posta veya şifre hatalı. Lütfen bilgilerinizi kontrol edip tekrar deneyin.');
     }
 
     const token = this.jwtService.sign({
@@ -130,6 +137,21 @@ export class AuthService {
         last_login: Math.floor(Date.now() / 1000),
       }),
     );
+
+    // Audit log: surfaces in admin “İşlemler Geçmişi” as "Sistem Girişi".
+    // Best-effort — never block login on logging failure.
+    try {
+      await this.systemLogsRepository.save(
+        this.systemLogsRepository.create({
+          user_id: userId,
+          user_type: userType,
+          process: SYSTEM_LOG_PROCESS_LOGIN,
+          description: `Desktop login: ${userEmail} (userType=${userType})`,
+        }),
+      );
+    } catch (err) {
+      console.warn(`[Desktop AuthService] system_logs save failed: ${(err as Error).message}`);
+    }
 
     return {
       token,
