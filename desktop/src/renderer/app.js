@@ -10,7 +10,9 @@ const api = /** @type {any} */ (window).mebbisAPI;
 function cleanError(err) {
   const raw = err?.message || '';
   const m = raw.match(/Error invoking remote method '[^']+':\s*(?:Error:\s*)?(.+)$/);
-  return (m ? m[1] : raw).trim();
+  const msg = (m ? m[1] : raw).trim();
+  // Last-resort: never expose internal URLs to the user
+  return msg.replace(/https?:\/\/[^\s"'\])]+/g, '[server]').replace(/[^\s"'\])]*\.mtsk\.app[^\s"'\])]*/g, '[server]');
 }
 
 // ── Views ──────────────────────────────────────────────────────

@@ -28,6 +28,10 @@ function request<T>(
       },
     };
 
+    // Strip any URLs from an error message before it reaches the renderer.
+    const sanitize = (msg: string): string =>
+      msg.replace(/https?:\/\/[^\s"')]+/g, '[server]').replace(/[^\s"')]+\.mtsk\.app[^\s"')]*/g, '[server]');
+
     const req = transport.request(options, (res) => {
       let data = '';
       res.on('data', (chunk) => (data += chunk));
@@ -38,18 +42,26 @@ function request<T>(
           if (status >= 200 && status < 300) {
             resolve(parsed as T);
           } else {
-            reject(new Error(parsed?.message || `HTTP ${status}`));
+            reject(new Error(sanitize(parsed?.message || `HTTP ${status}`)));
           }
         } catch {
-          reject(new Error(`Invalid JSON response: ${data.slice(0, 100)}`));
+          reject(new Error('Sunucudan geçersiz yanıt alındı.'));
         }
       });
     });
 
-    req.on('error', reject);
+    req.on('error', (err) => {
+      const msg = (err as NodeJS.ErrnoException).code === 'ECONNREFUSED' ||
+                  (err as NodeJS.ErrnoException).code === 'ENOTFOUND' ||
+                  (err as NodeJS.ErrnoException).code === 'ETIMEDOUT' ||
+                  (err as NodeJS.ErrnoException).code === 'ECONNRESET'
+        ? 'Sunucuya ulaşılamıyor. İnternet bağlantınızı kontrol edin.'
+        : sanitize((err as Error).message || 'Bağlantı hatası.');
+      reject(new Error(msg));
+    });
     req.setTimeout(10_000, () => {
       req.destroy();
-      reject(new Error('Request timed out'));
+      reject(new Error('Sunucu yanıt vermedi (zaman aşımı).'));
     });
 
     if (bodyStr) req.write(bodyStr);
