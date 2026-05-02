@@ -85,7 +85,21 @@ export class DesktopCodeController {
       this.collectFiles(CODE_BASE_RESOLVED, '', files);
     }
 
-    const json = Buffer.from(JSON.stringify({ files }), 'utf-8');
+    // Read optional version.json from CODE_BASE root (not inside scripts/)
+    let codeVersion: string | undefined;
+    const versionFilePath = path.join(CODE_BASE_RESOLVED, 'version.json');
+    if (fs.existsSync(versionFilePath)) {
+      try {
+        const versionData = JSON.parse(fs.readFileSync(versionFilePath, 'utf-8'));
+        if (typeof versionData.version === 'string') {
+          codeVersion = versionData.version;
+        }
+      } catch {
+        // ignore malformed version.json
+      }
+    }
+
+    const json = Buffer.from(JSON.stringify({ files, version: codeVersion }), 'utf-8');
     const encrypted = encryptPayload(json, aesKey);
 
     this.logger.debug(

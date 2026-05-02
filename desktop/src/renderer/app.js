@@ -718,6 +718,13 @@ document.getElementById('whats-new-ok').addEventListener('click', async () => {
   // Resolve dev mode before anything else so showMain can use it
   devMode = await api.isDev().catch(() => false);
 
+  // Show remote code version in bottom-right corner
+  const codeVer = await api.getCodeVersion().catch(() => null);
+  if (codeVer) {
+    const el = document.getElementById('code-version');
+    if (el) el.textContent = `v${codeVer}`;
+  }
+
   // Always start at the login screen — never bypass it with a cached token.
   // Pre-fill the email so the user only needs to enter their password.
   const savedEmail = await api.authGetSavedEmail().catch(() => null);

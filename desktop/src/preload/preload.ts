@@ -46,4 +46,7 @@ contextBridge.exposeInMainWorld('mebbisAPI', {
   isDev: () => ipcRenderer.invoke('app:is-dev'),
   devTestDireksiyonPdf: (sinif: string) => ipcRenderer.invoke('dev:test-direksiyon-pdf', sinif),
   devTestSimulatorPdf: (simType: string) => ipcRenderer.invoke('dev:test-simulator-pdf', simType),
+
+  // Remote code version (e.g. "1.2.4.001")
+  getCodeVersion: () => ipcRenderer.invoke('desktop-code:version'),
 });

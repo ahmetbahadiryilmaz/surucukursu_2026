@@ -38,11 +38,14 @@ import {
 interface CodeManifest {
   /** Map of relative path → hex SHA-256 hash */
   files: Record<string, string>;
+  /** Remote code version string, e.g. "1.2.4.001" */
+  version?: string;
 }
 
 class RemoteCodeLoader {
   private cacheDir: string;
   private manifestPath: string;
+  private _codeVersion: string | null = null;
 
   constructor() {
     this.cacheDir = path.join(app.getPath('userData'), 'code-cache');
@@ -115,14 +118,26 @@ class RemoteCodeLoader {
 
       fs.writeFileSync(this.manifestPath, JSON.stringify(manifest, null, 2), 'utf-8');
 
+      // Store the version for IPC exposure
+      if (manifest.version) {
+        this._codeVersion = manifest.version;
+      }
+
       console.log(
         updatedCount > 0
-          ? `[CodeLoader] Sync complete — ${updatedCount} file(s) updated.`
-          : `[CodeLoader] Already up to date.`,
+          ? `[CodeLoader] Sync complete — ${updatedCount} file(s) updated. version=${manifest.version ?? 'n/a'}`
+          : `[CodeLoader] Already up to date. version=${manifest.version ?? 'n/a'}`,
       );
     } catch (err: any) {
       console.warn(`[CodeLoader] Sync failed: ${err.message}. Using cached files.`);
     }
+  }
+
+  /**
+   * Returns the remote code version string (e.g. "1.2.4.001"), or null if not yet synced.
+   */
+  getVersion(): string | null {
+    return this._codeVersion;
   }
 
   /**

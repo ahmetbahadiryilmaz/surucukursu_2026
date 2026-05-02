@@ -68,6 +68,9 @@ function setupIPC() {
   // Dev mode flag
   ipcMain.handle('app:is-dev', () => IS_DEV);
 
+  // Remote code version (e.g. "1.2.4.001") — falls back to app version if not yet synced
+  ipcMain.handle('desktop-code:version', () => getCodeLoader().getVersion() ?? app.getVersion());
+
   // Dev test PDF generators — only functional in dev mode
   ipcMain.handle('dev:test-direksiyon-pdf', async (_event, sinif: string) => {
     if (!IS_DEV) throw new Error('Only available in development mode');
