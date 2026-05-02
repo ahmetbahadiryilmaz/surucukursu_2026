@@ -10,6 +10,14 @@ import { DesktopAuthGuard } from '../common/guards/desktop-auth.guard';
 export class DrivingSchoolController {
   constructor(private readonly drivingSchoolService: DrivingSchoolService) {}
 
+  @Get('all')
+  @ApiOperation({ summary: 'List all driving schools with MEBBIS account info (admin only)' })
+  @ApiResponse({ status: 200, description: 'All schools returned' })
+  @ApiResponse({ status: 401, description: 'Admin access required' })
+  async getAllSchools(@Req() req: any) {
+    return this.drivingSchoolService.getAllSchools(req.user);
+  }
+
   @Get('me')
   @ApiOperation({ summary: 'Get authenticated driving school info + settings' })
   @ApiResponse({ status: 200, description: 'Driving school info returned' })

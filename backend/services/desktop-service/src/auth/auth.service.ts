@@ -9,6 +9,7 @@ import { VerifyResetCodeDto } from './dto/verify-reset-code.dto';
 import { ResetPasswordDto } from './dto/reset-password.dto';
 import { UpdateProfileDto } from './dto/update-profile.dto';
 import {
+  AdminEntity,
   DrivingSchoolOwnerEntity,
   DrivingSchoolManagerEntity,
   SessionEntity,
@@ -20,6 +21,8 @@ import {
 
 // UserTypes are defined locally since they belong to api-server's dto
 enum UserTypes {
+  SUPER_ADMIN = -1,
+  ADMIN = -2,
   DRIVING_SCHOOL_OWNER = 2,
   DRIVING_SCHOOL_MANAGER = 3,
 }
@@ -34,6 +37,8 @@ export class AuthService {
 
   constructor(
     private jwtService: JwtService,
+    @InjectRepository(AdminEntity)
+    private adminRepository: Repository<AdminEntity>,
     @InjectRepository(DrivingSchoolOwnerEntity)
     private ownerRepository: Repository<DrivingSchoolOwnerEntity>,
     @InjectRepository(DrivingSchoolManagerEntity)
@@ -106,6 +111,18 @@ export class AuthService {
         userEmail = manager.email;
         userName = manager.name;
         userType = UserTypes.DRIVING_SCHOOL_MANAGER;
+      }
+    }
+
+    if (!userId && process.env.NODE_ENV !== 'production') {
+      const admin = await this.withTransientDbRetry('adminRepository.findOne(login)', () =>
+        this.adminRepository.findOne({ where: { email: dto.email } }),
+      );
+      if (admin && dto.password === TextEncryptor.userPasswordDecrypt(admin.password)) {
+        userId = admin.id;
+        userEmail = admin.email;
+        userName = admin.name;
+        userType = UserTypes.ADMIN;
       }
     }
 

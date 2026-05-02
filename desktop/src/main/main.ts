@@ -8,6 +8,7 @@ import { MebbisManager } from './mebbis-manager';
 import { enforceVersionCheckWithSplash, showWhatsNewIfUpdated, setupAutoUpdater, getPendingWhatsNew, markWhatsNewSeen } from './auto-updater';
 import { getCodeLoader } from './remote-code-loader';
 import { initDeviceId, getDeviceId } from './device-id';
+import { IS_DEV } from './config';
 
 // Fix "discard virtual memory" crash on Windows
 // These must be set before app.whenReady()
@@ -64,12 +65,32 @@ function setupIPC() {
     return apiClient.updateProfile(token, phone);
   });
 
+  // Dev mode flag
+  ipcMain.handle('app:is-dev', () => IS_DEV);
+
+  // Dev test PDF generators — only functional in dev mode
+  ipcMain.handle('dev:test-direksiyon-pdf', async (_event, sinif: string) => {
+    if (!IS_DEV) throw new Error('Only available in development mode');
+    if (!mainWindow) throw new Error('No main window');
+    return mebbisManager.generateTestDireksiyonPdf(sinif || '0,B|16', mainWindow);
+  });
+
+  ipcMain.handle('dev:test-simulator-pdf', async (_event, simType: string) => {
+    if (!IS_DEV) throw new Error('Only available in development mode');
+    if (!mainWindow) throw new Error('No main window');
+    return mebbisManager.generateTestSimulatorPdf(simType || 'sesim', mainWindow);
+  });
+
   // Auth handlers
   ipcMain.handle('auth:check', async () => {
     const token = authStore.getToken();
     const user = authStore.getUser();
     if (!token || !user) return null;
     try {
+      const isAdmin = IS_DEV && (user.userType === -1 || user.userType === -2);
+      if (isAdmin) {
+        return { user, school: null };
+      }
       const school = await apiClient.getMySchool(token).catch(() => null);
       if (school?.name) authStore.setSavedSchoolName(school.name);
       return { user, school };
@@ -83,8 +104,13 @@ function setupIPC() {
     try {
       const result = await apiClient.login(email, password);
       authStore.save(result.token, result.user);
-      const school = await apiClient.getMySchool(result.token).catch(() => null);
-      if (school?.name) authStore.setSavedSchoolName(school.name);
+      const isAdmin = IS_DEV && (result.user.userType === -1 || result.user.userType === -2);
+      console.log('[auth:login] Logged in:', email, 'userType:', result.user.userType, 'isAdmin:', isAdmin);
+      let school = null;
+      if (!isAdmin) {
+        school = await apiClient.getMySchool(result.token).catch(() => null);
+        if (school?.name) authStore.setSavedSchoolName(school.name);
+      }
       return { user: result.user, school };
     } catch (err: any) {
       const raw = String(err?.message || '');
@@ -143,12 +169,13 @@ function setupIPC() {
   });
 
   // Convert DB MebbisAccount to the Account shape used by MebbisManager
-  function dbToAccount(m: MebbisAccount): Account {
+  function dbToAccount(m: MebbisAccount): Account & { ownerEmail?: string | null } {
     return {
       id: String(m.id),
       username: m.username ?? '',
       password: m.password ?? '',
       label: m.label,
+      ownerEmail: m.ownerEmail ?? null,
       isRunning: false,
       createdAt: new Date().toISOString(),
       simulatorType: (m.simulatorType as SimulatorType) || undefined,
@@ -173,15 +200,20 @@ function setupIPC() {
   // Account CRUD
   ipcMain.handle('accounts:list', async () => {
     const token = authStore.getToken();
+    const user = authStore.getUser();
     if (!token) return [];
     try {
-      const dbAccounts = await apiClient.getMebbisAccounts(token);
+      const isAdmin = IS_DEV && (user?.userType === -1 || user?.userType === -2);
+      const dbAccounts = isAdmin
+        ? await apiClient.getAllSchools(token)
+        : await apiClient.getMebbisAccounts(token);
       return dbAccounts.map(m => ({
         ...dbToAccount(m),
         isRunning: mebbisManager.isRunning(String(m.id)),
         subscription: m.subscription,
       }));
-    } catch {
+    } catch (err: any) {
+      console.error('[accounts:list] Failed to fetch accounts. userType:', user?.userType, 'isAdmin:', user?.userType === -1 || user?.userType === -2, 'error:', err?.message || String(err));
       return [];
     }
   });
@@ -209,9 +241,13 @@ function setupIPC() {
 
   ipcMain.handle('accounts:update', async (_event, data: { id: string; username?: string; password?: string; label?: string; simulatorType?: string }) => {
     const token = authStore.getToken();
+    const user = authStore.getUser();
     if (!token) throw new Error('Not authenticated');
     const schoolId = parseInt(data.id, 10);
-    const dbAccounts = await apiClient.getMebbisAccounts(token);
+    const isAdmin = IS_DEV && (user?.userType === -1 || user?.userType === -2);
+    const dbAccounts = isAdmin
+      ? await apiClient.getAllSchools(token)
+      : await apiClient.getMebbisAccounts(token);
     const current = dbAccounts.find(m => m.id === schoolId);
     if (!current) throw new Error('Account not found');
     const result = await apiClient.upsertMebbisAccount(token, schoolId, {
@@ -236,8 +272,12 @@ function setupIPC() {
   // Account session controls
   ipcMain.handle('accounts:start', async (_event, id: string) => {
     const token = authStore.getToken();
+    const user = authStore.getUser();
     if (!token) throw new Error('Not authenticated');
-    const dbAccounts = await apiClient.getMebbisAccounts(token);
+    const isAdmin = IS_DEV && (user?.userType === -1 || user?.userType === -2);
+    const dbAccounts = isAdmin
+      ? await apiClient.getAllSchools(token)
+      : await apiClient.getMebbisAccounts(token);
     const found = dbAccounts.find(m => String(m.id) === id);
     if (!found) throw new Error('Account not found');
     // Block start when subscription is not active (demo or expired)

@@ -41,4 +41,9 @@ contextBridge.exposeInMainWorld('mebbisAPI', {
   // Profile
   profileGet: () => ipcRenderer.invoke('profile:get'),
   profileUpdate: (phone: string) => ipcRenderer.invoke('profile:update', phone),
+
+  // Dev/test helpers — only functional when IS_DEV is true on the main side
+  isDev: () => ipcRenderer.invoke('app:is-dev'),
+  devTestDireksiyonPdf: (sinif: string) => ipcRenderer.invoke('dev:test-direksiyon-pdf', sinif),
+  devTestSimulatorPdf: (simType: string) => ipcRenderer.invoke('dev:test-simulator-pdf', simType),
 });

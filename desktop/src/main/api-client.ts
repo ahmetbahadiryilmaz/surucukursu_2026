@@ -78,6 +78,7 @@ export interface SchoolResponse {
 export interface MebbisAccount {
   id: number;
   label: string;
+  ownerEmail?: string | null;
   username: string | null;
   password: string | null;
   simulatorType: string | null;
@@ -109,6 +110,9 @@ export const apiClient = {
 
   getMebbisAccounts: (token: string) =>
     request<MebbisAccount[]>('GET', '/desktop/desktop-service/driving-school/me/mebbis-accounts', undefined, token),
+
+  getAllSchools: (token: string) =>
+    request<MebbisAccount[]>('GET', '/desktop/desktop-service/driving-school/all', undefined, token),
 
   upsertMebbisAccount: (
     token: string,

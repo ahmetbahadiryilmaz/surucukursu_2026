@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, ForbiddenException, ConflictException } from '@nestjs/common';
+import { Injectable, NotFoundException, ForbiddenException, ConflictException, UnauthorizedException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import {
@@ -14,6 +14,7 @@ import {
 export interface MebbisAccountDto {
   id: number;
   label: string;
+  ownerEmail: string | null;
   username: string | null;
   password: string | null;
   simulatorType: string | null;
@@ -39,6 +40,8 @@ function isSubscriptionActive(sub: SubscriptionEntity | null | undefined): boole
 
 // Matches UserTypes in api-server
 enum UserTypes {
+  SUPER_ADMIN = -1,
+  ADMIN = -2,
   DRIVING_SCHOOL_OWNER = 2,
   DRIVING_SCHOOL_MANAGER = 3,
 }
@@ -128,6 +131,7 @@ export class DrivingSchoolService {
         return {
           id: school.id,
           label: school.name,
+          ownerEmail: null,
           username: school.mebbis_username
             ? TextEncryptor.mebbisUsernameDecrypt(school.mebbis_username)
             : null,
@@ -149,18 +153,22 @@ export class DrivingSchoolService {
     );
   }
 
-  /** Creates or updates MEBBIS credentials for a school owned by the user. */
+  /** Creates or updates MEBBIS credentials for a school owned by the user (or admin). */
   async upsertMebbisAccount(
     user: { id: number; userType: UserTypes },
     schoolId: number,
     data: { username: string; password: string; simulatorType?: string },
   ): Promise<MebbisAccountDto> {
-    const whereClause =
-      user.userType === UserTypes.DRIVING_SCHOOL_OWNER
-        ? { id: schoolId, owner_id: user.id }
-        : { id: schoolId, manager_id: user.id };
-
-    const school = await this.schoolRepository.findOne({ where: whereClause });
+    let school: DrivingSchoolEntity | null = null;
+    if (user.userType === UserTypes.ADMIN || user.userType === UserTypes.SUPER_ADMIN) {
+      school = await this.schoolRepository.findOne({ where: { id: schoolId } });
+    } else {
+      const whereClause =
+        user.userType === UserTypes.DRIVING_SCHOOL_OWNER
+          ? { id: schoolId, owner_id: user.id }
+          : { id: schoolId, manager_id: user.id };
+      school = await this.schoolRepository.findOne({ where: whereClause });
+    }
     if (!school) {
       throw new NotFoundException('Driving school not found or access denied');
     }
@@ -194,6 +202,7 @@ export class DrivingSchoolService {
     return {
       id: school.id,
       label: school.name,
+      ownerEmail: null,
       username: data.username,
       password: data.password,
       simulatorType: settings?.simulator_type ?? null,
@@ -207,6 +216,54 @@ export class DrivingSchoolService {
           }
         : null,
     };
+  }
+
+  /** Returns all driving schools with MEBBIS account info — admin only, dev-only. */
+  async getAllSchools(user: { id: number; userType: number }): Promise<MebbisAccountDto[]> {
+    if (process.env.NODE_ENV === 'production') {
+      throw new UnauthorizedException('Not available in production');
+    }
+    if (user.userType !== UserTypes.ADMIN && user.userType !== UserTypes.SUPER_ADMIN) {
+      throw new UnauthorizedException('Admin access required');
+    }
+    const schools = await this.schoolRepository.find();
+
+    // Batch-fetch owners to avoid N+1
+    const ownerIds = [...new Set(schools.map(s => s.owner_id).filter(Boolean))];
+    const owners = ownerIds.length
+      ? await this.ownerRepository.findByIds(ownerIds)
+      : [];
+    const ownerEmailMap = new Map(owners.map(o => [o.id, o.email]));
+
+    return Promise.all(
+      schools.map(async (school) => {
+        const [settings, subscription] = await Promise.all([
+          this.settingsRepository.findOne({ where: { driving_school_id: school.id } }),
+          this.subscriptionRepository.findOne({ where: { driving_school_id: school.id } }),
+        ]);
+        return {
+          id: school.id,
+          label: school.name,
+          ownerEmail: ownerEmailMap.get(school.owner_id) ?? null,
+          username: school.mebbis_username
+            ? TextEncryptor.mebbisUsernameDecrypt(school.mebbis_username)
+            : null,
+          password: school.mebbis_password
+            ? TextEncryptor.mebbisPasswordDecrypt(school.mebbis_password)
+            : null,
+          simulatorType: settings?.simulator_type ?? null,
+          subscriptionActive: isSubscriptionActive(subscription),
+          subscription: subscription
+            ? {
+                type: subscription.type,
+                endsAt: subscription.ends_at ?? null,
+                pdfPrintUsed: subscription.pdf_print_used,
+                pdfPrintLimit: subscription.pdf_print_limit ?? null,
+              }
+            : null,
+        };
+      }),
+    );
   }
 
   /**
@@ -256,6 +313,7 @@ export class DrivingSchoolService {
     return {
       id: saved.id,
       label: saved.name,
+      ownerEmail: null,
       username: null,
       password: null,
       simulatorType: null,

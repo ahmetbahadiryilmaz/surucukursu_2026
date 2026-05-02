@@ -2728,4 +2728,115 @@ export class MebbisManager {
       this.stop(id);
     }
   }
+
+  // ==================== DEV TEST HELPERS ====================
+
+  /**
+   * Generate a Direksiyon Takip PDF with entirely fake/test data.
+   * Asks the user where to save and then opens the file.
+   * Only called from the dev test panel (main process gates it with IS_DEV).
+   */
+  async generateTestDireksiyonPdf(sinif: string, mainWindow: BrowserWindow): Promise<void> {
+    const fakeStudentInfo = {
+      'ad-soyad': 'TEST ADAY AHMET YILMAZ',
+      'tc-kimlik-no': '12345678901',
+      'istenen-sertifika': 'B SINIFI SERTİFİKA (Manuel)',
+    };
+
+    // Build fake lesson rows matching the column layout used by generatePdfFromTemplate:
+    // [0]=donem [4]=plate [5]=dersYeri [6]=date [7]=time [8]=instructor
+    const fakeLessons: string[][] = [];
+    const plates = ['34 TEST 001', '34 TEST 002', '34 TEST 003'];
+    const dates = [
+      '05.02.2025', '12.02.2025', '19.02.2025', '26.02.2025',
+      '05.03.2025', '12.03.2025', '19.03.2025', '26.03.2025',
+      '02.04.2025', '09.04.2025', '16.04.2025', '23.04.2025',
+      '30.04.2025', '07.05.2025', '14.05.2025', '21.05.2025',
+      '28.05.2025', '04.06.2025', '11.06.2025', '18.06.2025',
+    ];
+    const times = ['09:00 - 10:00', '10:00 - 11:00', '11:00 - 12:00', '14:00 - 15:00'];
+    const instructor = 'TEST EĞİTMEN ALİ DEMİR';
+
+    // Parse lesson count from sinif (e.g. "0,B|16" → 16)
+    let lessonCount = 16;
+    const sinifParts = sinif.split('|');
+    if (sinifParts.length === 2) {
+      const n = parseInt(sinifParts[1], 10);
+      if (!isNaN(n) && n > 0) lessonCount = n;
+    }
+
+    // Detect if this is a simulator template (12/14/16 lessons)
+    const needsSimulator = [12, 14, 16].includes(lessonCount);
+    let simulatorInserted = false;
+
+    for (let i = 0; i < lessonCount; i++) {
+      // Insert one simulator row in the middle for templates that support it
+      const isSimRow = needsSimulator && !simulatorInserted && i === Math.floor(lessonCount / 2);
+      if (isSimRow) simulatorInserted = true;
+
+      const row: string[] = new Array(10).fill('');
+      row[0] = '2025/1. DÖNEM';
+      row[4] = isSimRow ? '34 TEST SIM' : plates[i % plates.length];
+      row[5] = isSimRow ? 'Simulatör' : 'Direksiyon Eğitim Alanı';
+      row[6] = dates[i % dates.length];
+      row[7] = times[i % times.length];
+      row[8] = instructor;
+      fakeLessons.push(row);
+    }
+
+    const saveResult = await dialog.showSaveDialog(mainWindow, {
+      title: 'Test Direksiyon Takip PDF — Kaydet',
+      defaultPath: `test_direksiyon_takip_${sinif.replace(/[|,]/g, '_')}.pdf`,
+      filters: [{ name: 'PDF Dosyası', extensions: ['pdf'] }],
+    });
+
+    if (saveResult.canceled || !saveResult.filePath) return;
+
+    console.log('[DEV TEST] Generating Direksiyon Takip PDF with fake data, sinif:', sinif);
+    const pdfBuffer = await this.generatePdfFromTemplate(fakeStudentInfo, fakeLessons, sinif);
+    fs.writeFileSync(saveResult.filePath, pdfBuffer);
+    console.log('[DEV TEST] Saved to:', saveResult.filePath);
+    await shell.openPath(saveResult.filePath);
+  }
+
+  /**
+   * Generate Simulator Report PDFs with entirely fake/test data.
+   * Delegates to the existing generateSimulatorReportPdf with a fake account object.
+   * Only called from the dev test panel (main process gates it with IS_DEV).
+   */
+  async generateTestSimulatorPdf(simType: string, mainWindow: BrowserWindow): Promise<void> {
+    const fakeStudentInfo = {
+      'ad-soyad': 'TEST ADAY AHMET YILMAZ',
+      'tc-kimlik-no': '12345678901',
+      'istenen-sertifika': 'B SINIFI SERTİFİKA (Manuel)',
+    };
+
+    // Two fake simulator sessions — col[5] must contain 'Simulatör' for extraction logic
+    const fakeSimulatorSessions: string[][] = [
+      ['2025/1. DÖNEM', '', '', '', '34 TEST SIM', 'Simulatör', '15.03.2025', '10:00 - 11:00', 'TEST EĞİTMEN ALİ DEMİR', ''],
+      ['2025/1. DÖNEM', '', '', '', '34 TEST SIM', 'Simulatör', '22.03.2025', '14:00 - 15:00', 'TEST EĞİTMEN ALİ DEMİR', ''],
+    ];
+
+    const fakeAccount: Account = {
+      id: 'dev-test',
+      username: 'test_mebbis_user',
+      password: 'test_password',
+      label: 'TEST OKUL',
+      isRunning: false,
+      createdAt: new Date().toISOString(),
+      simulatorType: 'sesim',
+      subscriptionActive: true,
+    };
+
+    console.log('[DEV TEST] Generating Simulator Report PDF(s) with fake data, simType:', simType);
+    const outputDir = await this.generateSimulatorReportPdf(
+      fakeStudentInfo,
+      fakeSimulatorSessions,
+      simType,
+      fakeAccount,
+      mainWindow,
+    );
+    console.log('[DEV TEST] Simulator PDFs saved to:', outputDir);
+    await shell.openPath(outputDir);
+  }
 }

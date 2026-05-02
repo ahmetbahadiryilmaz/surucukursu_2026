@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { JwtModule } from '@nestjs/jwt';
 import {
+  AdminEntity,
   DrivingSchoolOwnerEntity,
   DrivingSchoolManagerEntity,
   SessionEntity,
@@ -16,6 +17,7 @@ import { DesktopAuthGuard } from '../common/guards/desktop-auth.guard';
 @Module({
   imports: [
     TypeOrmModule.forFeature([
+      AdminEntity,
       DrivingSchoolOwnerEntity,
       DrivingSchoolManagerEntity,
       SessionEntity,

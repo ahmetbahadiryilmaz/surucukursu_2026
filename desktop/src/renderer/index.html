@@ -138,11 +138,56 @@
         <span id="school-name" class="school-badge"></span>
       </div>
       <div class="header-right">
+        <button id="btn-dev-test" class="btn btn-dev-toggle" style="display:none;" title="Geliştirici Test Menüsü (Dev Mode)">🧪 Test</button>
         <button id="btn-add" class="btn btn-primary">+ Hesap Ekle</button>
         <button id="btn-profile" class="btn btn-secondary" title="Hesap Ayarları">⚙ Hesap Ayarları</button>
         <button id="btn-logout" class="btn btn-secondary btn-logout" title="Çıkış Yap">Çıkış</button>
       </div>
     </header>
+
+    <div id="admin-search-bar" class="admin-search-bar" style="display:none;">
+      <input type="search" id="admin-search-input" class="admin-search-input" placeholder="Okul adı veya e-posta ile filtrele…" autocomplete="off">
+      <span id="admin-search-count" class="admin-search-count"></span>
+    </div>
+
+    <!-- Dev-only test panel — shown only in development mode -->
+    <div id="dev-test-panel" class="dev-test-panel" style="display:none;">
+      <div class="dev-test-header">🧪 Geliştirici Test Menüsü <span class="dev-test-badge">DEV ONLY</span></div>
+
+      <div class="dev-test-sections">
+        <!-- Direksiyon Takip -->
+        <div class="dev-test-section">
+          <div class="dev-test-section-title">📄 Direksiyon Takip PDF</div>
+          <div class="dev-test-row">
+            <label class="dev-label">Sınıf:</label>
+            <select id="dev-sinif-select" class="dev-select">
+              <option value="0,B|16">Yeni B — 16 ders</option>
+              <option value="0,A|14">Yeni A — 14 ders</option>
+              <option value="B(2016 Sonrası),C|20">B(Sonrası) → C — 20 ders</option>
+              <option value="B,A2|12">B → A2 — 12 ders (simülatörlü)</option>
+              <option value="B,A2|12-nosim">B → A2 — 12 ders (simülatörsüz)</option>
+              <option value="D,C|10">D → C — 10 ders</option>
+              <option value="C,D1|4">C → D1 — 4 ders</option>
+            </select>
+            <button id="dev-btn-direksiyon" class="btn dev-action-btn">Oluştur</button>
+          </div>
+          <div id="dev-direksiyon-status" class="dev-status"></div>
+        </div>
+
+        <!-- Simulator -->
+        <div class="dev-test-section">
+          <div class="dev-test-section-title">🖥 Simulasyon Raporu PDF</div>
+          <div class="dev-test-row">
+            <label class="dev-label">Tip:</label>
+            <label class="dev-radio"><input type="radio" name="dev-sim-type" value="sesim" checked> Sesim (1 rapor)</label>
+            <label class="dev-radio"><input type="radio" name="dev-sim-type" value="ana_grup"> Ana Grup (11 rapor)</label>
+            <label class="dev-radio"><input type="radio" name="dev-sim-type" value="both"> Her İkisi (12 rapor)</label>
+            <button id="dev-btn-simulator" class="btn dev-action-btn">Oluştur</button>
+          </div>
+          <div id="dev-simulator-status" class="dev-status"></div>
+        </div>
+      </div>
+    </div>
 
     <div id="account-list" class="account-list">
       <!-- Accounts rendered here -->

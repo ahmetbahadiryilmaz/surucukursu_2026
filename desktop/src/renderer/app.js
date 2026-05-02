@@ -46,14 +46,44 @@ function showForgot() {
 }
 
 let currentSchool = null;
+let currentUser = null;
+let devMode = false;  // set to true once api.isDev() resolves
 
-function showMain(school) {
+function isCurrentUserAdmin() {
+  return currentUser && (currentUser.userType === -1 || currentUser.userType === -2);
+}
+
+function showMain(school, user) {
   loginView.style.display  = 'none';
   forgotView.style.display = 'none';
   mainView.style.display   = 'block';
   currentSchool = school || null;
+  currentUser = user || null;
   const badge = document.getElementById('school-name');
-  if (badge) badge.textContent = (school && school.name) ? school.name : (typeof school === 'string' ? school : '');
+  if (badge) {
+    if (isCurrentUserAdmin()) {
+      badge.textContent = 'Yönetici';
+    } else {
+      badge.textContent = (school && school.name) ? school.name : (typeof school === 'string' ? school : '');
+    }
+  }
+  // Hide 'Hesap Ekle' for admins (they cannot create new schools from the desktop)
+  const btnAddEl = document.getElementById('btn-add');
+  if (btnAddEl) btnAddEl.style.display = isCurrentUserAdmin() ? 'none' : '';
+  // Show / hide search bar
+  const searchBar = document.getElementById('admin-search-bar');
+  if (searchBar) searchBar.style.display = isCurrentUserAdmin() ? 'flex' : 'none';
+  // Reset search on each login
+  adminSearchQuery = '';
+  const searchInput = document.getElementById('admin-search-input');
+  if (searchInput) searchInput.value = '';
+  // Show dev test toggle only in dev mode
+  const btnDevTest = document.getElementById('btn-dev-test');
+  if (btnDevTest) btnDevTest.style.display = devMode ? '' : 'none';
+  // Always hide test panel on (re-)login
+  const devPanel = document.getElementById('dev-test-panel');
+  if (devPanel) devPanel.style.display = 'none';
+  if (btnDevTest) btnDevTest.classList.remove('active');
 }
 
 // ── Login Form ─────────────────────────────────────────────────
@@ -83,7 +113,7 @@ loginForm.addEventListener('submit', async (e) => {
 
   try {
     const result = await api.authLogin(email, password);
-    showMain(result.school);
+    showMain(result.school, result.user);
     await refreshAccounts();
     await maybeShowWhatsNew();
   } catch (err) {
@@ -100,6 +130,53 @@ document.getElementById('btn-logout').addEventListener('click', async () => {
   const savedEmail = await api.authGetSavedEmail();
   await api.authLogout();
   showLogin(savedEmail);
+});
+
+// ── Dev Test Panel ─────────────────────────────────────────────
+document.getElementById('btn-dev-test').addEventListener('click', () => {
+  const panel = document.getElementById('dev-test-panel');
+  const btn   = document.getElementById('btn-dev-test');
+  const open  = panel.style.display !== 'none';
+  panel.style.display = open ? 'none' : 'block';
+  btn.classList.toggle('active', !open);
+});
+
+document.getElementById('dev-btn-direksiyon').addEventListener('click', async () => {
+  const sinif  = document.getElementById('dev-sinif-select').value;
+  const statusEl = document.getElementById('dev-direksiyon-status');
+  const btn    = document.getElementById('dev-btn-direksiyon');
+  btn.disabled = true;
+  statusEl.className = 'dev-status';
+  statusEl.textContent = 'PDF oluşturuluyor…';
+  try {
+    await api.devTestDireksiyonPdf(sinif);
+    statusEl.className = 'dev-status ok';
+    statusEl.textContent = '✓ PDF oluşturuldu ve açıldı.';
+  } catch (err) {
+    statusEl.className = 'dev-status err';
+    statusEl.textContent = '✗ ' + (cleanError(err) || 'Hata oluştu.');
+  } finally {
+    btn.disabled = false;
+  }
+});
+
+document.getElementById('dev-btn-simulator').addEventListener('click', async () => {
+  const simType  = document.querySelector('input[name="dev-sim-type"]:checked')?.value || 'sesim';
+  const statusEl = document.getElementById('dev-simulator-status');
+  const btn      = document.getElementById('dev-btn-simulator');
+  btn.disabled = true;
+  statusEl.className = 'dev-status';
+  statusEl.textContent = 'PDF oluşturuluyor…';
+  try {
+    await api.devTestSimulatorPdf(simType);
+    statusEl.className = 'dev-status ok';
+    statusEl.textContent = '✓ PDF(ler) oluşturuldu, klasör açıldı.';
+  } catch (err) {
+    statusEl.className = 'dev-status err';
+    statusEl.textContent = '✗ ' + (cleanError(err) || 'Hata oluştu.');
+  } finally {
+    btn.disabled = false;
+  }
 });
 
 // ── Forgot Password ────────────────────────────────────────────
@@ -250,6 +327,13 @@ const formSimulator   = document.getElementById('form-simulator');
 const modalSimError   = document.getElementById('modal-sim-error');
 
 let accounts = [];
+let adminSearchQuery = '';
+
+// --- Admin Search ---
+document.getElementById('admin-search-input').addEventListener('input', (e) => {
+  adminSearchQuery = e.target.value.trim();
+  renderAccounts();
+});
 
 // --- Password Toggle (MEBBIS form) ---
 togglePasswordBtn.addEventListener('click', (e) => {
@@ -440,18 +524,43 @@ profileForm.addEventListener('submit', async (e) => {
 
 // --- Rendering ---
 function renderAccounts() {
-  if (accounts.length === 0) {
+  // Apply search filter for admin users
+  const visible = isCurrentUserAdmin() && adminSearchQuery
+    ? accounts.filter(a => {
+        const q = adminSearchQuery.toLowerCase();
+        return a.label.toLowerCase().includes(q) ||
+               (a.ownerEmail && a.ownerEmail.toLowerCase().includes(q));
+      })
+    : accounts;
+
+  // Update count badge
+  const countEl = document.getElementById('admin-search-count');
+  if (countEl && isCurrentUserAdmin()) {
+    countEl.textContent = adminSearchQuery
+      ? `${visible.length} / ${accounts.length}`
+      : `${accounts.length} okul`;
+  }
+
+  if (visible.length === 0) {
     accountListEl.style.display = 'none';
     emptyStateEl.style.display  = 'block';
-    emptyStateEl.innerHTML = `
-      <p>Henüz hesap eklenmedi.</p>
-      <p>Yukarıdaki "Hesap Ekle" butonuna tıklayarak başlayın.</p>`;
+    if (isCurrentUserAdmin() && adminSearchQuery) {
+      emptyStateEl.innerHTML = `<p>"${escapeHtml(adminSearchQuery)}" ile eşleşen okul bulunamadı.</p>`;
+    } else if (isCurrentUserAdmin()) {
+      emptyStateEl.innerHTML = `
+        <p>Sistemde kayıtlı sürücü kursu bulunamadı.</p>
+        <p style="font-size:0.85em;color:#888;">Yönetici girişiyle bağlandınız. Sunucuya ulaşılamıyorsa konsol loglarını kontrol edin.</p>`;
+    } else {
+      emptyStateEl.innerHTML = `
+        <p>Henüz hesap eklenmedi.</p>
+        <p>Yukarıdaki "Hesap Ekle" butonuna tıklayarak başlayın.</p>`;
+    }
     return;
   }
   accountListEl.style.display = 'flex';
   emptyStateEl.style.display  = 'none';
 
-  accountListEl.innerHTML = accounts.map(account => {
+  accountListEl.innerHTML = visible.map(account => {
     const noSim = !account.simulatorType;
     const subActive = account.subscriptionActive !== false;
     const startDisabled = !subActive;
@@ -464,12 +573,16 @@ function renderAccounts() {
     const startClass = !subActive
       ? 'btn-secondary'
       : (noSim ? 'btn-warning' : 'btn-success');
+    const deleteBtn = isCurrentUserAdmin()
+      ? ''
+      : `<button class="btn btn-sm btn-danger" data-action="remove" data-id="${account.id}" title="Sil">Sil</button>`;
     return `
     <div class="account-card ${account.isRunning ? 'running' : ''} ${noSim ? 'no-simulator' : ''} ${!subActive ? 'disabled-subscription' : ''}" data-id="${account.id}">
       <div class="account-status"></div>
       <div class="account-info">
         <div class="account-label">${escapeHtml(account.label)}</div>
         <div class="account-username">${escapeHtml(account.username)}</div>
+        ${isCurrentUserAdmin() && account.ownerEmail ? `<div class="account-owner-email">${escapeHtml(account.ownerEmail)}</div>` : ''}
         ${!subActive ? '<div class="sim-warning">🔒 Abonelik gerekli — bu okul için aktif abonelik bulunmuyor</div>' : ''}
         ${subActive && noSim ? '<div class="sim-warning">⚠ Simülasyon Makinesi seçilmedi — başlatmadan önce düzenleyin</div>' : ''}
       </div>
@@ -481,7 +594,7 @@ function renderAccounts() {
           <button class="btn btn-sm ${startClass}" data-action="start" data-id="${account.id}" title="${startTitle}" ${startDisabled ? 'disabled' : ''}>${startLabel}</button>
         `}
         <button class="btn btn-sm btn-secondary" data-action="edit"   data-id="${account.id}" title="Düzenle">Düzenle</button>
-        <button class="btn btn-sm btn-danger"    data-action="remove" data-id="${account.id}" title="Sil">Sil</button>
+        ${deleteBtn}
       </div>
     </div>
   `;
@@ -598,21 +711,14 @@ document.getElementById('whats-new-ok').addEventListener('click', async () => {
   await api.whatsNewDismiss().catch(() => {});
 });
 
-// ── Bootstrap: check saved session, then show login or main ──
+// ── Bootstrap: always show login first; user must click to proceed ──
 (async () => {
-  try {
-    const session = await api.authCheck();
-    if (session) {
-      showMain(session.school);
-      await refreshAccounts();
-      await maybeShowWhatsNew();
-    } else {
-      const savedEmail = await api.authGetSavedEmail();
-      showLogin(savedEmail);
-    }
-  } catch {
-    const savedEmail = await api.authGetSavedEmail().catch(() => null);
-    showLogin(savedEmail);
-  }
+  // Resolve dev mode before anything else so showMain can use it
+  devMode = await api.isDev().catch(() => false);
+
+  // Always start at the login screen — never bypass it with a cached token.
+  // Pre-fill the email so the user only needs to enter their password.
+  const savedEmail = await api.authGetSavedEmail().catch(() => null);
+  showLogin(savedEmail);
 })();
 
