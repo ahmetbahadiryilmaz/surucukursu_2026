@@ -12,6 +12,7 @@ import IslemlerGecmisi from "./IslemlerGecmisi";
 import AdminlerPage from "./AdminlerPage";
 import DSManagerPage from "./DSManagerPage";
 import DSOwnerPage from "./DSOwnerPage";
+import DSOwnerDetay from "./DSOwnerDetay";
 import AdminDashboard from "./Dashboard/DashboardPage";
 import AdminHesabim from "./AdminHesabim";
 import SystemInfoDashboard from "@/components/SystemInfoDashboard";
@@ -173,7 +174,8 @@ console.log("User data cleared, theme preference preserved");
             <Route path="kullanicilar/adminler" element={<AdminlerPage />} />
             <Route path="kullanicilar/ds-manager" element={<DSManagerPage />} />
             <Route path="kullanicilar/ds-owner" element={<DSOwnerPage />} />
-            
+            <Route path="kullanicilar/ds-owner/:id" element={<DSOwnerDetay />} />
+
             {/* Detay Sayfaları - Geçici Çözüm */}
             <Route path="kullanicilar/adminler/detay/:id" element={<KullaniciDetay />} />
             <Route path="kullanicilar/ds-manager/detay/:id" element={<KullaniciDetay />} />

@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { DrivingSchool } from '@/services/api-service';
 import {
   KursFormModal,
@@ -40,6 +41,12 @@ const KurslarPage: React.FC = () => {
 
   const { isMobile } = useResponsive();
   const { filterText, setFilterText, filteredKurslar, paginatedKurslar, currentPage, totalPages, setCurrentPage } = useKursFilter(kurslar, owners, managers);
+
+  const [searchParams] = useSearchParams();
+  useEffect(() => {
+    const initial = searchParams.get('search');
+    if (initial) setFilterText(initial);
+  }, [searchParams, setFilterText]);
 
   // Local state for modals and forms
   const [modalError, setModalError] = useState<string | null>(null);

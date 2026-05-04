@@ -27,6 +27,7 @@ export const useKursFilter = (kurslar: DrivingSchool[], owners: any[], managers:
     } else {
       const searchTerm = filterText.toLowerCase();
       const filtered = kurslar.filter(kurs =>
+        (kurs.id != null && kurs.id.toString() === searchTerm) ||
         (kurs.name && kurs.name.toLowerCase().includes(searchTerm)) ||
         (kurs.address && kurs.address.toLowerCase().includes(searchTerm)) ||
         (kurs.phone && kurs.phone.toLowerCase().includes(searchTerm)) ||
