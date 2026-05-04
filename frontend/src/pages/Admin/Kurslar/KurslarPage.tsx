@@ -34,8 +34,8 @@ const KurslarPage: React.FC = () => {
     createKurs,
     updateKurs,
     deleteKurs,
-    getOwnerName,
-    getManagerName
+    getOwnerEmail,
+    getManagerEmail
   } = useKurslar();
 
   const { isMobile } = useResponsive();
@@ -262,8 +262,8 @@ const KurslarPage: React.FC = () => {
                       onViewDetails={handleViewDetails}
                       onEdit={handleEdit}
                       onDelete={confirmDelete}
-                      getOwnerName={getOwnerName}
-                      getManagerName={getManagerName}
+                      getOwnerEmail={getOwnerEmail}
+                      getManagerEmail={getManagerEmail}
                     />
                   ))}
                 </div>
@@ -275,8 +275,8 @@ const KurslarPage: React.FC = () => {
                   kurslar={paginatedKurslar}
                   onEdit={handleEdit}
                   onDelete={confirmDelete}
-                  getOwnerName={getOwnerName}
-                  getManagerName={getManagerName}
+                  getOwnerEmail={getOwnerEmail}
+                  getManagerEmail={getManagerEmail}
                   filterText={filterText}
                 />
               )}
@@ -383,8 +383,8 @@ const KurslarPage: React.FC = () => {
         onClose={() => setDetailView(null)}
         onEdit={handleEdit}
         onDelete={confirmDelete}
-        getOwnerName={getOwnerName}
-        getManagerName={getManagerName}
+        getOwnerEmail={getOwnerEmail}
+        getManagerEmail={getManagerEmail}
       />
     </div>
   );

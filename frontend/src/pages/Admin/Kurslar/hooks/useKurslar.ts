@@ -229,18 +229,18 @@ export const useKurslar = () => {
   }, [fetchKurslar]);
 
   // Helper functions
-  const getOwnerName = useCallback((owner_id: string | number | null | undefined): string => {
+  const getOwnerEmail = useCallback((owner_id: string | number | null | undefined): string => {
     if (!owner_id) return "-";
     const id = owner_id.toString();
     const owner = owners.find(o => o.id === id);
-    return owner ? owner.name : "-";
+    return owner && owner.email ? owner.email : "-";
   }, [owners]);
 
-  const getManagerName = useCallback((manager_id: string | number | null | undefined): string => {
+  const getManagerEmail = useCallback((manager_id: string | number | null | undefined): string => {
     if (!manager_id) return "-";
     const id = manager_id.toString();
     const manager = managers.find(m => m.id === id);
-    return manager ? manager.name : "-";
+    return manager && manager.email ? manager.email : "-";
   }, [managers]);
 
   return {
@@ -252,7 +252,7 @@ export const useKurslar = () => {
     managers,
     cities,
     districts,
-    
+
     // Actions
     fetchKurslar,
     fetchOwnersAndManagers,
@@ -260,9 +260,9 @@ export const useKurslar = () => {
     createKurs,
     updateKurs,
     deleteKurs,
-    
+
     // Helpers
-    getOwnerName,
-    getManagerName
+    getOwnerEmail,
+    getManagerEmail
   };
 };

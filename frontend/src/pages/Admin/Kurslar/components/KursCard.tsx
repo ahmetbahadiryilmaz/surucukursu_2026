@@ -9,17 +9,17 @@ interface KursCardProps {
   onViewDetails: (kurs: DrivingSchool) => void;
   onEdit: (id: string) => void;
   onDelete: (id: string) => void;
-  getOwnerName: (owner_id: string | number | null | undefined) => string;
-  getManagerName: (manager_id: string | number | null | undefined) => string;
+  getOwnerEmail: (owner_id: string | number | null | undefined) => string;
+  getManagerEmail: (manager_id: string | number | null | undefined) => string;
 }
 
-const KursCard: React.FC<KursCardProps> = ({ 
-  kurs, 
-  onViewDetails, 
-  onEdit, 
+const KursCard: React.FC<KursCardProps> = ({
+  kurs,
+  onViewDetails,
+  onEdit,
   onDelete,
-  getOwnerName,
-  getManagerName 
+  getOwnerEmail,
+  getManagerEmail
 }) => (
   <Card className="mb-4 hover:shadow-md transition-shadow">
     <CardHeader>
@@ -29,8 +29,8 @@ const KursCard: React.FC<KursCardProps> = ({
     <CardContent className="py-2">
       <div className="space-y-2 text-sm">
         <div><span className="font-medium">Telefon:</span> {kurs.phone}</div>
-        <div><span className="font-medium">Kurs Sahibi:</span> {getOwnerName(kurs.owner_id)}</div>
-        <div><span className="font-medium">Kurs Yöneticisi:</span> {getManagerName(kurs.manager_id)}</div>
+        <div><span className="font-medium">Kurs Sahibi (E-posta):</span> {getOwnerEmail(kurs.owner_id)}</div>
+        <div><span className="font-medium">Kurs Yöneticisi (E-posta):</span> {getManagerEmail(kurs.manager_id)}</div>
       </div>
     </CardContent>
     <CardFooter className="flex justify-between pt-2">

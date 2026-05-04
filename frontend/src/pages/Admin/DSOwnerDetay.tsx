@@ -70,6 +70,14 @@ const DSOwnerDetay: React.FC = () => {
         
         // API'den gelen verileri DSOwnerDetail tipine dönüştür
         if (ownerData) {
+          const drivingSchools: any[] = Array.isArray(ownerData.DrivingSchool) ? ownerData.DrivingSchool : [];
+          const branches = drivingSchools.map((school: any) => ({
+            name: school.name || "İsimsiz Şube",
+            address: school.address || "Belirtilmemiş",
+            manager: school.manager?.name || "Belirtilmemiş",
+            studentCount: school.studentCount ?? 0,
+          }));
+
           const formattedOwner: DSOwnerDetail = {
             id: ownerData.id,
             name: ownerData.name || "İsimsiz",
@@ -81,12 +89,8 @@ const DSOwnerDetay: React.FC = () => {
             city: ownerData.city || "Belirtilmemiş",
             joinDate: ownerData.createdAt || new Date().toISOString(),
             lastLogin: ownerData.lastLogin || new Date().toISOString(),
-            branchCount: ownerData.branchCount || 0,
-            // Şubeler için şimdilik standart veriler kullanıyoruz
-            // API'de şube verisi varsa burası güncellenecek
-            branches: ownerData.branches || [
-              { name: "Ana Şube", address: ownerData.address || "Belirtilmemiş", manager: "Belirtilmemiş", studentCount: 0 }
-            ],
+            branchCount: typeof ownerData.branchCount === 'number' ? ownerData.branchCount : branches.length,
+            branches,
             // İstatistikler için şimdilik standart veriler kullanıyoruz
             // API'de istatistik verisi varsa burası güncellenecek
             statistics: ownerData.statistics || {

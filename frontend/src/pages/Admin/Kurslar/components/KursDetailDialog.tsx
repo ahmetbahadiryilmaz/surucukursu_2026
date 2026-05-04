@@ -9,8 +9,8 @@ interface KursDetailDialogProps {
   onClose: () => void;
   onEdit: (id: string) => void;
   onDelete: (id: string) => void;
-  getOwnerName: (owner_id: string | number | null | undefined) => string;
-  getManagerName: (manager_id: string | number | null | undefined) => string;
+  getOwnerEmail: (owner_id: string | number | null | undefined) => string;
+  getManagerEmail: (manager_id: string | number | null | undefined) => string;
 }
 
 const KursDetailDialog: React.FC<KursDetailDialogProps> = ({
@@ -19,8 +19,8 @@ const KursDetailDialog: React.FC<KursDetailDialogProps> = ({
   onClose,
   onEdit,
   onDelete,
-  getOwnerName,
-  getManagerName
+  getOwnerEmail,
+  getManagerEmail
 }) => {
   if (!kurs) return null;
 
@@ -43,12 +43,12 @@ const KursDetailDialog: React.FC<KursDetailDialogProps> = ({
             <span className="col-span-2 text-gray-900">{kurs.phone}</span>
           </div>
           <div className="grid grid-cols-3 gap-2">
-            <span className="font-semibold text-gray-700">Kurs Sahibi:</span>
-            <span className="col-span-2 text-gray-900">{getOwnerName(kurs.owner_id)}</span>
+            <span className="font-semibold text-gray-700">Kurs Sahibi (E-posta):</span>
+            <span className="col-span-2 text-gray-900">{getOwnerEmail(kurs.owner_id)}</span>
           </div>
           <div className="grid grid-cols-3 gap-2">
-            <span className="font-semibold text-gray-700">Yönetici:</span>
-            <span className="col-span-2 text-gray-900">{getManagerName(kurs.manager_id)}</span>
+            <span className="font-semibold text-gray-700">Yönetici (E-posta):</span>
+            <span className="col-span-2 text-gray-900">{getManagerEmail(kurs.manager_id)}</span>
           </div>
         </div>
         <DialogFooter className="flex justify-between">
