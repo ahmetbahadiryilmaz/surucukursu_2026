@@ -297,18 +297,20 @@ export async function start(ctx: BootstrapContext): Promise<AppControllerHandle>
       personel: string; egitimTuru: string;
     }
     interface FakeStudent {
-      tc: string; adSoyad: string; kurum: string;
-      donemi: string; grubu: string; subesi: string;
-      mevcutBelge: string; istenenSertifika: string;
-      kurumOnay: string; ilceOnay: string; uygulama: string; durumu: string;
-      teorikHak: number; uygulamaHak: number; eSinavHak: number; kayitUcreti: number;
+      tc: string; adSoyad: string;
+      hasDetail: boolean;
+      kurum?: string;
+      donemi?: string; grubu?: string; subesi?: string;
+      mevcutBelge?: string; istenenSertifika?: string;
+      kurumOnay?: string; ilceOnay?: string; uygulama?: string; durumu?: string;
+      teorikHak?: number; uygulamaHak?: number; eSinavHak?: number; kayitUcreti?: number;
       exams: ExamRow[]; lessons: LessonRow[];
     }
 
     const KURUM = '99993164/ÖZEL AYDINCIK BATUHAN MOTORLU TAŞIT SÜRÜCÜLERİ KURSU';
     const fakeStudents: FakeStudent[] = [
       {
-        tc: '14674579946', adSoyad: 'MEHMET ÇELİK', kurum: KURUM,
+        tc: '14674579946', adSoyad: 'MEHMET ÇELİK', hasDetail: true, kurum: KURUM,
         donemi: '2026 - Mayıs', grubu: 'Grup-1', subesi: 'C',
         mevcutBelge: 'B SINIFI SERTİFİKA', istenenSertifika: 'C SINIFI SERTİFİKA (Manuel)',
         kurumOnay: 'Onaylandı', ilceOnay: 'Onaylandı',
@@ -323,7 +325,7 @@ export async function start(ctx: BootstrapContext): Promise<AppControllerHandle>
         ],
       },
       {
-        tc: '23456789012', adSoyad: 'AYŞE YILMAZ', kurum: KURUM,
+        tc: '23456789012', adSoyad: 'AYŞE YILMAZ', hasDetail: true, kurum: KURUM,
         donemi: '2026 - Mayıs', grubu: 'Grup-2', subesi: 'B',
         mevcutBelge: '—', istenenSertifika: 'B SINIFI SERTİFİKA',
         kurumOnay: 'Onaylandı', ilceOnay: 'Beklemede',
@@ -335,7 +337,7 @@ export async function start(ctx: BootstrapContext): Promise<AppControllerHandle>
         ],
       },
       {
-        tc: '34567890123', adSoyad: 'AHMET KAYA', kurum: KURUM,
+        tc: '34567890123', adSoyad: 'AHMET KAYA', hasDetail: true, kurum: KURUM,
         donemi: '2026 - Nisan', grubu: 'Grup-1', subesi: 'B',
         mevcutBelge: '—', istenenSertifika: 'B SINIFI SERTİFİKA',
         kurumOnay: 'Onaylandı', ilceOnay: 'Onaylandı',
@@ -350,7 +352,7 @@ export async function start(ctx: BootstrapContext): Promise<AppControllerHandle>
         ],
       },
       {
-        tc: '45678901234', adSoyad: 'ELİF DEMİR', kurum: KURUM,
+        tc: '45678901234', adSoyad: 'ELİF DEMİR', hasDetail: true, kurum: KURUM,
         donemi: '2026 - Mayıs', grubu: 'Grup-3', subesi: 'A2',
         mevcutBelge: 'B SINIFI SERTİFİKA', istenenSertifika: 'A2 SINIFI SERTİFİKA (Manuel)',
         kurumOnay: 'Onaylandı', ilceOnay: 'Onaylandı',
@@ -362,29 +364,20 @@ export async function start(ctx: BootstrapContext): Promise<AppControllerHandle>
           { donemi: '2026 - Mayıs', grupAdi: 'Grup 3', grupBaslama: '03/05/2026', subesi: 'A2 ŞUBESİ', plaka: '06FK4567', dersYeri: 'Park ve Manevra', dersTarihi: '08/05/2026', dersSaati: '10:00 - 10:50', personel: 'HASAN ÖZ', egitimTuru: 'Normal Eğitim' },
         ],
       },
+      // List-only (hasDetail: false) — came from skt02006 list, detail never fetched
       {
-        tc: '56789012345', adSoyad: 'MUSTAFA ŞAHİN', kurum: KURUM,
+        tc: '56789012345', adSoyad: 'MUSTAFA ŞAHİN', hasDetail: false,
         donemi: '2026 - Mayıs', grubu: 'Grup-1', subesi: 'B',
-        mevcutBelge: '—', istenenSertifika: 'B SINIFI SERTİFİKA',
-        kurumOnay: 'Beklemede', ilceOnay: 'Beklemede',
-        uygulama: 'Yeni Kayıt', durumu: 'Eğitime Başlamadı',
-        teorikHak: 2, uygulamaHak: 2, eSinavHak: 2, kayitUcreti: 92500,
+        durumu: 'Eğitime Başlamadı',
         exams: [],
         lessons: [],
       },
       {
-        tc: '67890123456', adSoyad: 'ZEYNEP ÖZTÜRK', kurum: KURUM,
+        tc: '67890123456', adSoyad: 'ZEYNEP ÖZTÜRK', hasDetail: false,
         donemi: '2026 - Mayıs', grubu: 'Grup-2', subesi: 'B',
-        mevcutBelge: '—', istenenSertifika: 'B SINIFI SERTİFİKA',
-        kurumOnay: 'Onaylandı', ilceOnay: 'Onaylandı',
-        uygulama: 'Tamamlandı', durumu: 'Sınav Bekleniyor',
-        teorikHak: 1, uygulamaHak: 0, eSinavHak: 1, kayitUcreti: 92500,
-        exams: [
-          { donemi: '2026 - Mayıs', sinavKodu: '13305001', sinavTarihi: '02/05/2026', plaka: '34GH8901', ustaOgretici: 'EMRE TUNÇ', onayDurumu: 'Onaylandı', sinavDurumu: 'Sınava Girdi', sonuc: 'Başarılı' },
-        ],
-        lessons: [
-          { donemi: '2026 - Mayıs', grupAdi: 'Grup 2', grupBaslama: '02/05/2026', subesi: 'B ŞUBESİ', plaka: '34ABC123', dersYeri: 'Akan Trafik', dersTarihi: '04/05/2026', dersSaati: '11:00 - 11:50', personel: 'EMRE TUNÇ', egitimTuru: 'Normal Eğitim' },
-        ],
+        durumu: 'Sınav Bekleniyor',
+        exams: [],
+        lessons: [],
       },
     ];
 
@@ -405,12 +398,16 @@ export async function start(ctx: BootstrapContext): Promise<AppControllerHandle>
     if (isStudents) {
       bodyHtml = fakeStudents
         .map((s) => {
-          const ps = platesOf(s).join(', ') || '—';
+          const ps = platesOf(s).join(', ');
+          const meta = s.hasDetail
+            ? (ps || '—')
+            : `${s.donemi || ''} · ${s.grubu || ''} · ${s.subesi || ''}`.replace(/^[ ·]+|[ ·]+$/g, '') || 'Liste kaydı';
+          const tag = s.hasDetail ? '' : '<span class="badge-tag">liste</span>';
           return `
         <div class="row" data-tc="${s.tc}">
           <div class="info">
-            <div class="name">${s.adSoyad}</div>
-            <div class="tc">${s.tc} · ${ps}</div>
+            <div class="name">${s.adSoyad} ${tag}</div>
+            <div class="tc">${s.tc} · ${meta}</div>
           </div>
           <button class="detay" data-tc="${s.tc}">Detay</button>
         </div>`;
@@ -487,6 +484,14 @@ export async function start(ctx: BootstrapContext): Promise<AppControllerHandle>
       .badge.fail{background:#3a1a1a;color:#f87171}
       .badge.pending{background:#3a2e1a;color:#fbbf24}
       .empty{padding:20px;text-align:center;color:#666;font-size:12px;font-style:italic}
+      .badge-tag{display:inline-block;padding:1px 6px;font-size:9px;border-radius:6px;background:#3a2e1a;color:#fbbf24;margin-left:4px;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;vertical-align:middle}
+      .empty-state{padding:40px 24px;text-align:center;display:flex;flex-direction:column;align-items:center;gap:10px}
+      .empty-title{font-size:14px;color:#e9e9f5;font-weight:600}
+      .empty-desc{font-size:12px;color:#8888aa;line-height:1.5;max-width:300px;font-style:normal}
+      .cta-btn{margin-top:6px;background:#4361ee;color:#fff;border:none;padding:10px 22px;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit}
+      .cta-btn:hover{filter:brightness(1.12)}
+      .cta-btn:disabled{opacity:0.6;cursor:wait}
+      .empty-note{font-size:10px;color:#6b6b8a;margin-top:6px;font-style:italic}
     </style></head><body>
       <!-- LIST VIEW -->
       <div id="list-view" style="display:flex;flex-direction:column;height:100vh">
@@ -552,6 +557,21 @@ export async function start(ctx: BootstrapContext): Promise<AppControllerHandle>
         }
 
         function renderDetail(s) {
+          if (!s.hasDetail) {
+            return \`
+              <div class="det-hero">
+                <div class="det-name">\${s.adSoyad}</div>
+                <div class="det-tc">\${s.tc} · \${s.donemi || '—'} · \${s.grubu || '—'} · Şube \${s.subesi || '—'}</div>
+                <div class="det-status pending">\${s.durumu || 'Detay Yüklenmedi'}</div>
+              </div>
+              <div class="empty-state">
+                <div class="empty-title">Bu öğrenci sadece liste kaydı</div>
+                <div class="empty-desc">Sınav geçmişi, ders programı, sertifika ve hak bilgileri için MEBBIS'e gidip TC ile sorgulanmalı. Tek tıklayın, biz hallederiz.</div>
+                <button id="fetch-detay-btn" class="cta-btn" data-tc="\${s.tc}">⤓ Detay Getir</button>
+                <div class="empty-note">örnek veri — gerçek bir sorgu yapılmaz</div>
+              </div>
+            \`;
+          }
           const platesAll = Array.from(new Set([
             ...s.exams.map(e => e.plaka),
             ...s.lessons.map(l => l.plaka)
@@ -635,6 +655,36 @@ export async function start(ctx: BootstrapContext): Promise<AppControllerHandle>
             console.log('[FakeList] Detay opening tc=' + tc);
             showDetail(tc);
           };
+        });
+
+        // Delegated handler for Detay Getir CTA inside detail empty state
+        detailBody.addEventListener('click', (ev) => {
+          const btn = ev.target && ev.target.closest && ev.target.closest('#fetch-detay-btn');
+          if (!btn) return;
+          const tc = btn.getAttribute('data-tc');
+          console.log('[FakeList] Detay Getir clicked tc=' + tc);
+          btn.disabled = true;
+          btn.textContent = '⏳ Sorgulanıyor…';
+          // Simulated fetch — real flow would fire MEBBIS_OPEN_STUDENT:<tc>
+          setTimeout(() => {
+            const s = STUDENTS.find(x => x.tc === tc);
+            if (!s) return;
+            // Promote fake student to detailed with placeholder rich data
+            s.hasDetail = true;
+            s.kurum = s.kurum || '99993164/ÖZEL AYDINCIK BATUHAN MOTORLU TAŞIT SÜRÜCÜLERİ KURSU';
+            s.mevcutBelge = s.mevcutBelge || '—';
+            s.istenenSertifika = s.istenenSertifika || 'B SINIFI SERTİFİKA';
+            s.kurumOnay = s.kurumOnay || 'Onaylandı';
+            s.ilceOnay = s.ilceOnay || 'Onaylandı';
+            s.uygulama = s.uygulama || 'Yeni Veri';
+            s.teorikHak = s.teorikHak ?? 1;
+            s.uygulamaHak = s.uygulamaHak ?? 1;
+            s.eSinavHak = s.eSinavHak ?? 1;
+            s.kayitUcreti = s.kayitUcreti ?? 92500;
+            s.exams = [];
+            s.lessons = [];
+            showDetail(tc);
+          }, 700);
         });
       </script>
     </body></html>`;

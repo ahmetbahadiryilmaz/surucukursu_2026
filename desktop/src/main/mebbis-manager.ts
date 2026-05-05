@@ -348,11 +348,17 @@ export class MebbisManager {
           console.log(`[${account.label}] Batch: skt02006 results loaded, scraping student list...`);
           this.injectLeftMenu(win, account);
           this.reinjectBatchStatus(win);
+          this.parseAndIngestStudentList(win, account);
           this.handleSkt02006Results(win, account);
         } else {
           this.hideStatus(win);
           this.injectLeftMenu(win, account);
         }
+      } else if (currentURL.toLowerCase().includes('skt02006')) {
+        // Normal user visit to skt02006 (student list) — passive list scrape
+        this.hideStatus(win);
+        this.injectLeftMenu(win, account);
+        this.parseAndIngestStudentList(win, account);
       } else if (currentURL.toLowerCase().includes('skt02009')) {
         // Handle skt02009 page loads for direksiyon takip download
         if (this.pendingDownload && this.pendingDownloadPhase === 'navigate') {
@@ -510,52 +516,139 @@ export class MebbisManager {
     void getCodeLoader().runScriptOrFallback(win, 'scripts/hide-status.js', fallback);
   }
 
+  /** skt02009 detail scrape — captures full student record. */
   private parseAndLogStudentPage(win: BrowserWindow, account: Account): void {
     if (win.isDestroyed()) return;
-    console.log(`[StudentParser][${account.label}] Running DOM scrape on skt02009`);
+    console.log(`[StudentParser][${account.label}] Running detail DOM scrape on skt02009`);
     win.webContents.executeJavaScript(`
       (function() {
+        function txt(el) { return (el && el.textContent || '').trim().replace(/\\s+/g, ' '); }
+        function num(s) { const n = parseInt(String(s||'').replace(/[^0-9-]/g,''), 10); return isNaN(n) ? undefined : n; }
+
         const tc = (document.querySelector('#txtTcKimlikNo')?.value || '').trim();
-        const adSoyadCell = document.querySelector('#dgDonemBilgileri tr:not(.frmListBaslik) td:nth-child(2)');
-        const adSoyad = (adSoyadCell?.textContent || '').trim();
-        const examPlates = Array.from(
-          document.querySelectorAll('#dgUygulamaNot tr:not(.frmListBaslik) td:nth-child(6)')
-        ).map(td => td.textContent.trim()).filter(Boolean);
-        const schedPlates = Array.from(
-          document.querySelectorAll('#dgDersProgrami tr:not(.frmListBaslik) td:nth-child(5)')
-        ).map(td => td.textContent.trim().replace(/\\s*\\(.*?\\)/g, '').trim()).filter(Boolean);
-        const plates = [...new Set([...examPlates, ...schedPlates])];
-        return { tc, adSoyad, plates };
+
+        // dgDonemBilgileri header order:
+        // 0:TC | 1:Ad Soyad | 2:Kurum | 3:Dönemi | 4:Grubu | 5:Şubesi | 6:Mevcut Sürücü Belgesi
+        // 7:İstenen Sertifika | 8:Kurum Onay | 9:İlçe Onay | 10:Uygulama | 11:Durumu
+        // 12:Teorik Hak | 13:Uygulama Hak | 14:E-Sınav Hak | 15:Kayıt Ücreti
+        const headerRow = document.querySelector('#dgDonemBilgileri tr:not(.frmListBaslik)');
+        let donem = {}, adSoyad = '';
+        if (headerRow) {
+          const cells = Array.from(headerRow.querySelectorAll('td')).map(txt);
+          adSoyad = cells[1] || '';
+          donem = {
+            kurum: cells[2], donemi: cells[3], grubu: cells[4], subesi: cells[5],
+            mevcutBelge: cells[6], istenenSertifika: cells[7],
+            kurumOnay: cells[8], ilceOnay: cells[9],
+            uygulama: cells[10], durumu: cells[11],
+            teorikHak: num(cells[12]), uygulamaHak: num(cells[13]),
+            eSinavHak: num(cells[14]), kayitUcreti: num(cells[15]),
+          };
+        }
+
+        // dgUygulamaNot header order:
+        // 0:TC | 1:Dönemi | 2:Ad Soyad | 3:Sınav Kodu | 4:Sınav Tarihi | 5:Araç Plaka
+        // 6:Usta Öğretici | 7:Onay Durumu | 8:Sınav Durumu | 9:Sınav Sonucu
+        const exams = Array.from(document.querySelectorAll('#dgUygulamaNot tr:not(.frmListBaslik)'))
+          .map(tr => Array.from(tr.querySelectorAll('td')).map(txt))
+          .filter(c => c.length >= 10)
+          .map(c => ({
+            donemi: c[1], sinavKodu: c[3], sinavTarihi: c[4], plaka: c[5],
+            ustaOgretici: c[6], onayDurumu: c[7], sinavDurumu: c[8], sonuc: c[9],
+          }));
+
+        // dgDersProgrami header order:
+        // 0:Dönemi | 1:Grup Adı | 2:Grup Başlama Tarihi | 3:Şubesi | 4:Araç Plakası
+        // 5:Ders Yeri | 6:Ders Tarihi | 7:Ders Saati | 8:Dersi Veren Personel | 9:Eğitim Türü
+        const lessons = Array.from(document.querySelectorAll('#dgDersProgrami tr:not(.frmListBaslik)'))
+          .map(tr => Array.from(tr.querySelectorAll('td')).map(txt))
+          .filter(c => c.length >= 10)
+          .map(c => ({
+            donemi: c[0], grupAdi: c[1], grupBaslama: c[2], subesi: c[3],
+            plaka: (c[4] || '').replace(/\\s*\\(.*?\\)/g, '').trim(),
+            dersYeri: c[5], dersTarihi: c[6], dersSaati: c[7],
+            personel: c[8], egitimTuru: c[9],
+          }));
+
+        return { tc, adSoyad, donem, exams, lessons };
       })();
-    `).then((result: { tc: string; adSoyad: string; plates: string[] } | null) => {
+    `).then((result: any) => {
       if (!result) {
-        console.log(`[StudentParser][${account.label}] No result returned from DOM scrape`);
+        console.log(`[StudentParser][${account.label}] No result returned from detail scrape`);
         return;
       }
-      const { tc, adSoyad, plates } = result;
-      if (!tc && !adSoyad) {
-        console.log(`[StudentParser][${account.label}] skt02009 loaded but no student data found (blank form)`);
+      const { tc, adSoyad, donem, exams, lessons } = result;
+      if (!tc || !adSoyad) {
+        console.log(`[StudentParser][${account.label}] skt02009 loaded but no student data (blank form)`);
         return;
       }
-      console.log(`[StudentParser][${account.label}] Scraped: tc=${tc}, adSoyad=${adSoyad}, plates=[${plates.join(', ')}]`);
-      this.ingestStudent(account, { tc, adSoyad, plates });
+      console.log(`[StudentParser][${account.label}] Detail scraped: tc=${tc}, adSoyad=${adSoyad}, exams=${exams.length}, lessons=${lessons.length}`);
+      const db = getStudentDb();
+      const r = db.ingestDetail(account.id, {
+        tc, adSoyad,
+        kurum: donem.kurum, donemi: donem.donemi, grubu: donem.grubu, subesi: donem.subesi,
+        mevcutBelge: donem.mevcutBelge, istenenSertifika: donem.istenenSertifika,
+        kurumOnay: donem.kurumOnay, ilceOnay: donem.ilceOnay,
+        uygulama: donem.uygulama, durumu: donem.durumu,
+        teorikHak: donem.teorikHak, uygulamaHak: donem.uygulamaHak,
+        eSinavHak: donem.eSinavHak, kayitUcreti: donem.kayitUcreti,
+        exams: exams || [], lessons: lessons || [],
+      });
+      console.log(`[Store][${account.label}] Detail ingested tc=${tc} ${r.studentIsNew ? '(NEW)' : '(UPDATE)'}. New plates for student=${r.newPlatesForStudent.length}, account=${r.newPlatesForAccount.length}. Total students=${db.countStudents(account.id)} (${db.countDetailed(account.id)} with detail)`);
       this.pushStoreToSidebar(win, account);
     }).catch((e: any) => {
-      console.error(`[StudentParser][${account.label}] DOM scrape failed:`, e);
+      console.error(`[StudentParser][${account.label}] Detail scrape failed:`, e);
     });
   }
 
-  private ingestStudent(account: Account, data: { tc: string; adSoyad: string; plates: string[] }) {
-    const db = getStudentDb();
-    const result = db.ingest(account.id, data);
-    if (data.tc) {
-      if (result.studentIsNew) {
-        console.log(`[Store][${account.label}] NEW student tc=${data.tc} adSoyad=${data.adSoyad}. Total students=${db.countStudents(account.id)}`);
-      } else {
-        console.log(`[Store][${account.label}] DEDUP student tc=${data.tc}. New plates for student: [${result.newPlatesForStudent.join(', ') || 'none'}]`);
+  /** skt02006 list scrape — bulk-ingests basic records for many students. */
+  private parseAndIngestStudentList(win: BrowserWindow, account: Account): void {
+    if (win.isDestroyed()) return;
+    console.log(`[ListParser][${account.label}] Running list DOM scrape on skt02006`);
+    win.webContents.executeJavaScript(`
+      (function() {
+        function txt(el) { return (el && el.textContent || '').trim().replace(/\\s+/g, ' '); }
+        const table = document.querySelector('table.frmList');
+        if (!table) return { rows: [], reason: 'no frmList table' };
+        const out = [];
+        const rows = table.querySelectorAll('tr');
+        for (const tr of rows) {
+          if (tr.classList.contains('frmListBaslik')) continue;
+          const cells = Array.from(tr.querySelectorAll('td')).map(txt);
+          if (cells.length < 3) continue;
+          // Existing batch scraper assumes col 1 = name, col 2 = TC. Keep that mapping.
+          const adSoyad = cells[1] || '';
+          const tc = cells[2] || '';
+          if (!/^[0-9]{11}$/.test(tc)) continue;
+          out.push({
+            tc, adSoyad,
+            // Best-effort mapping of remaining columns; keep raw for later analysis.
+            donemi: cells[3] || '',
+            grubu: cells[4] || '',
+            subesi: cells[5] || '',
+            durumu: cells[cells.length - 1] || '',
+            listRowRaw: cells,
+          });
+        }
+        return { rows: out };
+      })();
+    `).then((result: any) => {
+      if (!result || !Array.isArray(result.rows)) {
+        console.log(`[ListParser][${account.label}] No rows; reason=${result?.reason || 'unknown'}`);
+        return;
       }
-    }
-    console.log(`[Store][${account.label}] Plates ingested. New=${result.newPlatesForAccount.length}, total unique plates=${db.countPlates(account.id)}`);
+      const rows = result.rows as any[];
+      if (!rows.length) {
+        console.log(`[ListParser][${account.label}] Empty list (filter form likely not yet submitted)`);
+        return;
+      }
+      const db = getStudentDb();
+      const r = db.ingestList(account.id, rows);
+      console.log(`[ListParser][${account.label}] Ingested ${rows.length} rows: created=${r.created}, updated=${r.updated}. Total students=${db.countStudents(account.id)} (${db.countDetailed(account.id)} with detail)`);
+      this.pushStoreToSidebar(win, account);
+    }).catch((e: any) => {
+      console.error(`[ListParser][${account.label}] List scrape failed:`, e);
+    });
   }
 
   private serializeStore(account: Account) {
