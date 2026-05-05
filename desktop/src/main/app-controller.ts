@@ -287,16 +287,115 @@ export async function start(ctx: BootstrapContext): Promise<AppControllerHandle>
   async function showFakeListDialog(kind: 'students' | 'cars') {
     if (!mainWindow || mainWindow.isDestroyed()) return;
 
-    const fakeStudents = [
-      { tc: '14674579946', adSoyad: 'MEHMET ÇELİK', plates: ['33HE190', '33L3380'] },
-      { tc: '23456789012', adSoyad: 'AYŞE YILMAZ', plates: ['34ABC123'] },
-      { tc: '34567890123', adSoyad: 'AHMET KAYA', plates: ['33L3380', '33XY789'] },
-      { tc: '45678901234', adSoyad: 'ELİF DEMİR', plates: ['06FK4567'] },
-      { tc: '56789012345', adSoyad: 'MUSTAFA ŞAHİN', plates: ['33HE190'] },
-      { tc: '67890123456', adSoyad: 'ZEYNEP ÖZTÜRK', plates: ['34GH8901', '34ABC123'] },
+    interface ExamRow {
+      donemi: string; sinavKodu: string; sinavTarihi: string; plaka: string;
+      ustaOgretici: string; onayDurumu: string; sinavDurumu: string; sonuc: string;
+    }
+    interface LessonRow {
+      donemi: string; grupAdi: string; grupBaslama: string; subesi: string;
+      plaka: string; dersYeri: string; dersTarihi: string; dersSaati: string;
+      personel: string; egitimTuru: string;
+    }
+    interface FakeStudent {
+      tc: string; adSoyad: string; kurum: string;
+      donemi: string; grubu: string; subesi: string;
+      mevcutBelge: string; istenenSertifika: string;
+      kurumOnay: string; ilceOnay: string; uygulama: string; durumu: string;
+      teorikHak: number; uygulamaHak: number; eSinavHak: number; kayitUcreti: number;
+      exams: ExamRow[]; lessons: LessonRow[];
+    }
+
+    const KURUM = '99993164/ÖZEL AYDINCIK BATUHAN MOTORLU TAŞIT SÜRÜCÜLERİ KURSU';
+    const fakeStudents: FakeStudent[] = [
+      {
+        tc: '14674579946', adSoyad: 'MEHMET ÇELİK', kurum: KURUM,
+        donemi: '2026 - Mayıs', grubu: 'Grup-1', subesi: 'C',
+        mevcutBelge: 'B SINIFI SERTİFİKA', istenenSertifika: 'C SINIFI SERTİFİKA (Manuel)',
+        kurumOnay: 'Onaylandı', ilceOnay: 'Onaylandı',
+        uygulama: 'Muaf veya Geçti', durumu: 'Sertifika Almaya Hak Kazandı',
+        teorikHak: 1, uygulamaHak: 0, eSinavHak: 1, kayitUcreti: 162272,
+        exams: [
+          { donemi: '2026 - Nisan', sinavKodu: '13303121', sinavTarihi: '25/04/2026', plaka: '33HE190', ustaOgretici: 'YETKİNER TOKLU', onayDurumu: 'Onaylandı', sinavDurumu: 'Sınava Girdi', sonuc: 'Başarılı' },
+        ],
+        lessons: [
+          { donemi: '2026 - Mayıs', grupAdi: 'Grup 1', grupBaslama: '02/05/2026', subesi: 'C ŞUBESİ', plaka: '33L3380', dersYeri: 'Akan Trafik', dersTarihi: '04/05/2026', dersSaati: '15:00 - 15:50', personel: 'İBRAHİM ÇITIRKI', egitimTuru: 'Normal Eğitim' },
+          { donemi: '2026 - Mayıs', grupAdi: 'Grup 1', grupBaslama: '02/05/2026', subesi: 'C ŞUBESİ', plaka: '33L3380', dersYeri: 'Akan Trafik', dersTarihi: '05/05/2026', dersSaati: '15:00 - 15:50', personel: 'İBRAHİM ÇITIRKI', egitimTuru: 'Normal Eğitim' },
+        ],
+      },
+      {
+        tc: '23456789012', adSoyad: 'AYŞE YILMAZ', kurum: KURUM,
+        donemi: '2026 - Mayıs', grubu: 'Grup-2', subesi: 'B',
+        mevcutBelge: '—', istenenSertifika: 'B SINIFI SERTİFİKA',
+        kurumOnay: 'Onaylandı', ilceOnay: 'Beklemede',
+        uygulama: 'Devam Ediyor', durumu: 'Eğitim Sürüyor',
+        teorikHak: 2, uygulamaHak: 2, eSinavHak: 2, kayitUcreti: 92500,
+        exams: [],
+        lessons: [
+          { donemi: '2026 - Mayıs', grupAdi: 'Grup 2', grupBaslama: '02/05/2026', subesi: 'B ŞUBESİ', plaka: '34ABC123', dersYeri: 'Park ve Manevra', dersTarihi: '06/05/2026', dersSaati: '09:00 - 09:50', personel: 'AYHAN DEMİR', egitimTuru: 'Normal Eğitim' },
+        ],
+      },
+      {
+        tc: '34567890123', adSoyad: 'AHMET KAYA', kurum: KURUM,
+        donemi: '2026 - Nisan', grubu: 'Grup-1', subesi: 'B',
+        mevcutBelge: '—', istenenSertifika: 'B SINIFI SERTİFİKA',
+        kurumOnay: 'Onaylandı', ilceOnay: 'Onaylandı',
+        uygulama: 'Sınava Girdi', durumu: 'Tekrar Sınava Girecek',
+        teorikHak: 0, uygulamaHak: 1, eSinavHak: 0, kayitUcreti: 92500,
+        exams: [
+          { donemi: '2026 - Nisan', sinavKodu: '13301204', sinavTarihi: '20/04/2026', plaka: '33L3380', ustaOgretici: 'METİN ARSLAN', onayDurumu: 'Onaylandı', sinavDurumu: 'Sınava Girdi', sonuc: 'Başarısız' },
+          { donemi: '2026 - Nisan', sinavKodu: '13301888', sinavTarihi: '28/04/2026', plaka: '33XY789', ustaOgretici: 'METİN ARSLAN', onayDurumu: 'Onaylandı', sinavDurumu: 'Sınava Girmedi', sonuc: '—' },
+        ],
+        lessons: [
+          { donemi: '2026 - Nisan', grupAdi: 'Grup 1', grupBaslama: '01/04/2026', subesi: 'B ŞUBESİ', plaka: '33L3380', dersYeri: 'Akan Trafik', dersTarihi: '15/04/2026', dersSaati: '14:00 - 14:50', personel: 'METİN ARSLAN', egitimTuru: 'Normal Eğitim' },
+        ],
+      },
+      {
+        tc: '45678901234', adSoyad: 'ELİF DEMİR', kurum: KURUM,
+        donemi: '2026 - Mayıs', grubu: 'Grup-3', subesi: 'A2',
+        mevcutBelge: 'B SINIFI SERTİFİKA', istenenSertifika: 'A2 SINIFI SERTİFİKA (Manuel)',
+        kurumOnay: 'Onaylandı', ilceOnay: 'Onaylandı',
+        uygulama: 'Devam Ediyor', durumu: 'Eğitim Sürüyor',
+        teorikHak: 1, uygulamaHak: 2, eSinavHak: 1, kayitUcreti: 75000,
+        exams: [],
+        lessons: [
+          { donemi: '2026 - Mayıs', grupAdi: 'Grup 3', grupBaslama: '03/05/2026', subesi: 'A2 ŞUBESİ', plaka: '06FK4567', dersYeri: 'Akan Trafik', dersTarihi: '07/05/2026', dersSaati: '10:00 - 10:50', personel: 'HASAN ÖZ', egitimTuru: 'Normal Eğitim' },
+          { donemi: '2026 - Mayıs', grupAdi: 'Grup 3', grupBaslama: '03/05/2026', subesi: 'A2 ŞUBESİ', plaka: '06FK4567', dersYeri: 'Park ve Manevra', dersTarihi: '08/05/2026', dersSaati: '10:00 - 10:50', personel: 'HASAN ÖZ', egitimTuru: 'Normal Eğitim' },
+        ],
+      },
+      {
+        tc: '56789012345', adSoyad: 'MUSTAFA ŞAHİN', kurum: KURUM,
+        donemi: '2026 - Mayıs', grubu: 'Grup-1', subesi: 'B',
+        mevcutBelge: '—', istenenSertifika: 'B SINIFI SERTİFİKA',
+        kurumOnay: 'Beklemede', ilceOnay: 'Beklemede',
+        uygulama: 'Yeni Kayıt', durumu: 'Eğitime Başlamadı',
+        teorikHak: 2, uygulamaHak: 2, eSinavHak: 2, kayitUcreti: 92500,
+        exams: [],
+        lessons: [],
+      },
+      {
+        tc: '67890123456', adSoyad: 'ZEYNEP ÖZTÜRK', kurum: KURUM,
+        donemi: '2026 - Mayıs', grubu: 'Grup-2', subesi: 'B',
+        mevcutBelge: '—', istenenSertifika: 'B SINIFI SERTİFİKA',
+        kurumOnay: 'Onaylandı', ilceOnay: 'Onaylandı',
+        uygulama: 'Tamamlandı', durumu: 'Sınav Bekleniyor',
+        teorikHak: 1, uygulamaHak: 0, eSinavHak: 1, kayitUcreti: 92500,
+        exams: [
+          { donemi: '2026 - Mayıs', sinavKodu: '13305001', sinavTarihi: '02/05/2026', plaka: '34GH8901', ustaOgretici: 'EMRE TUNÇ', onayDurumu: 'Onaylandı', sinavDurumu: 'Sınava Girdi', sonuc: 'Başarılı' },
+        ],
+        lessons: [
+          { donemi: '2026 - Mayıs', grupAdi: 'Grup 2', grupBaslama: '02/05/2026', subesi: 'B ŞUBESİ', plaka: '34ABC123', dersYeri: 'Akan Trafik', dersTarihi: '04/05/2026', dersSaati: '11:00 - 11:50', personel: 'EMRE TUNÇ', egitimTuru: 'Normal Eğitim' },
+        ],
+      },
     ];
+
+    const platesOf = (s: FakeStudent): string[] =>
+      Array.from(new Set([
+        ...s.exams.map((e) => e.plaka),
+        ...s.lessons.map((l) => l.plaka),
+      ].filter(Boolean)));
+
     const fakePlates = Array.from(
-      new Set(fakeStudents.flatMap((s) => s.plates)),
+      new Set(fakeStudents.flatMap(platesOf)),
     ).sort();
 
     const isStudents = kind === 'students';
@@ -305,22 +404,26 @@ export async function start(ctx: BootstrapContext): Promise<AppControllerHandle>
     let bodyHtml = '';
     if (isStudents) {
       bodyHtml = fakeStudents
-        .map(
-          (s) => `
-        <div class="row">
+        .map((s) => {
+          const ps = platesOf(s).join(', ') || '—';
+          return `
+        <div class="row" data-tc="${s.tc}">
           <div class="info">
             <div class="name">${s.adSoyad}</div>
-            <div class="tc">${s.tc} · ${s.plates.join(', ') || '—'}</div>
+            <div class="tc">${s.tc} · ${ps}</div>
           </div>
           <button class="detay" data-tc="${s.tc}">Detay</button>
-        </div>`,
-        )
+        </div>`;
+        })
         .join('');
     } else {
       bodyHtml = fakePlates
         .map((p) => `<div class="row"><div class="plate">${p}</div></div>`)
         .join('');
     }
+
+    // Serialize fake students for renderer (used by detail view)
+    const fakeStudentsJson = JSON.stringify(fakeStudents).replace(/<\/script/gi, '<\\/script');
 
     const listWin = new BrowserWindow({
       width: 420,
@@ -341,10 +444,11 @@ export async function start(ctx: BootstrapContext): Promise<AppControllerHandle>
     const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><style>
       *{margin:0;padding:0;box-sizing:border-box}
       body{background:#1a1a2e;color:#e9e9f5;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Arial,sans-serif;display:flex;flex-direction:column;height:100vh;user-select:none;-webkit-user-select:none}
-      .drag{-webkit-app-region:drag;background:#12122a;padding:10px 16px;display:flex;align-items:center;justify-content:space-between}
-      .drag-title{font-size:13px;color:#8888aa;font-weight:500}
-      .close-btn{-webkit-app-region:no-drag;background:none;border:none;color:#8888aa;font-size:18px;cursor:pointer;padding:0 4px;line-height:1}
-      .close-btn:hover{color:#fff}
+      .drag{-webkit-app-region:drag;background:#12122a;padding:10px 16px;display:flex;align-items:center;justify-content:space-between;gap:8px}
+      .drag-title{font-size:13px;color:#8888aa;font-weight:500;flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+      .icon-btn{-webkit-app-region:no-drag;background:none;border:none;color:#8888aa;font-size:14px;cursor:pointer;padding:2px 8px;line-height:1;border-radius:4px}
+      .icon-btn:hover{color:#fff;background:#2a2a4a}
+      .close-btn{font-size:18px}
       .body{flex:1;overflow-y:auto;padding:8px 0}
       .row{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 16px;border-bottom:1px solid #20203a}
       .row:hover{background:#12122a}
@@ -355,31 +459,181 @@ export async function start(ctx: BootstrapContext): Promise<AppControllerHandle>
       .detay{background:#2a2a4a;border:none;color:#4361ee;cursor:pointer;padding:5px 12px;font-size:11px;border-radius:4px;font-weight:600}
       .detay:hover{background:#33335a}
       .footer{background:#12122a;padding:8px 16px;font-size:11px;color:#6b6b8a;text-align:center;border-top:1px solid #2a2a4a}
+      .hidden{display:none !important}
+
+      /* Detail view */
+      #detail-view .body{padding:0}
+      .det-hero{padding:18px 20px 14px;background:linear-gradient(180deg,#22224a 0%,#1a1a2e 100%);border-bottom:1px solid #2a2a4a}
+      .det-name{font-size:18px;font-weight:700;color:#e9e9f5}
+      .det-tc{font-size:12px;color:#8888aa;margin-top:2px;font-family:Consolas,monospace}
+      .det-status{display:inline-block;margin-top:8px;padding:3px 10px;font-size:11px;border-radius:10px;font-weight:600;background:#1a3a2e;color:#4ade80}
+      .det-status.pending{background:#3a2e1a;color:#fbbf24}
+      .det-status.fail{background:#3a1a1a;color:#f87171}
+      .section{padding:14px 20px;border-bottom:1px solid #20203a}
+      .section-title{font-size:11px;color:#4361ee;font-weight:700;letter-spacing:0.8px;margin-bottom:10px;text-transform:uppercase}
+      .kv{display:grid;grid-template-columns:1fr 1.4fr;gap:8px 12px;font-size:12px}
+      .kv-label{color:#6b6b8a}
+      .kv-val{color:#ddd;text-align:right;word-break:break-word}
+      .hak-row{display:flex;gap:8px;margin-top:6px}
+      .hak{flex:1;background:#12122a;border:1px solid #2a2a4a;border-radius:6px;padding:8px;text-align:center}
+      .hak-num{font-size:18px;font-weight:700;color:#4361ee}
+      .hak-num.zero{color:#6b6b8a}
+      .hak-lbl{font-size:10px;color:#8888aa;margin-top:2px;text-transform:uppercase;letter-spacing:0.5px}
+      .table{width:100%;font-size:11px;border-collapse:collapse}
+      .table th{background:#12122a;color:#8888aa;font-weight:600;text-align:left;padding:6px 8px;border-bottom:1px solid #2a2a4a;font-size:10px;text-transform:uppercase;letter-spacing:0.4px}
+      .table td{padding:6px 8px;border-bottom:1px solid #20203a;color:#ccc;vertical-align:top}
+      .badge{display:inline-block;padding:2px 6px;border-radius:8px;font-size:10px;font-weight:600}
+      .badge.ok{background:#1a3a2e;color:#4ade80}
+      .badge.fail{background:#3a1a1a;color:#f87171}
+      .badge.pending{background:#3a2e1a;color:#fbbf24}
+      .empty{padding:20px;text-align:center;color:#666;font-size:12px;font-style:italic}
     </style></head><body>
-      <div class="drag">
-        <div class="drag-title">${title}</div>
-        <button class="close-btn" id="close-btn">×</button>
+      <!-- LIST VIEW -->
+      <div id="list-view" style="display:flex;flex-direction:column;height:100vh">
+        <div class="drag">
+          <div class="drag-title">${title}</div>
+          <button class="icon-btn close-btn" id="close-btn">×</button>
+        </div>
+        <div class="body">${bodyHtml}</div>
+        <div class="footer">Örnek veri — gerçek kayıtlar değil</div>
       </div>
-      <div class="body">${bodyHtml}</div>
-      <div class="footer" id="footer">Örnek veri — gerçek kayıtlar değil</div>
+
+      <!-- DETAIL VIEW -->
+      <div id="detail-view" class="hidden" style="flex-direction:column;height:100vh">
+        <div class="drag">
+          <button class="icon-btn" id="back-btn" title="Geri">‹ Geri</button>
+          <div class="drag-title" id="det-title-bar">Öğrenci Detay</div>
+          <button class="icon-btn close-btn" id="close-btn-2">×</button>
+        </div>
+        <div class="body" id="detail-body"></div>
+        <div class="footer">Örnek veri — gerçek kayıtlar değil</div>
+      </div>
+
       <script>
+        const STUDENTS = ${fakeStudentsJson};
+        const listView = document.getElementById('list-view');
+        const detailView = document.getElementById('detail-view');
+        const detailBody = document.getElementById('detail-body');
+        const titleBar = document.getElementById('det-title-bar');
+
         document.getElementById('close-btn').onclick = () => window.close();
-        const footer = document.getElementById('footer');
+        document.getElementById('close-btn-2').onclick = () => window.close();
+        document.getElementById('back-btn').onclick = () => showList();
+
+        function showList() {
+          detailView.classList.add('hidden');
+          detailView.style.display = 'none';
+          listView.classList.remove('hidden');
+          listView.style.display = 'flex';
+        }
+        function showDetail(tc) {
+          const s = STUDENTS.find(x => x.tc === tc);
+          if (!s) { console.log('[FakeList] No student for tc=' + tc); return; }
+          listView.style.display = 'none';
+          detailView.classList.remove('hidden');
+          detailView.style.display = 'flex';
+          titleBar.textContent = s.adSoyad;
+          detailBody.innerHTML = renderDetail(s);
+          detailBody.scrollTop = 0;
+        }
+
+        function statusClass(durum) {
+          const d = (durum || '').toLowerCase();
+          if (d.includes('hak kazandı') || d.includes('başarılı') || d.includes('tamamlandı')) return '';
+          if (d.includes('başarısız') || d.includes('iptal') || d.includes('red')) return 'fail';
+          return 'pending';
+        }
+        function badge(text) {
+          const t = (text || '').toLowerCase();
+          let cls = 'pending';
+          if (t === 'başarılı' || t === 'onaylandı' || t === 'sınava girdi') cls = 'ok';
+          else if (t === 'başarısız' || t === 'sınava girmedi' || t === 'iptal') cls = 'fail';
+          return '<span class="badge ' + cls + '">' + (text || '—') + '</span>';
+        }
+
+        function renderDetail(s) {
+          const platesAll = Array.from(new Set([
+            ...s.exams.map(e => e.plaka),
+            ...s.lessons.map(l => l.plaka)
+          ].filter(Boolean)));
+          const passed = s.exams.filter(e => (e.sonuc || '').toLowerCase() === 'başarılı').length;
+          const failed = s.exams.filter(e => (e.sonuc || '').toLowerCase() === 'başarısız').length;
+          const teachers = Array.from(new Set([
+            ...s.exams.map(e => e.ustaOgretici),
+            ...s.lessons.map(l => l.personel)
+          ].filter(Boolean)));
+
+          const examRows = s.exams.length ? s.exams.map(e => \`
+            <tr>
+              <td>\${e.donemi}</td><td>\${e.sinavTarihi}</td><td>\${e.plaka}</td>
+              <td>\${e.ustaOgretici}</td><td>\${badge(e.sinavDurumu)}</td><td>\${badge(e.sonuc)}</td>
+            </tr>\`).join('') : '<tr><td colspan="6" class="empty">Sınav kaydı yok</td></tr>';
+
+          const lessonRows = s.lessons.length ? s.lessons.map(l => \`
+            <tr>
+              <td>\${l.dersTarihi}</td><td>\${l.dersSaati}</td><td>\${l.plaka}</td>
+              <td>\${l.dersYeri}</td><td>\${l.personel}</td><td>\${l.egitimTuru}</td>
+            </tr>\`).join('') : '<tr><td colspan="6" class="empty">Ders kaydı yok</td></tr>';
+
+          return \`
+            <div class="det-hero">
+              <div class="det-name">\${s.adSoyad}</div>
+              <div class="det-tc">\${s.tc} · \${s.donemi} · \${s.grubu} · Şube \${s.subesi}</div>
+              <div class="det-status \${statusClass(s.durumu)}">\${s.durumu}</div>
+            </div>
+
+            <div class="section">
+              <div class="section-title">Genel Bilgiler</div>
+              <div class="kv">
+                <div class="kv-label">Kurum</div><div class="kv-val">\${s.kurum}</div>
+                <div class="kv-label">Mevcut Belge</div><div class="kv-val">\${s.mevcutBelge}</div>
+                <div class="kv-label">İstenen Sertifika</div><div class="kv-val">\${s.istenenSertifika}</div>
+                <div class="kv-label">Kurum Onayı</div><div class="kv-val">\${badge(s.kurumOnay)}</div>
+                <div class="kv-label">İlçe Onayı</div><div class="kv-val">\${badge(s.ilceOnay)}</div>
+                <div class="kv-label">Uygulama Durumu</div><div class="kv-val">\${s.uygulama}</div>
+                <div class="kv-label">Kayıt Ücreti</div><div class="kv-val">\${(s.kayitUcreti||0).toLocaleString('tr-TR')} ₺</div>
+                <div class="kv-label">Araçlar</div><div class="kv-val">\${platesAll.join(', ') || '—'}</div>
+                <div class="kv-label">Eğitmenler</div><div class="kv-val">\${teachers.join(', ') || '—'}</div>
+              </div>
+            </div>
+
+            <div class="section">
+              <div class="section-title">Sınav Hakları</div>
+              <div class="hak-row">
+                <div class="hak"><div class="hak-num \${s.teorikHak ? '' : 'zero'}">\${s.teorikHak}</div><div class="hak-lbl">Teorik</div></div>
+                <div class="hak"><div class="hak-num \${s.uygulamaHak ? '' : 'zero'}">\${s.uygulamaHak}</div><div class="hak-lbl">Uygulama</div></div>
+                <div class="hak"><div class="hak-num \${s.eSinavHak ? '' : 'zero'}">\${s.eSinavHak}</div><div class="hak-lbl">E-Sınav</div></div>
+              </div>
+              <div style="margin-top:10px;font-size:11px;color:#8888aa">
+                Geçti: <span style="color:#4ade80;font-weight:600">\${passed}</span> ·
+                Kaldı: <span style="color:#f87171;font-weight:600">\${failed}</span> ·
+                Toplam Sınav: <span style="color:#ddd;font-weight:600">\${s.exams.length}</span>
+              </div>
+            </div>
+
+            <div class="section">
+              <div class="section-title">Sınav Geçmişi</div>
+              <table class="table">
+                <thead><tr><th>Dönem</th><th>Tarih</th><th>Plaka</th><th>Usta Öğretici</th><th>Durum</th><th>Sonuç</th></tr></thead>
+                <tbody>\${examRows}</tbody>
+              </table>
+            </div>
+
+            <div class="section">
+              <div class="section-title">Ders Programı</div>
+              <table class="table">
+                <thead><tr><th>Tarih</th><th>Saat</th><th>Plaka</th><th>Yer</th><th>Personel</th><th>Tür</th></tr></thead>
+                <tbody>\${lessonRows}</tbody>
+              </table>
+            </div>
+          \`;
+        }
+
         document.querySelectorAll('.detay').forEach(b => {
           b.onclick = () => {
             const tc = b.getAttribute('data-tc');
-            console.log('[FakeList] Detay clicked tc=' + tc);
-            const row = b.closest('.row');
-            const name = row.querySelector('.name').textContent;
-            // visual feedback: flash row + update footer
-            row.style.transition = 'background 0.3s';
-            row.style.background = '#1a3a5a';
-            setTimeout(() => { row.style.background = ''; }, 600);
-            const orig = b.textContent;
-            b.textContent = '✓';
-            b.disabled = true;
-            setTimeout(() => { b.textContent = orig; b.disabled = false; }, 800);
-            footer.textContent = 'Detay tıklandı: ' + name + ' (TC ' + tc + ') — örnek veri, gerçek bir işlem yapılmadı';
+            console.log('[FakeList] Detay opening tc=' + tc);
+            showDetail(tc);
           };
         });
       </script>
