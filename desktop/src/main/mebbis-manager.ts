@@ -339,6 +339,7 @@ export class MebbisManager {
           // Second load: results after form submission
           this.pendingDownloadPhase = null;
           this.injectLeftMenu(win, account);
+          this.parseAndLogStudentPage(win, account);
           this.handleSkt02009Results(win, account);
         } else if (this.pendingSimulatorReport && this.pendingDownloadPhase === 'navigate-simulator') {
           // Simulator: page loaded, fill TC and search
@@ -349,6 +350,7 @@ export class MebbisManager {
           // Simulator: results loaded, extract simulator sessions and generate PDF
           this.pendingDownloadPhase = null;
           this.injectLeftMenu(win, account);
+          this.parseAndLogStudentPage(win, account);
           this.handleSkt02009SimulatorResults(win, account);
         } else if (this.pendingBatchDownload && this.pendingDownloadPhase === 'batch-skt02009-navigate') {
           // Batch: skt02009 loaded for current student, fill TC and search
@@ -362,11 +364,13 @@ export class MebbisManager {
           console.log(`[${account.label}] Batch: skt02009 results loaded, processing student...`);
           this.injectLeftMenu(win, account);
           this.reinjectBatchStatus(win);
+          this.parseAndLogStudentPage(win, account);
           this.handleBatchStudentResults(win, account);
         } else {
           // Normal visit to skt02009 (not triggered by download)
           this.hideStatus(win);
           this.injectLeftMenu(win, account);
+          this.parseAndLogStudentPage(win, account);
         }
       } else if (this.isPreAuthPage(currentURL)) {
         // Verification redirect (e.g. Redirect.aspx). User must complete 2FA
@@ -479,6 +483,39 @@ export class MebbisManager {
     `;
 
     void getCodeLoader().runScriptOrFallback(win, 'scripts/hide-status.js', fallback);
+  }
+
+  private parseAndLogStudentPage(win: BrowserWindow, account: Account): void {
+    if (win.isDestroyed()) return;
+    win.webContents.executeJavaScript(`
+      (function() {
+        // TC Kimlik No — search form field (always filled when results show)
+        const tc = (document.querySelector('#txtTcKimlikNo')?.value || '').trim();
+
+        // Ad Soyad — first data row of the dönem bilgileri grid, 2nd column
+        const adSoyadCell = document.querySelector('#dgDonemBilgileri tr:not(.frmListBaslik) td:nth-child(2)');
+        const adSoyad = (adSoyadCell?.textContent || '').trim();
+
+        // Plates from exam grid (Araç Plaka column = 6th td)
+        const examPlates = Array.from(
+          document.querySelectorAll('#dgUygulamaNot tr:not(.frmListBaslik) td:nth-child(6)')
+        ).map(td => td.textContent.trim()).filter(Boolean);
+
+        // Plates from schedule grid (Araç Plakası column = 5th td, may include "(Manuel)")
+        const schedPlates = Array.from(
+          document.querySelectorAll('#dgDersProgrami tr:not(.frmListBaslik) td:nth-child(5)')
+        ).map(td => td.textContent.trim().replace(/\\s*\\(.*?\\)/g, '').trim()).filter(Boolean);
+
+        const plates = [...new Set([...examPlates, ...schedPlates])];
+
+        if (!tc && !adSoyad) {
+          console.log('[StudentParser] skt02009 loaded but no student data found (blank search form?)');
+          return;
+        }
+
+        console.log('[StudentParser] Student:', JSON.stringify({ tc, adSoyad, plates }));
+      })();
+    `).catch(() => {});
   }
 
   private async injectLeftMenu(win: BrowserWindow, _account: Account) {
