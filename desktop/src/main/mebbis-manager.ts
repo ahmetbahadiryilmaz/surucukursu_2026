@@ -6,6 +6,7 @@ import { getCodeLoader } from './remote-code-loader';
 import { fetchEncryptedTemplate } from './template-fetcher';
 import { getRequestLogger } from './request-logger';
 import { getStudentDb } from './student-db';
+import { pushList, pushDetail } from './student-sync';
 
 
 interface RunningAccount {
@@ -596,6 +597,27 @@ export class MebbisManager {
       });
       console.log(`[Store][${account.label}] Detail ingested tc=${tc} ${r.studentIsNew ? '(NEW)' : '(UPDATE)'}. New plates for student=${r.newPlatesForStudent.length}, account=${r.newPlatesForAccount.length}. Total students=${db.countStudents(account.id)} (${db.countDetailed(account.id)} with detail)`);
       this.pushStoreToSidebar(win, account);
+
+      // Push to backend (write-through, fire-and-forget)
+      pushDetail(account.id, {
+        tc, adSoyad,
+        kurum: donem.kurum, donem: donem.donemi, grup: donem.grubu, sube: donem.subesi,
+        mevcutBelge: donem.mevcutBelge, istenenSertifika: donem.istenenSertifika,
+        kurumOnay: donem.kurumOnay, ilceOnay: donem.ilceOnay,
+        uygulama: donem.uygulama, durum: donem.durumu,
+        teorikHak: donem.teorikHak, uygulamaHak: donem.uygulamaHak,
+        esinavHak: donem.eSinavHak, kayitUcreti: donem.kayitUcreti,
+        exams: (exams || []).map((e: any) => ({
+          donem: e.donemi, sinavKodu: e.sinavKodu, sinavTarihi: e.sinavTarihi,
+          plaka: e.plaka, ustaOgretici: e.ustaOgretici,
+          onayDurumu: e.onayDurumu, sinavDurumu: e.sinavDurumu, sonuc: e.sonuc,
+        })),
+        lessons: (lessons || []).map((l: any) => ({
+          donem: l.donemi, grupAdi: l.grupAdi, grupBaslama: l.grupBaslama, sube: l.subesi,
+          plaka: l.plaka, dersYeri: l.dersYeri, dersTarihi: l.dersTarihi, dersSaati: l.dersSaati,
+          personel: l.personel, egitimTuru: l.egitimTuru,
+        })),
+      });
     }).catch((e: any) => {
       console.error(`[StudentParser][${account.label}] Detail scrape failed:`, e);
     });
@@ -646,6 +668,16 @@ export class MebbisManager {
       const r = db.ingestList(account.id, rows);
       console.log(`[ListParser][${account.label}] Ingested ${rows.length} rows: created=${r.created}, updated=${r.updated}. Total students=${db.countStudents(account.id)} (${db.countDetailed(account.id)} with detail)`);
       this.pushStoreToSidebar(win, account);
+
+      // Push to backend
+      pushList(account.id, rows.map((row) => ({
+        tc: row.tc,
+        adSoyad: row.adSoyad,
+        donem: row.donemi,
+        grup: row.grubu,
+        sube: row.subesi,
+        durum: row.durumu,
+      })));
     }).catch((e: any) => {
       console.error(`[ListParser][${account.label}] List scrape failed:`, e);
     });

@@ -26,6 +26,7 @@ import { app, BrowserWindow, ipcMain, session, Menu, dialog, shell } from 'elect
 import type { MenuItemConstructorOptions } from 'electron';
 import { Account, SimulatorType } from './account-store';
 import { AuthStore } from './auth-store';
+import { configureStudentSync, pullAll as pullStudentSync } from './student-sync';
 import { MebbisManager } from './mebbis-manager';
 import { apiClient, MebbisAccount, ActivityLogBody } from './api-client';
 import { getCodeLoader } from './remote-code-loader';
@@ -60,6 +61,15 @@ export interface AppControllerHandle {
 export async function start(ctx: BootstrapContext): Promise<AppControllerHandle> {
   const authStore = new AuthStore();
   const mebbisManager = new MebbisManager();
+
+  // Wire the student-sync HTTP client. Account-id resolver returns null;
+  // sync calls receive the explicit account.id from MebbisManager scrape paths.
+  configureStudentSync(() => authStore.getToken(), () => null);
+
+  // If we already have a valid token from a previous session, pull on boot.
+  if (authStore.getToken()) {
+    pullStudentSync().catch((e) => console.error('[StudentSync] Boot pull failed:', e));
+  }
 
   let mainWindow: BrowserWindow | null = null;
   let isShiftHeld = false;
@@ -782,6 +792,8 @@ export async function start(ctx: BootstrapContext): Promise<AppControllerHandle>
           school = await apiClient.getMySchool(result.token).catch(() => null);
           if (school?.name) authStore.setSavedSchoolName(school.name);
         }
+        // Pull the school's student/plate data into local DB on every login.
+        pullStudentSync().catch((e) => console.error('[StudentSync] Login pull failed:', e));
         return { user: result.user, school };
       } catch (err: any) {
         const raw = String(err?.message || '');
