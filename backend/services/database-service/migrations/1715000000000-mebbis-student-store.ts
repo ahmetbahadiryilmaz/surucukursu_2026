@@ -28,7 +28,7 @@ export class MebbisStudentStore1715000000000 implements MigrationInterface {
       SELECT COUNT(*) AS c FROM information_schema.tables
       WHERE table_schema = DATABASE() AND table_name = 'driving_school_students'
     `);
-    if (!parentExists?.[0]?.c) {
+    if (!Number(parentExists?.[0]?.c)) {
       console.log('[migration] driving_school_students does not exist — fresh DB, nothing to migrate.');
       return;
     }
@@ -132,7 +132,7 @@ export class MebbisStudentStore1715000000000 implements MigrationInterface {
         AND table_name = 'driving_school_students'
         AND column_name = 'license_class'
     `);
-    if (hasMebbisCols?.[0]?.c > 0) {
+    if (Number(hasMebbisCols?.[0]?.c) > 0) {
       await queryRunner.query(`
         INSERT INTO \`driving_school_student_mebbis\`
           (student_id, school_id, has_detail, donem, istenen_sertifika, durum,
@@ -165,7 +165,7 @@ export class MebbisStudentStore1715000000000 implements MigrationInterface {
           AND table_name = 'driving_school_students'
           AND column_name = ?
       `, [col]);
-      if (exists?.[0]?.c > 0) {
+      if (Number(exists?.[0]?.c) > 0) {
         await queryRunner.query(`ALTER TABLE \`driving_school_students\` DROP COLUMN \`${col}\``);
       }
     };
@@ -184,7 +184,7 @@ export class MebbisStudentStore1715000000000 implements MigrationInterface {
         AND table_name = 'driving_school_students'
         AND column_name = 'source'
     `);
-    if (!hasSourceOnStudents?.[0]?.c) {
+    if (!Number(hasSourceOnStudents?.[0]?.c)) {
       await queryRunner.query(`
         ALTER TABLE \`driving_school_students\`
           ADD COLUMN \`source\` ENUM('manual','mebbis_scrape') NOT NULL DEFAULT 'manual'
@@ -197,7 +197,7 @@ export class MebbisStudentStore1715000000000 implements MigrationInterface {
         AND table_name = 'driving_school_cars'
         AND column_name = 'source'
     `);
-    if (!hasSourceOnCars?.[0]?.c) {
+    if (!Number(hasSourceOnCars?.[0]?.c)) {
       await queryRunner.query(`
         ALTER TABLE \`driving_school_cars\`
           ADD COLUMN \`source\` ENUM('manual','mebbis_scrape') NOT NULL DEFAULT 'manual'
