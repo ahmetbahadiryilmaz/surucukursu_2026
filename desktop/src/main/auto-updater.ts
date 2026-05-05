@@ -141,7 +141,7 @@ export function showWhatsNewIfUpdated(mainWindow: BrowserWindow): void {
   });
 }
 
-interface VersionCheckResult {
+export interface VersionCheckResult {
   allowed: boolean;
   /**
    * 'ok'           — version is within allowed range
@@ -464,7 +464,7 @@ export function setupAutoUpdater(mainWindow: BrowserWindow | null) {
  *   maximumVersion     — block if app is above this (too-new protection; no auto-downgrade)
  *   strictVersionCheck — if false, skip all blocking; everyone is allowed to run
  */
-function fetchVersionCheck(
+export function fetchVersionCheck(
   version: string,
 ): Promise<VersionCheckResult> {
   return new Promise((resolve, reject) => {

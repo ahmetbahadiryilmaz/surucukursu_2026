@@ -94,6 +94,13 @@ export const ENCRYPTED_TEMPLATE_URL = `${API_BASE_URL}/desktop/desktop-service/t
  */
 export const DESKTOP_CODE_BASE_URL = `${API_BASE_URL}/desktop/desktop-service/desktop-code`;
 
+/**
+ * Dev-mode opt-in: when true, the remote-code loader runs sync() even in dev.
+ * Set DESKTOP_FORCE_REMOTE_CODE=1 in desktop/.env(.local) to test deploys
+ * locally without packaging. Packaged builds always sync regardless.
+ */
+export const FORCE_REMOTE_CODE_IN_DEV = /^(1|true|yes)$/i.test(envOr('DESKTOP_FORCE_REMOTE_CODE', ''));
+
 if (IS_DEV) {
   // Helpful one-line confirmation of which backend dev mode is pointing at.
   // eslint-disable-next-line no-console

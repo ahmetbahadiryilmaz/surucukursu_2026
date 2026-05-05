@@ -5,7 +5,7 @@ import { MebbisAccount } from './api-client';
 import { AuthStore } from './auth-store';
 import { apiClient } from './api-client';
 import { MebbisManager } from './mebbis-manager';
-import { enforceVersionCheckWithSplash, showWhatsNewIfUpdated, setupAutoUpdater, getPendingWhatsNew, markWhatsNewSeen } from './auto-updater';
+import { enforceVersionCheckWithSplash, showWhatsNewIfUpdated, setupAutoUpdater, getPendingWhatsNew, markWhatsNewSeen, fetchVersionCheck } from './auto-updater';
 import { getCodeLoader } from './remote-code-loader';
 import { initDeviceId, getDeviceId } from './device-id';
 import { IS_DEV } from './config';
@@ -70,6 +70,9 @@ function setupIPC() {
 
   // Remote code version (e.g. "1.2.4.001") — falls back to app version if not yet synced
   ipcMain.handle('desktop-code:version', () => getCodeLoader().getVersion() ?? app.getVersion());
+
+  // Installed desktop app version from package.json (e.g. "1.2.5")
+  ipcMain.handle('app:version', () => app.getVersion());
 
   // Dev test PDF generators — only functional in dev mode
   ipcMain.handle('dev:test-direksiyon-pdf', async (_event, sinif: string) => {
@@ -342,35 +345,199 @@ app.whenReady().then(async () => {
   // Set up auto-updater for future checks
   setupAutoUpdater(mainWindow!);
 
-  // Set up application menu with only "Hakkında"
-  const menu = Menu.buildFromTemplate([
-    {
-      label: 'Hakkında',
-      click: () => {
-        if (!mainWindow || mainWindow.isDestroyed()) return;
-        dialog.showMessageBox(mainWindow, {
-          type: 'info',
-          title: 'Hakkında',
-          message: `MTSK Uygulaması\nSürüm: v${app.getVersion()}`,
-          detail: `Web: online.mtsk.app\nWhatsApp: +90 552 187 03 34`,
-          buttons: ['WhatsApp', 'Web Sitesi', 'Kapat'],
-          defaultId: 2,
-          cancelId: 2,
-        }).then((result) => {
-          if (result.response === 0) {
-            shell.openExternal('https://wa.me/905521870334');
-          } else if (result.response === 1) {
-            shell.openExternal('https://online.mtsk.app');
-          }
-        });
-      },
-    },
-  ]);
-  Menu.setApplicationMenu(menu);
+  // Application menu: "Hakkında" always; "Check Remote Version" only in dev;
+  // "Test" submenu appears while user holds Shift.
+  rebuildAppMenu();
+
+  // Track Shift key state to toggle the hidden Test menu.
+  // Released-on-blur guards against the user alt-tabbing while Shift is held.
+  mainWindow!.webContents.on('before-input-event', (_event, input) => {
+    const next = input.shift === true;
+    if (next !== isShiftHeld) {
+      isShiftHeld = next;
+      rebuildAppMenu();
+    }
+  });
+  mainWindow!.on('blur', () => {
+    if (isShiftHeld) {
+      isShiftHeld = false;
+      rebuildAppMenu();
+    }
+  });
 
   // Show "What's New" dialog on first launch after update
   showWhatsNewIfUpdated(mainWindow!);
 });
+
+let isShiftHeld = false;
+
+function rebuildAppMenu() {
+  const items: Electron.MenuItemConstructorOptions[] = [
+    {
+      label: 'Hakkında',
+      click: showAboutDialog,
+    },
+  ];
+
+  if (IS_DEV) {
+    items.push({
+      label: 'Remote Sürüm Kontrolü',
+      click: showRemoteVersionDialog,
+    });
+  }
+
+  if (isShiftHeld) {
+    items.push({
+      label: '🧪 Test',
+      submenu: [
+        { label: 'Direksiyon Takip PDF…', click: showDireksiyonPdfDialog },
+        { label: 'Simülasyon Raporu PDF…', click: showSimulatorPdfDialog },
+      ],
+    });
+  }
+
+  Menu.setApplicationMenu(Menu.buildFromTemplate(items));
+}
+
+function showAboutDialog() {
+  if (!mainWindow || mainWindow.isDestroyed()) return;
+  dialog.showMessageBox(mainWindow, {
+    type: 'info',
+    title: 'Hakkında',
+    message: `MTSK Uygulaması\nSürüm: v${app.getVersion()}`,
+    detail: `Web: online.mtsk.app\nWhatsApp: +90 552 187 03 34`,
+    buttons: ['WhatsApp', 'Web Sitesi', 'Kapat'],
+    defaultId: 2,
+    cancelId: 2,
+  }).then((result) => {
+    if (result.response === 0) {
+      shell.openExternal('https://wa.me/905521870334');
+    } else if (result.response === 1) {
+      shell.openExternal('https://online.mtsk.app');
+    }
+  });
+}
+
+async function showDireksiyonPdfDialog() {
+  if (!mainWindow || mainWindow.isDestroyed()) return;
+
+  const r1 = await dialog.showMessageBox(mainWindow, {
+    type: 'question',
+    title: 'Direksiyon Takip PDF',
+    message: 'Hangi sınıf için test PDF oluşturulsun?',
+    buttons: ['Yeni A (14)', 'Yeni B (16)', 'Geçiş…', 'İptal'],
+    defaultId: 1,
+    cancelId: 3,
+    noLink: true,
+  });
+
+  let sinif: string | null = null;
+  if (r1.response === 0) sinif = '0,A|14';
+  else if (r1.response === 1) sinif = '0,B|16';
+  else if (r1.response === 2) {
+    const r2 = await dialog.showMessageBox(mainWindow, {
+      type: 'question',
+      title: 'Geçiş Türü',
+      message: 'Hangi geçiş türü için PDF oluşturulsun?',
+      buttons: [
+        'B → C (20 ders)',
+        'B → A2 (12, simülatörlü)',
+        'B → A2 (12, sim. yok)',
+        'D → C (10 ders)',
+        'C → D1 (4 ders)',
+        'İptal',
+      ],
+      defaultId: 0,
+      cancelId: 5,
+      noLink: true,
+    });
+    if (r2.response === 0) sinif = 'B(2016 Sonrası),C|20';
+    else if (r2.response === 1) sinif = 'B,A2|12';
+    else if (r2.response === 2) sinif = 'B,A2|12-nosim';
+    else if (r2.response === 3) sinif = 'D,C|10';
+    else if (r2.response === 4) sinif = 'C,D1|4';
+  }
+
+  if (!sinif) return;
+
+  try {
+    await mebbisManager.generateTestDireksiyonPdf(sinif, mainWindow);
+  } catch (err: any) {
+    dialog.showErrorBox('PDF Oluşturulamadı', err?.message || 'Bilinmeyen hata');
+  }
+}
+
+async function showSimulatorPdfDialog() {
+  if (!mainWindow || mainWindow.isDestroyed()) return;
+
+  const r = await dialog.showMessageBox(mainWindow, {
+    type: 'question',
+    title: 'Simülasyon Raporu PDF',
+    message: 'Hangi tip simülasyon raporu oluşturulsun?',
+    detail: 'Rastgele test verisi ile PDF üretilir.',
+    buttons: ['Sesim (1 rapor)', 'Ana Grup (11 rapor)', 'Her İkisi (12 rapor)', 'İptal'],
+    defaultId: 0,
+    cancelId: 3,
+    noLink: true,
+  });
+
+  let simType: string | null = null;
+  if (r.response === 0) simType = 'sesim';
+  else if (r.response === 1) simType = 'ana_grup';
+  else if (r.response === 2) simType = 'both';
+
+  if (!simType) return;
+
+  try {
+    await mebbisManager.generateTestSimulatorPdf(simType, mainWindow);
+  } catch (err: any) {
+    dialog.showErrorBox('PDF Oluşturulamadı', err?.message || 'Bilinmeyen hata');
+  }
+}
+
+async function showRemoteVersionDialog() {
+  if (!mainWindow || mainWindow.isDestroyed()) return;
+
+  const installedVer = app.getVersion();
+
+  // Force a fresh sync so the dialog reflects the live server state, not a
+  // stale cache. Bypasses the IS_DEV early-return inside sync().
+  let codeSyncInfo: string;
+  try {
+    await getCodeLoader().sync({ force: true });
+    const fresh = getCodeLoader().getVersion();
+    codeSyncInfo = fresh
+      ? `Remote kod sürümü:  v${fresh}`
+      : `Remote kod sürümü:  (sunucuda version.json yok)`;
+  } catch (err: any) {
+    codeSyncInfo = `Remote kod sürümü:  ✗ sync hatası: ${err?.message || 'Bilinmeyen hata'}`;
+  }
+
+  let updaterInfo: string;
+  try {
+    const result = await fetchVersionCheck(installedVer);
+    const lines = [
+      `Sunucu min. sürüm:  v${result.minimumVersion}`,
+      result.maximumVersion ? `Sunucu max. sürüm:  v${result.maximumVersion}` : null,
+      `Durum:              ${result.allowed ? '✓ izin verildi' : '✗ engellendi (' + result.reason + ')'}`,
+    ].filter(Boolean);
+    updaterInfo = lines.join('\n');
+  } catch (err: any) {
+    updaterInfo = `Sunucuya ulaşılamadı: ${err?.message || 'Bilinmeyen hata'}`;
+  }
+
+  await dialog.showMessageBox(mainWindow, {
+    type: 'info',
+    title: 'Remote Sürüm Kontrolü',
+    message: 'Sürüm Bilgisi',
+    detail:
+      `Yüklü uygulama:     v${installedVer}\n` +
+      `${codeSyncInfo}\n\n` +
+      updaterInfo,
+    buttons: ['Tamam'],
+    noLink: true,
+  });
+}
 
 app.on('window-all-closed', () => {
   // Stop all running accounts and flush cookies

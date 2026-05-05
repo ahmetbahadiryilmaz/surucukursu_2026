@@ -49,4 +49,7 @@ contextBridge.exposeInMainWorld('mebbisAPI', {
 
   // Remote code version (e.g. "1.2.4.001")
   getCodeVersion: () => ipcRenderer.invoke('desktop-code:version'),
+
+  // Installed desktop app version (e.g. "1.2.5")
+  getAppVersion: () => ipcRenderer.invoke('app:version'),
 });

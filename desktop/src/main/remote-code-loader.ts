@@ -28,7 +28,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as crypto from 'crypto';
 import type { BrowserWindow } from 'electron';
-import { IS_DEV, DESKTOP_CODE_BASE_URL } from './config';
+import { IS_DEV, DESKTOP_CODE_BASE_URL, FORCE_REMOTE_CODE_IN_DEV } from './config';
 import {
   postSignedBinary,
   decryptPayload,
@@ -64,10 +64,13 @@ class RemoteCodeLoader {
    * the local cache, and persists them. Never throws — silently falls back to
    * cached files if the server is unreachable.
    */
-  async sync(): Promise<void> {
-    if (IS_DEV) {
-      console.log('[CodeLoader] Dev mode — skipping remote code sync.');
+  async sync(opts: { force?: boolean } = {}): Promise<void> {
+    if (IS_DEV && !FORCE_REMOTE_CODE_IN_DEV && !opts.force) {
+      console.log('[CodeLoader] Dev mode — skipping remote code sync. (Set DESKTOP_FORCE_REMOTE_CODE=1 or call sync({force:true}) to enable.)');
       return;
+    }
+    if (IS_DEV) {
+      console.log(`[CodeLoader] Dev mode — syncing (${opts.force ? 'forced' : 'env-flag'}).`);
     }
     try {
       console.log('[CodeLoader] Checking for code updates...');

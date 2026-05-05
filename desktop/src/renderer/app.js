@@ -718,11 +718,17 @@ document.getElementById('whats-new-ok').addEventListener('click', async () => {
   // Resolve dev mode before anything else so showMain can use it
   devMode = await api.isDev().catch(() => false);
 
-  // Show remote code version in bottom-right corner
-  const codeVer = await api.getCodeVersion().catch(() => null);
-  if (codeVer) {
-    const el = document.getElementById('code-version');
-    if (el) el.textContent = `v${codeVer}`;
+  // Show desktop app version + remote code version in bottom-right corner
+  const [appVer, codeVer] = await Promise.all([
+    api.getAppVersion().catch(() => null),
+    api.getCodeVersion().catch(() => null),
+  ]);
+  const el = document.getElementById('code-version');
+  if (el) {
+    const parts = [];
+    if (appVer) parts.push(`app v${appVer}`);
+    if (codeVer && codeVer !== appVer) parts.push(`code v${codeVer}`);
+    el.textContent = parts.join(' · ');
   }
 
   // Always start at the login screen — never bypass it with a cached token.
