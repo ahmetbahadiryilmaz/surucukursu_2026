@@ -1,6 +1,6 @@
 import { Injectable, NotFoundException, ForbiddenException, ConflictException, UnauthorizedException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { In, Repository } from 'typeorm';
 import {
   DrivingSchoolEntity,
   DrivingSchoolStudentEntity,
@@ -227,43 +227,57 @@ export class DrivingSchoolService {
       throw new UnauthorizedException('Admin access required');
     }
     const schools = await this.schoolRepository.find();
+    if (schools.length === 0) return [];
 
-    // Batch-fetch owners to avoid N+1
+    const schoolIds = schools.map(s => s.id);
     const ownerIds = [...new Set(schools.map(s => s.owner_id).filter(Boolean))];
-    const owners = ownerIds.length
-      ? await this.ownerRepository.findByIds(ownerIds)
-      : [];
-    const ownerEmailMap = new Map(owners.map(o => [o.id, o.email]));
 
-    return Promise.all(
-      schools.map(async (school) => {
-        const [settings, subscription] = await Promise.all([
-          this.settingsRepository.findOne({ where: { driving_school_id: school.id } }),
-          this.subscriptionRepository.findOne({ where: { driving_school_id: school.id } }),
-        ]);
-        return {
-          id: school.id,
-          label: school.name,
-          ownerEmail: ownerEmailMap.get(school.owner_id) ?? null,
-          username: school.mebbis_username
-            ? TextEncryptor.mebbisUsernameDecrypt(school.mebbis_username)
-            : null,
-          password: school.mebbis_password
-            ? TextEncryptor.mebbisPasswordDecrypt(school.mebbis_password)
-            : null,
-          simulatorType: settings?.simulator_type ?? null,
-          subscriptionActive: isSubscriptionActive(subscription),
-          subscription: subscription
-            ? {
-                type: subscription.type,
-                endsAt: subscription.ends_at ?? null,
-                pdfPrintUsed: subscription.pdf_print_used,
-                pdfPrintLimit: subscription.pdf_print_limit ?? null,
-              }
-            : null,
-        };
-      }),
-    );
+    // Batch-fetch owners, settings, subscriptions in parallel — avoid N+1.
+    const [owners, allSettings, allSubscriptions] = await Promise.all([
+      ownerIds.length ? this.ownerRepository.findByIds(ownerIds) : Promise.resolve([]),
+      this.settingsRepository.find({ where: { driving_school_id: In(schoolIds) } }),
+      this.subscriptionRepository.find({ where: { driving_school_id: In(schoolIds) } }),
+    ]);
+
+    const ownerEmailMap = new Map(owners.map(o => [o.id, o.email]));
+    const settingsMap = new Map(allSettings.map(s => [s.driving_school_id, s]));
+    const subMap = new Map(allSubscriptions.map(s => [s.driving_school_id, s]));
+
+    return schools.map(school => {
+      const settings = settingsMap.get(school.id);
+      const subscription = subMap.get(school.id) ?? null;
+      // Decrypt is best-effort: a single corrupted ciphertext shouldn't break
+      // the whole admin list.
+      let username: string | null = null;
+      let password: string | null = null;
+      try {
+        if (school.mebbis_username) {
+          username = TextEncryptor.mebbisUsernameDecrypt(school.mebbis_username);
+        }
+        if (school.mebbis_password) {
+          password = TextEncryptor.mebbisPasswordDecrypt(school.mebbis_password);
+        }
+      } catch {
+        // leave as null on decrypt failure
+      }
+      return {
+        id: school.id,
+        label: school.name,
+        ownerEmail: ownerEmailMap.get(school.owner_id) ?? null,
+        username,
+        password,
+        simulatorType: settings?.simulator_type ?? null,
+        subscriptionActive: isSubscriptionActive(subscription),
+        subscription: subscription
+          ? {
+              type: subscription.type,
+              endsAt: subscription.ends_at ?? null,
+              pdfPrintUsed: subscription.pdf_print_used,
+              pdfPrintLimit: subscription.pdf_print_limit ?? null,
+            }
+          : null,
+      };
+    });
   }
 
   /**

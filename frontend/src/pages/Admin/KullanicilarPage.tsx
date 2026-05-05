@@ -20,7 +20,7 @@ const fakeUsers: User[] = [
   {
     id: 1,
     name: "Ahmet Yılmaz",
-    email: "ahmet@mtsk.com",
+    email: "ahmet@mtsk.app",
     role: "admin",
     status: "active",
     lastLogin: "2025-04-28 09:45:23"
@@ -28,7 +28,7 @@ const fakeUsers: User[] = [
   {
     id: 2,
     name: "Ayşe Kaya",
-    email: "ayse@mtsk.com",
+    email: "ayse@mtsk.app",
     role: "manager",
     status: "active",
     lastLogin: "2025-04-29 14:30:12"
@@ -36,7 +36,7 @@ const fakeUsers: User[] = [
   {
     id: 3,
     name: "Mehmet Demir",
-    email: "mehmet@mtsk.com",
+    email: "mehmet@mtsk.app",
     role: "instructor",
     status: "active",
     lastLogin: "2025-04-27 08:15:38"
@@ -44,7 +44,7 @@ const fakeUsers: User[] = [
   {
     id: 4,
     name: "Fatma Şahin",
-    email: "fatma@mtsk.com",
+    email: "fatma@mtsk.app",
     role: "staff",
     status: "inactive",
     lastLogin: "2025-04-20 16:22:05"

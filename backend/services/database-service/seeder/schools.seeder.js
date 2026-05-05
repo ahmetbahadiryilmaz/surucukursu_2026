@@ -24,7 +24,7 @@ class SchoolsSeeder extends typeorm_seeding_1.Seeder {
             return;
         }
         // Find the test owner
-        const testOwner = owners.find(owner => owner.email === 'test@surucukursu.com');
+        const testOwner = owners.find(owner => owner.email === 'test@mtsk.app');
         if (!testOwner) {
             console.log('⚠️ Test owner not found, using first owner');
         }

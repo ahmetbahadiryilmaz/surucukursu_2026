@@ -24,8 +24,8 @@ class UsersSeeder extends typeorm_seeding_1.Seeder {
         for (let i = 0; i < 3; i++) {
             adminsData.push({
                 name: (0, seeder_utils_1.getRandomName)(),
-                email: `admin${i + 1}@surucukursu.com`,
-                password: shared_1.TextEncryptor.userPasswordEncrypt(`admin${i + 1}@surucukursu.com`),
+                email: `admin${i + 1}@mtsk.app`,
+                password: shared_1.TextEncryptor.userPasswordEncrypt(`admin${i + 1}@mtsk.app`),
             });
         }
         // Bulk insert all admins
@@ -40,16 +40,16 @@ class UsersSeeder extends typeorm_seeding_1.Seeder {
         const ownersData = [
             {
                 name: 'Test Sürücü Kursu Sahibi',
-                email: 'test@surucukursu.com',
-                password: shared_1.TextEncryptor.userPasswordEncrypt('test@surucukursu.com'),
+                email: 'test@mtsk.app',
+                password: shared_1.TextEncryptor.userPasswordEncrypt('test@mtsk.app'),
                 phone: (0, seeder_utils_1.generatePhoneNumber)()
             }
         ];
         for (let i = 0; i < 10; i++) {
             ownersData.push({
                 name: (0, seeder_utils_1.getRandomName)(),
-                email: `owner${i + 1}@surucukursu.com`,
-                password: shared_1.TextEncryptor.userPasswordEncrypt(`owner${i + 1}@surucukursu.com`),
+                email: `owner${i + 1}@mtsk.app`,
+                password: shared_1.TextEncryptor.userPasswordEncrypt(`owner${i + 1}@mtsk.app`),
                 phone: (0, seeder_utils_1.generatePhoneNumber)()
             });
         }
@@ -66,8 +66,8 @@ class UsersSeeder extends typeorm_seeding_1.Seeder {
         for (let i = 0; i < 15; i++) {
             managersData.push({
                 name: (0, seeder_utils_1.getRandomName)(),
-                email: `manager${i + 1}@surucukursu.com`,
-                password: shared_1.TextEncryptor.userPasswordEncrypt(`manager${i + 1}@surucukursu.com`),
+                email: `manager${i + 1}@mtsk.app`,
+                password: shared_1.TextEncryptor.userPasswordEncrypt(`manager${i + 1}@mtsk.app`),
                 phone: (0, seeder_utils_1.generatePhoneNumber)()
             });
         }

@@ -32,7 +32,7 @@ const fakeUserDetails: Record<number, UserDetail> = {
   1: {
     id: 1,
     name: "Ahmet Yılmaz",
-    email: "ahmet@mtsk.com",
+    email: "ahmet@mtsk.app",
     phone: "+90 (555) 123-4567",
     role: "admin",
     status: "active",
@@ -104,7 +104,7 @@ const KullaniciDetay: React.FC = () => {
             getDefaultUserDetail(
               userId, 
               `Kullanıcı ${userId}`, 
-              `user${userId}@mtsk.com`
+              `user${userId}@mtsk.app`
             )
           );
         }

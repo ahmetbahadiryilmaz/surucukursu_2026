@@ -20,12 +20,25 @@ const loginView  = document.getElementById('login-view');
 const forgotView = document.getElementById('forgot-view');
 const mainView   = document.getElementById('main-view');
 
-function showLogin(prefillEmail) {
+function showLogin(prefill) {
   loginView.style.display  = 'flex';
   forgotView.style.display = 'none';
   mainView.style.display   = 'none';
-  if (prefillEmail) {
-    loginEmailInput.value    = prefillEmail;
+  if (prefill && typeof prefill === 'object') {
+    if (prefill.email) loginEmailInput.value = prefill.email;
+    if (prefill.password) loginPasswordInput.value = prefill.password;
+    if (typeof prefill.autoLogin === 'boolean') {
+      const cb = document.getElementById('login-auto-login');
+      if (cb) cb.checked = prefill.autoLogin;
+    }
+    if (loginPasswordInput.value) {
+      // Have both fields filled — most likely they want to just submit.
+      document.getElementById('login-btn').focus();
+    } else {
+      loginPasswordInput.focus();
+    }
+  } else if (typeof prefill === 'string' && prefill) {
+    loginEmailInput.value    = prefill;
     loginPasswordInput.value = '';
     loginPasswordInput.focus();
   }
@@ -103,28 +116,36 @@ loginToggleBtn.addEventListener('click', () => {
   loginToggleBtn.querySelector('.eye-off-icon').style.display = isPassword ? 'block' : 'none';
 });
 
-loginForm.addEventListener('submit', async (e) => {
-  e.preventDefault();
-  const email    = loginEmailInput.value.trim();
-  const password = loginPasswordInput.value;
-  if (!email || !password) return;
-
+async function attemptLogin(email, password, autoLogin) {
   loginErrorEl.style.display = 'none';
   loginBtn.disabled   = true;
   loginBtn.textContent = 'Giriş yapılıyor…';
-
   try {
-    const result = await api.authLogin(email, password);
+    const result = await api.authLogin(email, password, autoLogin);
     showMain(result.school, result.user);
     await refreshAccounts();
     await maybeShowWhatsNew();
+    return true;
   } catch (err) {
     loginErrorEl.textContent   = cleanError(err) || 'Giriş başarısız. E-posta veya şifre hatalı.';
     loginErrorEl.style.display = 'block';
+    // If a saved-credential auto-submit just failed, drop the autoLogin flag
+    // so the user isn't trapped in a loop on next launch.
+    if (autoLogin) await api.authSetAutoLogin(false).catch(() => {});
+    return false;
   } finally {
     loginBtn.disabled    = false;
     loginBtn.textContent = 'Giriş Yap';
   }
+}
+
+loginForm.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const email      = loginEmailInput.value.trim();
+  const password   = loginPasswordInput.value;
+  if (!email || !password) return;
+  const autoLogin  = !!document.getElementById('login-auto-login')?.checked;
+  await attemptLogin(email, password, autoLogin);
 });
 
 // ── Logout ─────────────────────────────────────────────────────
@@ -713,27 +734,52 @@ document.getElementById('whats-new-ok').addEventListener('click', async () => {
   await api.whatsNewDismiss().catch(() => {});
 });
 
+// ── About / Hakkında Modal ──────────────────────────────────────
+const aboutOverlay = document.getElementById('about-overlay');
+let cachedAppVersion = null;
+let cachedCodeVersion = null;
+
+document.getElementById('btn-about').addEventListener('click', () => {
+  document.getElementById('about-app-version').textContent =
+    cachedAppVersion ? `v${cachedAppVersion}` : '—';
+  document.getElementById('about-code-version').textContent =
+    cachedCodeVersion ? `v${cachedCodeVersion}` : '—';
+  aboutOverlay.style.display = 'flex';
+});
+
+document.getElementById('btn-about-close').addEventListener('click', () => {
+  aboutOverlay.style.display = 'none';
+});
+
 // ── Bootstrap: always show login first; user must click to proceed ──
 (async () => {
   // Resolve dev mode before anything else so showMain can use it
   devMode = await api.isDev().catch(() => false);
 
-  // Show desktop app version + remote code version in bottom-right corner
+  // Resolve app + remote code versions; surfaced via the Hakkında modal
+  // and the fixed bottom-right badge.
   const [appVer, codeVer] = await Promise.all([
     api.getAppVersion().catch(() => null),
     api.getCodeVersion().catch(() => null),
   ]);
-  const el = document.getElementById('code-version');
-  if (el) {
+  cachedAppVersion = appVer;
+  cachedCodeVersion = codeVer;
+  const badge = document.getElementById('code-version');
+  if (badge) {
     const parts = [];
     if (appVer) parts.push(`app v${appVer}`);
     if (codeVer && codeVer !== appVer) parts.push(`code v${codeVer}`);
-    el.textContent = parts.join(' · ');
+    badge.textContent = parts.join(' · ');
   }
 
   // Always start at the login screen — never bypass it with a cached token.
-  // Pre-fill the email so the user only needs to enter their password.
-  const savedEmail = await api.authGetSavedEmail().catch(() => null);
-  showLogin(savedEmail);
+  // Pre-fill credentials from the encrypted store so the user only has to
+  // click "Giriş Yap" (or do nothing if they ticked Otomatik giriş).
+  const creds = await api.authGetSavedCredentials().catch(() => null);
+  showLogin(creds || (await api.authGetSavedEmail().catch(() => null)));
+
+  if (creds && creds.autoLogin && creds.email && creds.password) {
+    attemptLogin(creds.email, creds.password, true);
+  }
 })();
 

@@ -44,7 +44,7 @@ export class SchoolsSeeder extends Seeder {
     }
 
     // Find the test owner
-    const testOwner = owners.find(owner => owner.email === 'test@surucukursu.com');
+    const testOwner = owners.find(owner => owner.email === 'test@mtsk.app');
     if (!testOwner) {
       console.log('⚠️ Test owner not found, using first owner');
     }

@@ -32,8 +32,8 @@ export class UsersSeeder extends Seeder {
     for (let i = 0; i < 3; i++) {
       adminsData.push({
         name: getRandomName(),
-        email: `admin${i + 1}@surucukursu.com`,
-        password: TextEncryptor.userPasswordEncrypt(`admin${i + 1}@surucukursu.com`),
+        email: `admin${i + 1}@mtsk.app`,
+        password: TextEncryptor.userPasswordEncrypt(`admin${i + 1}@mtsk.app`),
       });
     }
 
@@ -50,8 +50,8 @@ export class UsersSeeder extends Seeder {
     const ownersData = [
       {
         name: 'Test Sürücü Kursu Sahibi',
-        email: 'test@surucukursu.com',
-        password: TextEncryptor.userPasswordEncrypt('test@surucukursu.com'),
+        email: 'test@mtsk.app',
+        password: TextEncryptor.userPasswordEncrypt('test@mtsk.app'),
         phone: generatePhoneNumber()
       }
     ];
@@ -59,8 +59,8 @@ export class UsersSeeder extends Seeder {
     for (let i = 0; i < 10; i++) {
       ownersData.push({
         name: getRandomName(),
-        email: `owner${i + 1}@surucukursu.com`,
-        password: TextEncryptor.userPasswordEncrypt(`owner${i + 1}@surucukursu.com`),
+        email: `owner${i + 1}@mtsk.app`,
+        password: TextEncryptor.userPasswordEncrypt(`owner${i + 1}@mtsk.app`),
         phone: generatePhoneNumber()
       });
     }
@@ -79,8 +79,8 @@ export class UsersSeeder extends Seeder {
     for (let i = 0; i < 15; i++) {
       managersData.push({
         name: getRandomName(),
-        email: `manager${i + 1}@surucukursu.com`,
-        password: TextEncryptor.userPasswordEncrypt(`manager${i + 1}@surucukursu.com`),
+        email: `manager${i + 1}@mtsk.app`,
+        password: TextEncryptor.userPasswordEncrypt(`manager${i + 1}@mtsk.app`),
         phone: generatePhoneNumber()
       });
     }

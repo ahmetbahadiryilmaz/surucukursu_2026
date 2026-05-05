@@ -106,10 +106,14 @@ function setupIPC() {
     }
   });
 
-  ipcMain.handle('auth:login', async (_event, email: string, password: string) => {
+  ipcMain.handle('auth:login', async (_event, email: string, password: string, autoLogin?: boolean) => {
     try {
       const result = await apiClient.login(email, password);
       authStore.save(result.token, result.user);
+      // Remember the password (encrypted via OS keychain) so the renderer
+      // can pre-fill the field on next launch.
+      authStore.setRememberedPassword(password);
+      authStore.setAutoLogin(autoLogin === true);
       const isAdmin = IS_DEV && (result.user.userType === -1 || result.user.userType === -2);
       console.log('[auth:login] Logged in:', email, 'userType:', result.user.userType, 'isAdmin:', isAdmin);
       let school = null;
@@ -142,6 +146,15 @@ function setupIPC() {
 
   ipcMain.handle('auth:get-saved-email', () => authStore.getSavedEmail());
   ipcMain.handle('auth:get-saved-school', () => authStore.getSavedSchoolName());
+  ipcMain.handle('auth:get-saved-credentials', () => ({
+    email: authStore.getSavedEmail(),
+    password: authStore.getRememberedPassword(),
+    autoLogin: authStore.getAutoLogin(),
+  }));
+  ipcMain.handle('auth:set-auto-login', (_event, value: boolean) => {
+    authStore.setAutoLogin(!!value);
+    return true;
+  });
 
   ipcMain.handle('auth:forgot-password', async (_event, email: string, phone: string) => {
     try {
@@ -213,6 +226,7 @@ function setupIPC() {
       const dbAccounts = isAdmin
         ? await apiClient.getAllSchools(token)
         : await apiClient.getMebbisAccounts(token);
+      console.log(`[accounts:list] IS_DEV=${IS_DEV} userType=${user?.userType} isAdmin=${isAdmin} count=${dbAccounts.length}`);
       return dbAccounts.map(m => ({
         ...dbToAccount(m),
         isRunning: mebbisManager.isRunning(String(m.id)),
@@ -379,13 +393,6 @@ function rebuildAppMenu() {
     },
   ];
 
-  if (IS_DEV) {
-    items.push({
-      label: 'Remote Sürüm Kontrolü',
-      click: showRemoteVersionDialog,
-    });
-  }
-
   if (isShiftHeld) {
     items.push({
       label: '🧪 Test',
@@ -399,23 +406,63 @@ function rebuildAppMenu() {
   Menu.setApplicationMenu(Menu.buildFromTemplate(items));
 }
 
-function showAboutDialog() {
+async function showAboutDialog() {
   if (!mainWindow || mainWindow.isDestroyed()) return;
-  dialog.showMessageBox(mainWindow, {
+
+  const installedVer = app.getVersion();
+
+  // Force a fresh sync so the dialog reflects the live server state.
+  // sync() never throws — it logs and falls back to cache.
+  let remoteCodeLine: string;
+  try {
+    await getCodeLoader().sync({ force: true });
+    const fresh = getCodeLoader().getVersion();
+    remoteCodeLine = fresh
+      ? `   Uzak kod sürümü     v${fresh}`
+      : `   Uzak kod sürümü     (sunucuda version.json yok)`;
+  } catch (err: any) {
+    remoteCodeLine = `   Uzak kod sürümü     ✗ ${err?.message || 'sync hatası'}`;
+  }
+
+  let updaterLines: string[];
+  try {
+    const result = await fetchVersionCheck(installedVer);
+    updaterLines = [
+      `   Sunucu minimum      v${result.minimumVersion}`,
+      result.maximumVersion ? `   Sunucu maksimum     v${result.maximumVersion}` : null,
+      `   Durum               ${result.allowed ? '✓ izin verildi' : `✗ engellendi (${result.reason})`}`,
+    ].filter((x): x is string => x !== null);
+  } catch (err: any) {
+    updaterLines = [`   Sunucu              ✗ ulaşılamadı (${err?.message || 'bilinmeyen hata'})`];
+  }
+
+  const detail = [
+    '─────────────  İletişim  ─────────────',
+    '   Web                 online.mtsk.app',
+    '   WhatsApp            +90 552 187 03 34',
+    '',
+    '─────────────  Sürüm Bilgisi  ─────────────',
+    `   Yüklü uygulama      v${installedVer}`,
+    remoteCodeLine,
+    ...updaterLines,
+  ].join('\n');
+
+  const result = await dialog.showMessageBox(mainWindow, {
     type: 'info',
     title: 'Hakkında',
-    message: `MTSK Uygulaması\nSürüm: v${app.getVersion()}`,
-    detail: `Web: online.mtsk.app\nWhatsApp: +90 552 187 03 34`,
-    buttons: ['WhatsApp', 'Web Sitesi', 'Kapat'],
+    message: 'MTSK Uygulaması',
+    detail,
+    buttons: ['💬  WhatsApp', '🌐  Web Sitesi', 'Kapat'],
     defaultId: 2,
     cancelId: 2,
-  }).then((result) => {
-    if (result.response === 0) {
-      shell.openExternal('https://wa.me/905521870334');
-    } else if (result.response === 1) {
-      shell.openExternal('https://online.mtsk.app');
-    }
+    noLink: true,
   });
+
+  if (result.response === 0) {
+    shell.openExternal('https://wa.me/905521870334');
+  } else if (result.response === 1) {
+    shell.openExternal('https://online.mtsk.app');
+  }
 }
 
 async function showDireksiyonPdfDialog() {
@@ -493,50 +540,6 @@ async function showSimulatorPdfDialog() {
   } catch (err: any) {
     dialog.showErrorBox('PDF Oluşturulamadı', err?.message || 'Bilinmeyen hata');
   }
-}
-
-async function showRemoteVersionDialog() {
-  if (!mainWindow || mainWindow.isDestroyed()) return;
-
-  const installedVer = app.getVersion();
-
-  // Force a fresh sync so the dialog reflects the live server state, not a
-  // stale cache. Bypasses the IS_DEV early-return inside sync().
-  let codeSyncInfo: string;
-  try {
-    await getCodeLoader().sync({ force: true });
-    const fresh = getCodeLoader().getVersion();
-    codeSyncInfo = fresh
-      ? `Remote kod sürümü:  v${fresh}`
-      : `Remote kod sürümü:  (sunucuda version.json yok)`;
-  } catch (err: any) {
-    codeSyncInfo = `Remote kod sürümü:  ✗ sync hatası: ${err?.message || 'Bilinmeyen hata'}`;
-  }
-
-  let updaterInfo: string;
-  try {
-    const result = await fetchVersionCheck(installedVer);
-    const lines = [
-      `Sunucu min. sürüm:  v${result.minimumVersion}`,
-      result.maximumVersion ? `Sunucu max. sürüm:  v${result.maximumVersion}` : null,
-      `Durum:              ${result.allowed ? '✓ izin verildi' : '✗ engellendi (' + result.reason + ')'}`,
-    ].filter(Boolean);
-    updaterInfo = lines.join('\n');
-  } catch (err: any) {
-    updaterInfo = `Sunucuya ulaşılamadı: ${err?.message || 'Bilinmeyen hata'}`;
-  }
-
-  await dialog.showMessageBox(mainWindow, {
-    type: 'info',
-    title: 'Remote Sürüm Kontrolü',
-    message: 'Sürüm Bilgisi',
-    detail:
-      `Yüklü uygulama:     v${installedVer}\n` +
-      `${codeSyncInfo}\n\n` +
-      updaterInfo,
-    buttons: ['Tamam'],
-    noLink: true,
-  });
 }
 
 app.on('window-all-closed', () => {

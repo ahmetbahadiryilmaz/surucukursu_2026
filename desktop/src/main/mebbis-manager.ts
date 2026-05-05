@@ -4,12 +4,70 @@ import * as path from 'path';
 import * as fs from 'fs';
 import { getCodeLoader } from './remote-code-loader';
 import { fetchEncryptedTemplate } from './template-fetcher';
+import { getRequestLogger } from './request-logger';
 
 
 interface RunningAccount {
   account: Account;
   window: BrowserWindow;
 }
+
+/**
+ * In-page helpers injected into every dgDersProgrami scrape so we can pick
+ * the right Dönem (period) regardless of MEBBIS row order. Parses
+ * "YYYY - <Turkish month>" (or "YYYY - <month number>") into a comparable
+ * key, exposes:
+ *   _periodKey(label)      → numeric key (year*12 + monthIndex), -Infinity if unparseable
+ *   _filterByNewest(rows)  → rows belonging to the chronologically newest period
+ *   _filterByPeriod(rows, targetLabel)
+ *                          → rows whose period matches targetLabel; falls back to newest
+ *
+ * Background: MEBBIS lists periods newest-first sometimes and oldest-first
+ * sometimes, so we cannot trust array position. See the Mehmet Çelik
+ * regression where "lessons[length-1]" picked the older Nisan period.
+ */
+const PERIOD_HELPERS_JS = `
+  const TR_MONTHS = {
+    'Ocak':0,'Şubat':1,'Mart':2,'Nisan':3,'Mayıs':4,'Haziran':5,
+    'Temmuz':6,'Ağustos':7,'Eylül':8,'Ekim':9,'Kasım':10,'Aralık':11
+  };
+  function _periodKey(p) {
+    const s = String(p == null ? '' : p).trim();
+    const m = s.match(/(\\d{4})\\s*-\\s*(.+)/);
+    if (!m) return -Infinity;
+    const year = parseInt(m[1], 10);
+    const tail = m[2].trim();
+    let month;
+    if (/^\\d+$/.test(tail)) {
+      month = parseInt(tail, 10) - 1;
+    } else {
+      month = TR_MONTHS[tail];
+    }
+    if (month == null || isNaN(month)) return -Infinity;
+    return year * 12 + month;
+  }
+  function _pickNewestPeriod(rows) {
+    let best = -Infinity, picked = null;
+    for (const r of rows) {
+      const k = _periodKey(r[0]);
+      if (k > best) { best = k; picked = r[0]; }
+    }
+    return picked;
+  }
+  function _filterByNewest(rows) {
+    if (!rows.length) return rows;
+    const newest = _pickNewestPeriod(rows);
+    return newest ? rows.filter(r => r[0] === newest) : rows;
+  }
+  function _filterByPeriod(rows, targetLabel) {
+    if (!targetLabel) return _filterByNewest(rows);
+    const targetKey = _periodKey(targetLabel);
+    const matches = targetKey > -Infinity
+      ? rows.filter(r => _periodKey(r[0]) === targetKey)
+      : rows.filter(r => r[0] === targetLabel);
+    return matches.length ? matches : _filterByNewest(rows);
+  }
+`;
 
 export class MebbisManager {
   private running: Map<string, RunningAccount> = new Map();
@@ -93,6 +151,10 @@ export class MebbisManager {
 
     // Check existing cookies in this partition
     const ses = session.fromPartition(partition);
+
+    // Capture all main-frame MEBBIS requests (incl. ASP.NET postbacks) so
+    // recordResponse() can pair them with the response HTML.
+    getRequestLogger().attach(ses);
 
     // Convert session cookies to persistent cookies.
     // MEBBIS sets session cookies (no expiry) which Electron deletes on window close.
@@ -306,6 +368,10 @@ export class MebbisManager {
           this.hideStatus(win);
           this.injectLeftMenu(win, account);
         }
+      } else if (this.isPreAuthPage(currentURL)) {
+        // Verification redirect (e.g. Redirect.aspx). User must complete 2FA
+        // before we inject anything — leave the page untouched.
+        console.log(`[${account.label}] Pre-auth verification page, awaiting user`);
       } else {
         // Successfully past login - reset attempts counter
         this.loginAttempts.set(account.id, 0);
@@ -318,7 +384,7 @@ export class MebbisManager {
     win.webContents.on('dom-ready', () => {
       const currentURL = win.webContents.getURL();
       console.log(`[${account.label}] DOM READY: ${currentURL}`);
-      if (!this.isLoginPage(currentURL)) {
+      if (!this.isPreAuthPage(currentURL)) {
         this.injectLeftMenu(win, account);
       }
       if (this.isLoginPage(currentURL)) {
@@ -732,22 +798,27 @@ export class MebbisManager {
     return false;
   }
 
+  /**
+   * True for any pre-authenticated MEBBIS screen where the left menu must NOT
+   * be injected:
+   *   - default.aspx              → username/password form
+   *   - redirect.aspx             → 2FA verification (MEB Ajanda code / e-Devlet bridge)
+   * After the user passes the verification screen, MEBBIS lands on an SKT
+   * module page and the menu is injected as usual.
+   */
+  private isPreAuthPage(url: string): boolean {
+    const lower = url.toLowerCase();
+    return lower.includes('default.aspx') || lower.includes('redirect.aspx');
+  }
+
   private async saveResponse(win: BrowserWindow, account: Account, url: string) {
     try {
       if (win.isDestroyed()) return;
       const html = await win.webContents.executeJavaScript('document.documentElement.outerHTML');
-      const responsesDir = path.join(__dirname, '..', '..', 'responses');
-      if (!fs.existsSync(responsesDir)) {
-        fs.mkdirSync(responsesDir, { recursive: true });
-      }
-      // Extract page name from URL
-      const urlObj = new URL(url);
-      const pageName = urlObj.pathname.split('/').pop()?.replace(/\.aspx$/i, '') || 'unknown';
-      const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-      const filename = `${account.label}_${pageName}_${timestamp}.html`;
-      const filePath = path.join(responsesDir, filename);
-      fs.writeFileSync(filePath, html, 'utf-8');
-      console.log(`[${account.label}] Response saved: ${filename}`);
+      // Logger writes three artifacts (journal entry + req.json + res.html)
+      // and pairs the response with the most recent main-frame request
+      // captured via the session's webRequest hook.
+      await getRequestLogger().recordResponse(win.webContents, account.label, url, html);
     } catch (e) {
       console.error(`[${account.label}] Failed to save response:`, e);
     }
@@ -980,15 +1051,16 @@ export class MebbisManager {
           
           // Lesson data is in dgDersProgrami table
           // Columns: 0=Dönemi, 1=Grup, 2=Başlama, 3=Şubesi, 4=Araç Plakası, 5=Ders Yeri, 6=Ders Tarihi, 7=Ders Saati, 8=Personel, 9=Eğitim Türü
+          ${PERIOD_HELPERS_JS}
           const lessonTable = document.getElementById('dgDersProgrami');
-          
+
           if (!lessonTable) {
             if (!studentInfo['ad-soyad']) {
               return { error: 'Veri bulunamadı - Direksiyon ders programı tablosu yok' };
             }
             return { error: 'Direksiyon ders programı bulunamadı' };
           }
-          
+
           const lessons = [];
           const rows = lessonTable.querySelectorAll('tr');
           for (const row of rows) {
@@ -1002,16 +1074,10 @@ export class MebbisManager {
             lessons.push(cellTexts);
           }
 
-          // Filter to most recent period (column 0 = Dönemi)
-          // Find the last period value in the table
-          let filteredLessons = lessons;
-          if (lessons.length > 0) {
-            const lastPeriod = lessons[lessons.length - 1][0];
-            if (lastPeriod) {
-              filteredLessons = lessons.filter(l => l[0] === lastPeriod);
-            }
-          }
-          
+          // Pick the chronologically newest period (column 0 = Dönemi).
+          // MEBBIS row order is unreliable — parse "YYYY - <month>" instead.
+          const filteredLessons = _filterByNewest(lessons);
+
           return { studentInfo, lessons: filteredLessons };
         })();
       `);
@@ -1178,6 +1244,7 @@ export class MebbisManager {
               }
             }
           }
+          ${PERIOD_HELPERS_JS}
           const lessonTable = document.getElementById('dgDersProgrami');
           if (!lessonTable) {
             return { error: 'Direksiyon ders programı tablosu bulunamadı' };
@@ -1191,14 +1258,8 @@ export class MebbisManager {
             const cellTexts = Array.from(cells).map(c => c.textContent.trim());
             lessons.push(cellTexts);
           }
-          // Filter to most recent period
-          let filteredLessons = lessons;
-          if (lessons.length > 0) {
-            const lastPeriod = lessons[lessons.length - 1][0];
-            if (lastPeriod) {
-              filteredLessons = lessons.filter(l => l[0] === lastPeriod);
-            }
-          }
+          // Pick the chronologically newest period (column 0 = Dönemi).
+          const filteredLessons = _filterByNewest(lessons);
           return { studentInfo, lessons: filteredLessons };
         })();
       `);
@@ -2424,10 +2485,21 @@ export class MebbisManager {
     const student = students[currentStudentIndex];
     const total = students.length;
 
+    // Resolve the period the user picked in the batch dialog (e.g. "2026 - Mayıs").
+    // If they left it as "Tüm Dönemler" we pass an empty string and the
+    // in-page helper falls back to picking the chronologically newest period.
+    const selectedDonemiValue = this.pendingBatchDownload.options?.donemi ?? '';
+    const selectedDonemiLabelRaw =
+      this.pendingBatchDownload.donemList?.find(d => d.value === selectedDonemiValue)?.label ?? '';
+    const isAllPeriods = /tüm|tüm/i.test(selectedDonemiLabelRaw);
+    const targetPeriodLabel = isAllPeriods ? '' : selectedDonemiLabelRaw;
+    const targetPeriodJs = JSON.stringify(targetPeriodLabel);
+
     try {
       // Scrape lesson data (same logic as handleSkt02009Results)
       const lessonData = await win.webContents.executeJavaScript(`
         (function() {
+          ${PERIOD_HELPERS_JS}
           const donemTable = document.getElementById('dgDonemBilgileri');
           const studentInfo = { 'ad-soyad': '', 'tc-kimlik-no': '${student.tc}', 'istenen-sertifika': '' };
           if (donemTable) {
@@ -2457,14 +2529,10 @@ export class MebbisManager {
             if (rowText.includes('Başarısız Aday')) continue;
             lessons.push(cellTexts);
           }
-          // Filter to most recent period
-          let filteredLessons = lessons;
-          if (lessons.length > 0) {
-            const lastPeriod = lessons[lessons.length - 1][0];
-            if (lastPeriod) {
-              filteredLessons = lessons.filter(l => l[0] === lastPeriod);
-            }
-          }
+          // Match the period the user picked in the batch dialog (e.g. May).
+          // If they picked "Tüm Dönemler" or the student doesn't have that
+          // period, fall back to the chronologically newest period.
+          const filteredLessons = _filterByPeriod(lessons, ${targetPeriodJs});
           return { studentInfo, lessons: filteredLessons };
         })();
       `);

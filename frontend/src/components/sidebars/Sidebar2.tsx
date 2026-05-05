@@ -6,7 +6,7 @@ const AdminSidebar = () => {
     return (
       <div className="hidden md:flex w-64 bg-zinc-900 text-white h-screen p-4 flex-col border-r border-zinc-800">
         <div className="mb-4 flex flex-col">
-          <span className="font-bold text-sm">test@surucukursu.com</span>
+          <span className="font-bold text-sm">test@mtsk.app</span>
           <span className="text-xs text-gray-400">DEMO</span>
         </div>
         <nav className="flex-1">
