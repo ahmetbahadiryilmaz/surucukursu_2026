@@ -7,18 +7,18 @@ interface KursTableProps {
   kurslar: DrivingSchool[];
   onEdit: (id: string) => void;
   onDelete: (id: string) => void;
-  getOwnerName: (owner_id: string | number | null | undefined) => string;
-  getManagerName: (manager_id: string | number | null | undefined) => string;
+  getOwnerEmail: (owner_id: string | number | null | undefined) => string;
+  getManagerEmail: (manager_id: string | number | null | undefined) => string;
   filterText: string;
 }
 
-const KursTable: React.FC<KursTableProps> = ({ 
-  kurslar, 
-  onEdit, 
+const KursTable: React.FC<KursTableProps> = ({
+  kurslar,
+  onEdit,
   onDelete,
-  getOwnerName,
-  getManagerName,
-  filterText 
+  getOwnerEmail,
+  getManagerEmail,
+  filterText
 }) => (
   <div className="rounded-md border overflow-hidden shadow-sm">
     <Table>
@@ -28,8 +28,8 @@ const KursTable: React.FC<KursTableProps> = ({
           <TableHead className="font-semibold">Kurs Adı</TableHead>
           <TableHead className="font-semibold">Adres</TableHead>
           <TableHead className="font-semibold">Telefon</TableHead>
-          <TableHead className="font-semibold">Kurs Sahibi</TableHead>
-          <TableHead className="font-semibold">Kurs Yöneticisi</TableHead>
+          <TableHead className="font-semibold">Kurs Sahibi (E-posta)</TableHead>
+          <TableHead className="font-semibold">Kurs Yöneticisi (E-posta)</TableHead>
           <TableHead className="font-semibold text-center">İşlemler</TableHead>
         </TableRow>
       </TableHeader>
@@ -41,8 +41,8 @@ const KursTable: React.FC<KursTableProps> = ({
               <TableCell className="font-medium">{kurs.name}</TableCell>
               <TableCell className="text-sm">{kurs.address}</TableCell>
               <TableCell className="text-sm">{kurs.phone}</TableCell>
-              <TableCell className="text-sm">{getOwnerName(kurs.owner_id)}</TableCell>
-              <TableCell className="text-sm">{getManagerName(kurs.manager_id)}</TableCell>
+              <TableCell className="text-sm">{getOwnerEmail(kurs.owner_id)}</TableCell>
+              <TableCell className="text-sm">{getManagerEmail(kurs.manager_id)}</TableCell>
               <TableCell>
                 <div className="flex justify-center space-x-2">
                   <Button 

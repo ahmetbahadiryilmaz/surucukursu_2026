@@ -7,18 +7,18 @@ export const useKursFilter = (kurslar: DrivingSchool[], owners: any[], managers:
   const [filteredKurslar, setFilteredKurslar] = useState<DrivingSchool[]>([]);
   const [currentPage, setCurrentPage] = useState<number>(1);
 
-  const getOwnerName = (owner_id: string | number | null | undefined): string => {
-    if (!owner_id) return "-";
+  const getOwnerEmail = (owner_id: string | number | null | undefined): string => {
+    if (!owner_id) return "";
     const id = owner_id.toString();
     const owner = owners.find(o => o.id === id);
-    return owner ? owner.name : "-";
+    return owner && owner.email ? owner.email : "";
   };
 
-  const getManagerName = (manager_id: string | number | null | undefined): string => {
-    if (!manager_id) return "-";
+  const getManagerEmail = (manager_id: string | number | null | undefined): string => {
+    if (!manager_id) return "";
     const id = manager_id.toString();
     const manager = managers.find(m => m.id === id);
-    return manager ? manager.name : "-";
+    return manager && manager.email ? manager.email : "";
   };
 
   useEffect(() => {
@@ -27,11 +27,12 @@ export const useKursFilter = (kurslar: DrivingSchool[], owners: any[], managers:
     } else {
       const searchTerm = filterText.toLowerCase();
       const filtered = kurslar.filter(kurs =>
+        (kurs.id != null && kurs.id.toString() === searchTerm) ||
         (kurs.name && kurs.name.toLowerCase().includes(searchTerm)) ||
         (kurs.address && kurs.address.toLowerCase().includes(searchTerm)) ||
         (kurs.phone && kurs.phone.toLowerCase().includes(searchTerm)) ||
-        (getOwnerName(kurs.owner_id).toLowerCase().includes(searchTerm)) ||
-        (getManagerName(kurs.manager_id).toLowerCase().includes(searchTerm))
+        (getOwnerEmail(kurs.owner_id).toLowerCase().includes(searchTerm)) ||
+        (getManagerEmail(kurs.manager_id).toLowerCase().includes(searchTerm))
       );
       setFilteredKurslar(filtered);
     }

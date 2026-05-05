@@ -39,14 +39,54 @@ export class AdminDrivingSchoolOwnersService {
     async getOwnerById(id: number) {
         const owner = await this.ownerRepository.findOne({
             where: { id },
-            relations: ['DrivingSchool']
+            relations: {
+                DrivingSchool: {
+                    manager: true,
+                },
+            },
         });
 
         if (!owner) {
             throw new NotFoundException(`Owner with ID ${id} not found`);
         }
 
-        return owner;
+        const schools = owner.DrivingSchool || [];
+        const schoolIds = schools.map(s => s.id);
+
+        let studentCounts: Record<number, number> = {};
+        if (schoolIds.length > 0) {
+            const rows = await this.schoolRepository
+                .createQueryBuilder('school')
+                .leftJoin('school.students', 'student')
+                .where('school.id IN (:...ids)', { ids: schoolIds })
+                .select('school.id', 'school_id')
+                .addSelect('COUNT(student.id)', 'count')
+                .groupBy('school.id')
+                .getRawMany();
+
+            studentCounts = rows.reduce((acc, r) => {
+                acc[r.school_id] = parseInt(r.count, 10) || 0;
+                return acc;
+            }, {} as Record<number, number>);
+        }
+
+        const drivingSchools = schools.map(school => ({
+            id: school.id,
+            name: school.name,
+            address: school.address,
+            phone: school.phone,
+            manager: school.manager
+                ? { id: school.manager.id, name: school.manager.name }
+                : null,
+            studentCount: studentCounts[school.id] || 0,
+        }));
+
+        return {
+            ...owner,
+            isActive: owner.is_active,
+            DrivingSchool: drivingSchools,
+            branchCount: drivingSchools.length,
+        };
     }
 
     async createOwner(dto: CreateOwnerDto) {

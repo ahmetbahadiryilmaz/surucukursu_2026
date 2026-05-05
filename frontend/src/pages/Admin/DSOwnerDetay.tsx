@@ -22,6 +22,7 @@ export type DSOwnerDetail = {
   lastLogin: string;
   branchCount: number;
   branches: Array<{
+    id: number;
     name: string;
     address: string;
     manager: string;
@@ -70,6 +71,15 @@ const DSOwnerDetay: React.FC = () => {
         
         // API'den gelen verileri DSOwnerDetail tipine dönüştür
         if (ownerData) {
+          const drivingSchools: any[] = Array.isArray(ownerData.DrivingSchool) ? ownerData.DrivingSchool : [];
+          const branches = drivingSchools.map((school: any) => ({
+            id: Number(school.id),
+            name: school.name || "İsimsiz Şube",
+            address: school.address || "Belirtilmemiş",
+            manager: school.manager?.name || "Belirtilmemiş",
+            studentCount: school.studentCount ?? 0,
+          }));
+
           const formattedOwner: DSOwnerDetail = {
             id: ownerData.id,
             name: ownerData.name || "İsimsiz",
@@ -81,12 +91,8 @@ const DSOwnerDetay: React.FC = () => {
             city: ownerData.city || "Belirtilmemiş",
             joinDate: ownerData.createdAt || new Date().toISOString(),
             lastLogin: ownerData.lastLogin || new Date().toISOString(),
-            branchCount: ownerData.branchCount || 0,
-            // Şubeler için şimdilik standart veriler kullanıyoruz
-            // API'de şube verisi varsa burası güncellenecek
-            branches: ownerData.branches || [
-              { name: "Ana Şube", address: ownerData.address || "Belirtilmemiş", manager: "Belirtilmemiş", studentCount: 0 }
-            ],
+            branchCount: typeof ownerData.branchCount === 'number' ? ownerData.branchCount : branches.length,
+            branches,
             // İstatistikler için şimdilik standart veriler kullanıyoruz
             // API'de istatistik verisi varsa burası güncellenecek
             statistics: ownerData.statistics || {
@@ -349,9 +355,26 @@ const DSOwnerDetay: React.FC = () => {
                   <h3 className="text-base md:text-lg font-medium mb-3 md:mb-4">Kuruma Ait Şubeler</h3>
                   <div className="space-y-3 md:space-y-4">
                     {owner.branches.length > 0 ? (
-                      owner.branches.map((branch, index) => (
-                        <div key={index} className="p-3 border rounded-md">
-                          <h4 className="font-medium text-sm md:text-base">{branch.name}</h4>
+                      owner.branches.map((branch) => (
+                        <div
+                          key={branch.id}
+                          role="button"
+                          tabIndex={0}
+                          onClick={() => navigate(`/admin/kurslar?search=${branch.id}`)}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter' || e.key === ' ') {
+                              e.preventDefault();
+                              navigate(`/admin/kurslar?search=${branch.id}`);
+                            }
+                          }}
+                          className="p-3 border rounded-md cursor-pointer hover:bg-accent hover:border-primary transition-colors"
+                        >
+                          <div className="flex items-center justify-between gap-2">
+                            <h4 className="font-medium text-sm md:text-base">{branch.name}</h4>
+                            <span className="text-xs font-mono px-2 py-0.5 rounded bg-muted text-muted-foreground flex-shrink-0">
+                              #{branch.id}
+                            </span>
+                          </div>
                           <div className="text-xs md:text-sm text-muted-foreground mt-1">
                             <div className="flex items-center mt-1">
                               <MapPin className="h-3 w-3 mr-1" />

@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { DrivingSchool } from '@/services/api-service';
 import {
   KursFormModal,
@@ -34,12 +35,18 @@ const KurslarPage: React.FC = () => {
     createKurs,
     updateKurs,
     deleteKurs,
-    getOwnerName,
-    getManagerName
+    getOwnerEmail,
+    getManagerEmail
   } = useKurslar();
 
   const { isMobile } = useResponsive();
   const { filterText, setFilterText, filteredKurslar, paginatedKurslar, currentPage, totalPages, setCurrentPage } = useKursFilter(kurslar, owners, managers);
+
+  const [searchParams] = useSearchParams();
+  useEffect(() => {
+    const initial = searchParams.get('search');
+    if (initial) setFilterText(initial);
+  }, [searchParams, setFilterText]);
 
   // Local state for modals and forms
   const [modalError, setModalError] = useState<string | null>(null);
@@ -262,8 +269,8 @@ const KurslarPage: React.FC = () => {
                       onViewDetails={handleViewDetails}
                       onEdit={handleEdit}
                       onDelete={confirmDelete}
-                      getOwnerName={getOwnerName}
-                      getManagerName={getManagerName}
+                      getOwnerEmail={getOwnerEmail}
+                      getManagerEmail={getManagerEmail}
                     />
                   ))}
                 </div>
@@ -275,8 +282,8 @@ const KurslarPage: React.FC = () => {
                   kurslar={paginatedKurslar}
                   onEdit={handleEdit}
                   onDelete={confirmDelete}
-                  getOwnerName={getOwnerName}
-                  getManagerName={getManagerName}
+                  getOwnerEmail={getOwnerEmail}
+                  getManagerEmail={getManagerEmail}
                   filterText={filterText}
                 />
               )}
@@ -383,8 +390,8 @@ const KurslarPage: React.FC = () => {
         onClose={() => setDetailView(null)}
         onEdit={handleEdit}
         onDelete={confirmDelete}
-        getOwnerName={getOwnerName}
-        getManagerName={getManagerName}
+        getOwnerEmail={getOwnerEmail}
+        getManagerEmail={getManagerEmail}
       />
     </div>
   );
