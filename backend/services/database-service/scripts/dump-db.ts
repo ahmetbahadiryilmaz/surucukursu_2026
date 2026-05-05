@@ -4,7 +4,8 @@ import { spawn } from 'child_process';
 import * as fs from 'fs';
 import * as path from 'path';
 
-config();
+// .env lives at backend/.env (one level above services/<svc>/scripts/).
+config({ path: path.resolve(__dirname, '..', '..', '..', '.env') });
 
 /**
  * Pre-migration safety dump. Streams mysqldump to a timestamped file under
