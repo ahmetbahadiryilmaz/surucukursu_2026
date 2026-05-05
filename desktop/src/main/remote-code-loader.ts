@@ -338,13 +338,17 @@ class RemoteCodeLoader {
     }
 
     try {
+      const whatsNewSection = latest.whatsNew
+        ? `\nBu sürümdeki yenilikler:\n${latest.whatsNew}\n`
+        : '';
       await dialog.showMessageBox(win, {
         type: 'info',
         title: 'Güncelleme Mevcut',
         message: 'Yeni bir güncelleme yüklendi',
         detail:
           `Devam edebilmek için uygulamanın yeniden başlatılması gerekiyor.\n\n` +
-          `Mevcut sürüm: v${previousVersion}\nYeni sürüm: v${latest.version}`,
+          `Mevcut sürüm: v${previousVersion}\nYeni sürüm: v${latest.version}` +
+          whatsNewSection,
         buttons: ['Yeniden Başlat'],
         defaultId: 0,
         cancelId: 0,
