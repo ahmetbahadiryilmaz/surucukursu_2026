@@ -1,4 +1,4 @@
-import { Entity, Column, ManyToOne, JoinColumn } from 'typeorm';
+import { Entity, Column, ManyToOne, JoinColumn, Index } from 'typeorm';
 import { BaseEntity } from './base.entity';
 import { DrivingSchoolEntity } from './driving-school.entity';
 
@@ -7,19 +7,28 @@ export enum CarType {
   SIMULATOR = 'simulator',
 }
 
+export enum CarSource {
+  MANUAL = 'manual',
+  MEBBIS_SCRAPE = 'mebbis_scrape',
+}
+
 @Entity('driving_school_cars')
+@Index(['school_id', 'plate_number'], { unique: true })
 export class DrivingSchoolCarEntity extends BaseEntity {
   @Column({ type: 'enum', enum: CarType, default: CarType.REGULAR_CAR })
   car_type: CarType;
 
+  @Column({ type: 'enum', enum: CarSource, default: CarSource.MANUAL })
+  source: CarSource;
+
   // Common fields
-  @Column()
+  @Column({ nullable: true })
   model: string;
 
   @Column({ nullable: true })
   brand: string;
 
-  @Column({ nullable: true, unique: true })
+  @Column({ nullable: true })
   plate_number: string;
 
   @Column({ nullable: true })

@@ -4,9 +4,14 @@
   "description": "Database migration and seeding service",
   "private": true,
   "scripts": {
-    "migrate": "npx ts-node -r tsconfig-paths/register migrations/migrate.ts",
-    "migrate:fresh": "npx ts-node -r tsconfig-paths/register migrations/migrate-fresh.ts",
-    "seed": "npx ts-node -r tsconfig-paths/register seeder/run-seeder.ts",
+    "clean:js": "npx rimraf data-source.js run-migrations.js \"migrations/migrate.js\" \"migrations/migrate-fresh.js\" \"seeder/**/*.js\"",
+    "dump:db": "cross-env TS_NODE_PREFER_TS_EXTS=true npx ts-node -r tsconfig-paths/register scripts/dump-db.ts",
+    "restore:db": "cross-env TS_NODE_PREFER_TS_EXTS=true npx ts-node -r tsconfig-paths/register scripts/restore-db.ts",
+    "migrate": "cross-env TS_NODE_PREFER_TS_EXTS=true DUMP_REASON=migrate npm run dump:db && cross-env TS_NODE_PREFER_TS_EXTS=true npx ts-node -r tsconfig-paths/register migrations/migrate.ts",
+    "migrate:fresh": "cross-env TS_NODE_PREFER_TS_EXTS=true DUMP_REASON=fresh npm run dump:db && cross-env TS_NODE_PREFER_TS_EXTS=true npx ts-node -r tsconfig-paths/register migrations/migrate-fresh.ts",
+    "migrate:nodump": "cross-env TS_NODE_PREFER_TS_EXTS=true npx ts-node -r tsconfig-paths/register migrations/migrate.ts",
+    "migrate:fresh:nodump": "cross-env TS_NODE_PREFER_TS_EXTS=true npx ts-node -r tsconfig-paths/register migrations/migrate-fresh.ts",
+    "seed": "cross-env TS_NODE_PREFER_TS_EXTS=true npx ts-node -r tsconfig-paths/register seeder/run-seeder.ts",
     "build": "tsc",
     "dev": "tsc --watch"
   },

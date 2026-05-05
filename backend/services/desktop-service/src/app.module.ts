@@ -8,6 +8,7 @@ import { DrivingSchoolModule } from './driving-school/driving-school.module';
 import { ActivityLogModule } from './activity-log/activity-log.module';
 import { TemplatesModule } from './templates/templates.module';
 import { DesktopCodeModule } from './desktop-code/desktop-code.module';
+import { StudentStoreModule } from './student-store/student-store.module';
 import { validate, getApiServerDatabaseConfig } from '@surucukursu/shared';
 import {
   AdminEntity,
@@ -18,7 +19,9 @@ import {
   DrivingSchoolOwnerEntity,
   DrivingSchoolSettingsEntity,
   DrivingSchoolStudentEntity,
-  DrivingSchoolStudentIntegrationInfoEntity,
+  DrivingSchoolStudentMebbisEntity,
+  DrivingSchoolStudentMebbisExamEntity,
+  DrivingSchoolStudentMebbisLessonEntity,
   DrivingSchoolCarEntity,
   MebbisCookie,
   SystemLogsEntity,
@@ -46,7 +49,9 @@ import {
       DrivingSchoolOwnerEntity,
       DrivingSchoolSettingsEntity,
       DrivingSchoolStudentEntity,
-      DrivingSchoolStudentIntegrationInfoEntity,
+      DrivingSchoolStudentMebbisEntity,
+      DrivingSchoolStudentMebbisExamEntity,
+      DrivingSchoolStudentMebbisLessonEntity,
       DrivingSchoolCarEntity,
       MebbisCookie,
       SystemLogsEntity,
@@ -61,6 +66,7 @@ import {
     ActivityLogModule,
     TemplatesModule,
     DesktopCodeModule,
+    StudentStoreModule,
     HealthModule,
   ],
 })

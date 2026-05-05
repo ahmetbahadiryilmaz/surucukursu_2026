@@ -1,2 +1,50 @@
-everytime when we getting into a student page and fetching student data , can we store all data in the html page by parsing (idn where to store  locally ,we ll convert it to remote later  ) ,and create An Öğrenciler & araçlar menu on the left . 
-and if we catch car plate  list under araçlar , and list ogrenciler in öğrenciler left side menu (idn will you use manipulated html or some other way), with button of details .
+# Öğrenciler & Araçlar — Left Sidebar Menu
+
+## Goal
+
+Whenever a student page is opened and its data is fetched, parse the page and
+accumulate the data into a local store. Surface that store as a left-side menu
+with two sections: **Öğrenciler** and **Araçlar**.
+
+## Behavior
+
+- Trigger: every time the user navigates into a student page and student data
+  is loaded.
+- Parse the rendered student page and extract:
+  - Student record (for the **Öğrenciler** list).
+  - Car plate(s) referenced on the page (for the **Araçlar** list).
+- Append/merge into the local store (dedupe by id / plate).
+- Render a left sidebar:
+  - **Öğrenciler** — one row per student, each with a "Details" button.
+  - **Araçlar** — one row per unique car plate.
+
+## Storage
+
+- Phase 0 (first step): no storage, no UI. On every student page load,
+  `console.log` the extracted student record and any car plates found. Use the
+  logs to verify the parser picks up the right fields before committing to a
+  store shape or rendering anything.
+- Phase 1: local only. Storage location TBD — pick whatever is simplest to
+  iterate on (e.g. in-memory + window/localStorage shim).
+- Phase 2 (later): migrate the same shape to a remote store. Keep the data
+  model storage-agnostic so the swap is mechanical.
+
+## Open questions
+
+1. **Extraction method**: scrape the rendered HTML (DOM walk / querySelector on
+   the loaded page) vs. intercept the underlying fetch/XHR response and parse
+   the JSON/HTML payload directly. Pick one before implementing — interception
+   is more robust if the response format is stable.
+2. **Local store shape**: single keyed map per entity (`students[id]`,
+   `cars[plate]`) is probably enough; confirm before wiring UI.
+3. **Details button target**: does it re-open the original student page, or
+   show a local detail view built from the cached data?
+
+## Acceptance criteria
+
+- Opening N student pages results in N students listed under **Öğrenciler**
+  (no duplicates on revisit).
+- Every plate seen on any visited student page appears once under **Araçlar**.
+- Clicking "Details" on a student row navigates to that student's detail view.
+- Reload behavior is defined (survives reload? cleared on reload?) — decide
+  alongside the storage choice.

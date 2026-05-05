@@ -103,6 +103,103 @@ export interface MebbisAccount {
   } | null;
 }
 
+// ── Student store payloads (mirror desktop-service DTOs) ─────────────
+
+export interface RemoteStudent {
+  id: number;
+  tc: string;
+  ad_soyad: string;
+  source: 'manual' | 'mebbis_scrape';
+  has_detail: 0 | 1 | boolean | null;
+  donem: string | null;
+  grup: string | null;
+  sube: string | null;
+  durum: string | null;
+  last_list_seen_at: number | null;
+  last_detail_seen_at: number | null;
+}
+
+export interface RemoteStudentDetail {
+  id: number;
+  tc_number: string;
+  name: string;
+  source: string;
+  mebbis: {
+    has_detail: boolean;
+    donem?: string;
+    grup?: string;
+    sube?: string;
+    durum?: string;
+    kurum?: string;
+    mevcut_belge?: string;
+    istenen_sertifika?: string;
+    kurum_onay?: string;
+    ilce_onay?: string;
+    uygulama?: string;
+    teorik_hak?: number;
+    uygulama_hak?: number;
+    esinav_hak?: number;
+    kayit_ucreti?: number;
+    last_list_seen_at?: number;
+    last_detail_seen_at?: number;
+    exams: Array<{
+      donem?: string; sinav_kodu?: string; sinav_tarihi?: string; plaka?: string;
+      usta_ogretici?: string; onay_durumu?: string; sinav_durumu?: string; sonuc?: string;
+    }>;
+    lessons: Array<{
+      donem?: string; grup_adi?: string; grup_baslama?: string; sube?: string;
+      plaka?: string; ders_yeri?: string; ders_tarihi?: string; ders_saati?: string;
+      personel?: string; egitim_turu?: string;
+    }>;
+  } | null;
+}
+
+export interface RemoteCar {
+  id: number;
+  plate_number: string;
+  source: 'manual' | 'mebbis_scrape';
+  car_type: string;
+  brand: string | null;
+  model: string | null;
+}
+
+export interface ListIngestRow {
+  tc: string;
+  adSoyad: string;
+  donem?: string;
+  grup?: string;
+  sube?: string;
+  durum?: string;
+}
+
+export interface DetailIngestPayload {
+  tc: string;
+  adSoyad: string;
+  kurum?: string;
+  donem?: string;
+  grup?: string;
+  sube?: string;
+  mevcutBelge?: string;
+  istenenSertifika?: string;
+  kurumOnay?: string;
+  ilceOnay?: string;
+  uygulama?: string;
+  durum?: string;
+  teorikHak?: number;
+  uygulamaHak?: number;
+  esinavHak?: number;
+  kayitUcreti?: number;
+  exams: Array<{
+    donem?: string; sinavKodu?: string; sinavTarihi?: string; plaka?: string;
+    ustaOgretici?: string; onayDurumu?: string; sinavDurumu?: string; sonuc?: string;
+  }>;
+  lessons: Array<{
+    donem?: string; grupAdi?: string; grupBaslama?: string; sube?: string;
+    plaka?: string; dersYeri?: string; dersTarihi?: string; dersSaati?: string;
+    personel?: string; egitimTuru?: string;
+  }>;
+}
+
 export interface ActivityLogBody {
   event: 'school_login' | 'pdf_download';
   school_id: number;
@@ -156,4 +253,30 @@ export const apiClient = {
 
   updateProfile: (token: string, phone: string) =>
     request<{ name: string; email: string; phone: string }>('PATCH', '/desktop/desktop-service/auth/profile', { phone } as Record<string, unknown>, token),
+
+  // ── Student store ───────────────────────────────────────────────
+  listStudents: (token: string) =>
+    request<RemoteStudent[]>('GET', '/desktop/desktop-service/student-store/students', undefined, token),
+
+  getStudent: (token: string, tc: string) =>
+    request<RemoteStudentDetail>('GET', `/desktop/desktop-service/student-store/students/${encodeURIComponent(tc)}`, undefined, token),
+
+  listCars: (token: string) =>
+    request<RemoteCar[]>('GET', '/desktop/desktop-service/student-store/cars', undefined, token),
+
+  ingestStudentList: (token: string, mebbisAccountId: string, rows: ListIngestRow[]) =>
+    request<{ created: number; updated: number }>(
+      'POST',
+      '/desktop/desktop-service/student-store/students/list',
+      { mebbis_account_id: mebbisAccountId, rows } as unknown as Record<string, unknown>,
+      token,
+    ),
+
+  ingestStudentDetail: (token: string, mebbisAccountId: string, payload: DetailIngestPayload) =>
+    request<{ studentIsNew: boolean; mebbis_id: number }>(
+      'POST',
+      '/desktop/desktop-service/student-store/students/detail',
+      { mebbis_account_id: mebbisAccountId, payload } as unknown as Record<string, unknown>,
+      token,
+    ),
 };

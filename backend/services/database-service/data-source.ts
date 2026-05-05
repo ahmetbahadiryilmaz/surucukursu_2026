@@ -9,8 +9,10 @@ import {
   DrivingSchoolManagerEntity,
   DrivingSchoolOwnerEntity,
   DrivingSchoolSettingsEntity,
-  DrivingSchoolStudentIntegrationInfoEntity,
   DrivingSchoolStudentEntity,
+  DrivingSchoolStudentMebbisEntity,
+  DrivingSchoolStudentMebbisExamEntity,
+  DrivingSchoolStudentMebbisLessonEntity,
   DrivingSchoolCarEntity,
   MebbisCookie,
   SystemLogsEntity,
@@ -28,8 +30,10 @@ const entities = [
   DrivingSchoolManagerEntity,
   DrivingSchoolOwnerEntity,
   DrivingSchoolSettingsEntity,
-  DrivingSchoolStudentIntegrationInfoEntity,
   DrivingSchoolStudentEntity,
+  DrivingSchoolStudentMebbisEntity,
+  DrivingSchoolStudentMebbisExamEntity,
+  DrivingSchoolStudentMebbisLessonEntity,
   DrivingSchoolCarEntity,
   MebbisCookie,
   SystemLogsEntity,
@@ -39,7 +43,11 @@ const entities = [
   PasswordResetTokenEntity
 ];
 
-const migrations = [__dirname + '/migrations/**/*{.ts,.js}'];
+// IMPORTANT: only match timestamped migration class files. The entry-point
+// scripts migrate.ts / migrate-fresh.ts live in the same directory; including
+// them here causes runMigrations() to import migrate-fresh.ts which executes
+// migrateFresh() at file load and drops all tables.
+const migrations = [__dirname + '/migrations/[0-9]*-*.{ts,js}'];
 
 export const dataSource = new DataSource(
   getDatabaseServiceConfig(entities, migrations)

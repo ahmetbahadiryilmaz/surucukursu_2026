@@ -5,12 +5,16 @@ import * as fs from 'fs';
 import { getCodeLoader } from './remote-code-loader';
 import { fetchEncryptedTemplate } from './template-fetcher';
 import { getRequestLogger } from './request-logger';
+import { getStudentDb } from './student-db';
+import { pushList, pushDetail } from './student-sync';
 
 
 interface RunningAccount {
   account: Account;
   window: BrowserWindow;
 }
+
+// StudentRecord type is defined in student-db.ts (re-exported via DB module)
 
 /**
  * In-page helpers injected into every dgDersProgrami scrape so we can pick
@@ -74,6 +78,9 @@ export class MebbisManager {
   private loginAttempts: Map<string, number> = new Map();
   private autoRefreshIntervals: Map<string, ReturnType<typeof setInterval>> = new Map();
   private activityLogger: ((accountId: string, pdfType: 'direksiyon_takip' | 'simulator_raporu', count: number) => void) | null = null;
+
+  // Pending "open student" navigation triggered from sidebar Details button
+  private pendingOpenStudent: Map<string, { tc: string; phase: 'skt-module' | 'skt02009' }> = new Map();
 
   setActivityLogger(fn: (accountId: string, pdfType: 'direksiyon_takip' | 'simulator_raporu', count: number) => void) {
     this.activityLogger = fn;
@@ -219,6 +226,11 @@ export class MebbisManager {
           console.error(`[${account.label}] Batch start parse error:`, e);
         }
       }
+      if (message.startsWith('MEBBIS_OPEN_STUDENT:')) {
+        const tc = message.replace('MEBBIS_OPEN_STUDENT:', '').trim();
+        console.log(`[OpenStudent][${account.label}] Sidebar requested open for tc=${tc}`);
+        this.openStudent(win, account, tc);
+      }
       if (message === 'MEBBIS_BATCH_CANCEL') {
         console.log(`[${account.label}] Batch cancelled by user`);
         this.pendingBatchDownload = null;
@@ -300,6 +312,20 @@ export class MebbisManager {
           this.showStatus(win, 'TRYING LOGIN...', '#FF6B6B');
           this.autoFillLogin(win, account);
         }
+      } else if (this.pendingOpenStudent.has(account.id) && currentURL.toLowerCase().includes('skt00001')) {
+        // Sidebar Detay flow: SKT module loaded, click into skt02009
+        const pending = this.pendingOpenStudent.get(account.id)!;
+        console.log(`[OpenStudent][${account.label}] skt00001 loaded, clicking skt02009 menu for tc=${pending.tc}`);
+        pending.phase = 'skt02009';
+        this.injectLeftMenu(win, account);
+        this.clickMenuItemForSkt02009(win, account);
+      } else if (this.pendingOpenStudent.has(account.id) && currentURL.toLowerCase().includes('skt02009')) {
+        // Sidebar Detay flow: skt02009 loaded, fill TC and submit (then clear pending so results land in normal-visit parser)
+        const pending = this.pendingOpenStudent.get(account.id)!;
+        this.pendingOpenStudent.delete(account.id);
+        console.log(`[OpenStudent][${account.label}] skt02009 loaded, filling tc=${pending.tc} and submitting search`);
+        this.injectLeftMenu(win, account);
+        this.fillTcAndSubmit(win, pending.tc);
       } else if ((this.pendingDownload || this.pendingSimulatorReport) && this.pendingDownloadPhase === 'skt-module' && currentURL.toLowerCase().includes('skt00001')) {
         // Phase 1: SKT module loaded, now click the menu item for skt02009
         console.log(`[${account.label}] SKT module loaded, clicking Aday Durum Görüntüleme...`);
@@ -323,11 +349,17 @@ export class MebbisManager {
           console.log(`[${account.label}] Batch: skt02006 results loaded, scraping student list...`);
           this.injectLeftMenu(win, account);
           this.reinjectBatchStatus(win);
+          this.parseAndIngestStudentList(win, account);
           this.handleSkt02006Results(win, account);
         } else {
           this.hideStatus(win);
           this.injectLeftMenu(win, account);
         }
+      } else if (currentURL.toLowerCase().includes('skt02006')) {
+        // Normal user visit to skt02006 (student list) — passive list scrape
+        this.hideStatus(win);
+        this.injectLeftMenu(win, account);
+        this.parseAndIngestStudentList(win, account);
       } else if (currentURL.toLowerCase().includes('skt02009')) {
         // Handle skt02009 page loads for direksiyon takip download
         if (this.pendingDownload && this.pendingDownloadPhase === 'navigate') {
@@ -339,6 +371,7 @@ export class MebbisManager {
           // Second load: results after form submission
           this.pendingDownloadPhase = null;
           this.injectLeftMenu(win, account);
+          this.parseAndLogStudentPage(win, account);
           this.handleSkt02009Results(win, account);
         } else if (this.pendingSimulatorReport && this.pendingDownloadPhase === 'navigate-simulator') {
           // Simulator: page loaded, fill TC and search
@@ -349,6 +382,7 @@ export class MebbisManager {
           // Simulator: results loaded, extract simulator sessions and generate PDF
           this.pendingDownloadPhase = null;
           this.injectLeftMenu(win, account);
+          this.parseAndLogStudentPage(win, account);
           this.handleSkt02009SimulatorResults(win, account);
         } else if (this.pendingBatchDownload && this.pendingDownloadPhase === 'batch-skt02009-navigate') {
           // Batch: skt02009 loaded for current student, fill TC and search
@@ -362,11 +396,13 @@ export class MebbisManager {
           console.log(`[${account.label}] Batch: skt02009 results loaded, processing student...`);
           this.injectLeftMenu(win, account);
           this.reinjectBatchStatus(win);
+          this.parseAndLogStudentPage(win, account);
           this.handleBatchStudentResults(win, account);
         } else {
           // Normal visit to skt02009 (not triggered by download)
           this.hideStatus(win);
           this.injectLeftMenu(win, account);
+          this.parseAndLogStudentPage(win, account);
         }
       } else if (this.isPreAuthPage(currentURL)) {
         // Verification redirect (e.g. Redirect.aspx). User must complete 2FA
@@ -481,7 +517,249 @@ export class MebbisManager {
     void getCodeLoader().runScriptOrFallback(win, 'scripts/hide-status.js', fallback);
   }
 
-  private async injectLeftMenu(win: BrowserWindow, _account: Account) {
+  /** skt02009 detail scrape — captures full student record. */
+  private parseAndLogStudentPage(win: BrowserWindow, account: Account): void {
+    if (win.isDestroyed()) return;
+    console.log(`[StudentParser][${account.label}] Running detail DOM scrape on skt02009`);
+    win.webContents.executeJavaScript(`
+      (function() {
+        function txt(el) { return (el && el.textContent || '').trim().replace(/\\s+/g, ' '); }
+        function num(s) { const n = parseInt(String(s||'').replace(/[^0-9-]/g,''), 10); return isNaN(n) ? undefined : n; }
+
+        const tc = (document.querySelector('#txtTcKimlikNo')?.value || '').trim();
+
+        // dgDonemBilgileri header order:
+        // 0:TC | 1:Ad Soyad | 2:Kurum | 3:Dönemi | 4:Grubu | 5:Şubesi | 6:Mevcut Sürücü Belgesi
+        // 7:İstenen Sertifika | 8:Kurum Onay | 9:İlçe Onay | 10:Uygulama | 11:Durumu
+        // 12:Teorik Hak | 13:Uygulama Hak | 14:E-Sınav Hak | 15:Kayıt Ücreti
+        const headerRow = document.querySelector('#dgDonemBilgileri tr:not(.frmListBaslik)');
+        let donem = {}, adSoyad = '';
+        if (headerRow) {
+          const cells = Array.from(headerRow.querySelectorAll('td')).map(txt);
+          adSoyad = cells[1] || '';
+          donem = {
+            kurum: cells[2], donemi: cells[3], grubu: cells[4], subesi: cells[5],
+            mevcutBelge: cells[6], istenenSertifika: cells[7],
+            kurumOnay: cells[8], ilceOnay: cells[9],
+            uygulama: cells[10], durumu: cells[11],
+            teorikHak: num(cells[12]), uygulamaHak: num(cells[13]),
+            eSinavHak: num(cells[14]), kayitUcreti: num(cells[15]),
+          };
+        }
+
+        // dgUygulamaNot header order:
+        // 0:TC | 1:Dönemi | 2:Ad Soyad | 3:Sınav Kodu | 4:Sınav Tarihi | 5:Araç Plaka
+        // 6:Usta Öğretici | 7:Onay Durumu | 8:Sınav Durumu | 9:Sınav Sonucu
+        const exams = Array.from(document.querySelectorAll('#dgUygulamaNot tr:not(.frmListBaslik)'))
+          .map(tr => Array.from(tr.querySelectorAll('td')).map(txt))
+          .filter(c => c.length >= 10)
+          .map(c => ({
+            donemi: c[1], sinavKodu: c[3], sinavTarihi: c[4], plaka: c[5],
+            ustaOgretici: c[6], onayDurumu: c[7], sinavDurumu: c[8], sonuc: c[9],
+          }));
+
+        // dgDersProgrami header order:
+        // 0:Dönemi | 1:Grup Adı | 2:Grup Başlama Tarihi | 3:Şubesi | 4:Araç Plakası
+        // 5:Ders Yeri | 6:Ders Tarihi | 7:Ders Saati | 8:Dersi Veren Personel | 9:Eğitim Türü
+        const lessons = Array.from(document.querySelectorAll('#dgDersProgrami tr:not(.frmListBaslik)'))
+          .map(tr => Array.from(tr.querySelectorAll('td')).map(txt))
+          .filter(c => c.length >= 10)
+          .map(c => ({
+            donemi: c[0], grupAdi: c[1], grupBaslama: c[2], subesi: c[3],
+            plaka: (c[4] || '').replace(/\\s*\\(.*?\\)/g, '').trim(),
+            dersYeri: c[5], dersTarihi: c[6], dersSaati: c[7],
+            personel: c[8], egitimTuru: c[9],
+          }));
+
+        return { tc, adSoyad, donem, exams, lessons };
+      })();
+    `).then((result: any) => {
+      if (!result) {
+        console.log(`[StudentParser][${account.label}] No result returned from detail scrape`);
+        return;
+      }
+      const { tc, adSoyad, donem, exams, lessons } = result;
+      if (!tc || !adSoyad) {
+        console.log(`[StudentParser][${account.label}] skt02009 loaded but no student data (blank form)`);
+        return;
+      }
+      console.log(`[StudentParser][${account.label}] Detail scraped: tc=${tc}, adSoyad=${adSoyad}, exams=${exams.length}, lessons=${lessons.length}`);
+      const db = getStudentDb();
+      const r = db.ingestDetail(account.id, {
+        tc, adSoyad,
+        kurum: donem.kurum, donemi: donem.donemi, grubu: donem.grubu, subesi: donem.subesi,
+        mevcutBelge: donem.mevcutBelge, istenenSertifika: donem.istenenSertifika,
+        kurumOnay: donem.kurumOnay, ilceOnay: donem.ilceOnay,
+        uygulama: donem.uygulama, durumu: donem.durumu,
+        teorikHak: donem.teorikHak, uygulamaHak: donem.uygulamaHak,
+        eSinavHak: donem.eSinavHak, kayitUcreti: donem.kayitUcreti,
+        exams: exams || [], lessons: lessons || [],
+      });
+      console.log(`[Store][${account.label}] Detail ingested tc=${tc} ${r.studentIsNew ? '(NEW)' : '(UPDATE)'}. New plates for student=${r.newPlatesForStudent.length}, account=${r.newPlatesForAccount.length}. Total students=${db.countStudents(account.id)} (${db.countDetailed(account.id)} with detail)`);
+      this.pushStoreToSidebar(win, account);
+
+      // Push to backend (write-through, fire-and-forget)
+      pushDetail(account.id, {
+        tc, adSoyad,
+        kurum: donem.kurum, donem: donem.donemi, grup: donem.grubu, sube: donem.subesi,
+        mevcutBelge: donem.mevcutBelge, istenenSertifika: donem.istenenSertifika,
+        kurumOnay: donem.kurumOnay, ilceOnay: donem.ilceOnay,
+        uygulama: donem.uygulama, durum: donem.durumu,
+        teorikHak: donem.teorikHak, uygulamaHak: donem.uygulamaHak,
+        esinavHak: donem.eSinavHak, kayitUcreti: donem.kayitUcreti,
+        exams: (exams || []).map((e: any) => ({
+          donem: e.donemi, sinavKodu: e.sinavKodu, sinavTarihi: e.sinavTarihi,
+          plaka: e.plaka, ustaOgretici: e.ustaOgretici,
+          onayDurumu: e.onayDurumu, sinavDurumu: e.sinavDurumu, sonuc: e.sonuc,
+        })),
+        lessons: (lessons || []).map((l: any) => ({
+          donem: l.donemi, grupAdi: l.grupAdi, grupBaslama: l.grupBaslama, sube: l.subesi,
+          plaka: l.plaka, dersYeri: l.dersYeri, dersTarihi: l.dersTarihi, dersSaati: l.dersSaati,
+          personel: l.personel, egitimTuru: l.egitimTuru,
+        })),
+      });
+    }).catch((e: any) => {
+      console.error(`[StudentParser][${account.label}] Detail scrape failed:`, e);
+    });
+  }
+
+  /** skt02006 list scrape — bulk-ingests basic records for many students. */
+  private parseAndIngestStudentList(win: BrowserWindow, account: Account): void {
+    if (win.isDestroyed()) return;
+    console.log(`[ListParser][${account.label}] Running list DOM scrape on skt02006`);
+    win.webContents.executeJavaScript(`
+      (function() {
+        function txt(el) { return (el && el.textContent || '').trim().replace(/\\s+/g, ' '); }
+        const table = document.querySelector('table.frmList');
+        if (!table) return { rows: [], reason: 'no frmList table' };
+        const out = [];
+        const rows = table.querySelectorAll('tr');
+        for (const tr of rows) {
+          if (tr.classList.contains('frmListBaslik')) continue;
+          const cells = Array.from(tr.querySelectorAll('td')).map(txt);
+          if (cells.length < 3) continue;
+          // Existing batch scraper assumes col 1 = name, col 2 = TC. Keep that mapping.
+          const adSoyad = cells[1] || '';
+          const tc = cells[2] || '';
+          if (!/^[0-9]{11}$/.test(tc)) continue;
+          out.push({
+            tc, adSoyad,
+            // Best-effort mapping of remaining columns; keep raw for later analysis.
+            donemi: cells[3] || '',
+            grubu: cells[4] || '',
+            subesi: cells[5] || '',
+            durumu: cells[cells.length - 1] || '',
+            listRowRaw: cells,
+          });
+        }
+        return { rows: out };
+      })();
+    `).then((result: any) => {
+      if (!result || !Array.isArray(result.rows)) {
+        console.log(`[ListParser][${account.label}] No rows; reason=${result?.reason || 'unknown'}`);
+        return;
+      }
+      const rows = result.rows as any[];
+      if (!rows.length) {
+        console.log(`[ListParser][${account.label}] Empty list (filter form likely not yet submitted)`);
+        return;
+      }
+      const db = getStudentDb();
+      const r = db.ingestList(account.id, rows);
+      console.log(`[ListParser][${account.label}] Ingested ${rows.length} rows: created=${r.created}, updated=${r.updated}. Total students=${db.countStudents(account.id)} (${db.countDetailed(account.id)} with detail)`);
+      this.pushStoreToSidebar(win, account);
+
+      // Push to backend
+      pushList(account.id, rows.map((row) => ({
+        tc: row.tc,
+        adSoyad: row.adSoyad,
+        donem: row.donemi,
+        grup: row.grubu,
+        sube: row.subesi,
+        durum: row.durumu,
+      })));
+    }).catch((e: any) => {
+      console.error(`[ListParser][${account.label}] List scrape failed:`, e);
+    });
+  }
+
+  private serializeStore(account: Account) {
+    return getStudentDb().serialize(account.id);
+  }
+
+  private pushStoreToSidebar(win: BrowserWindow, account: Account): void {
+    if (win.isDestroyed()) return;
+    const payload = this.serializeStore(account);
+    console.log(`[Sidebar][${account.label}] Pushing store: ${payload.students.length} students, ${payload.plates.length} plates`);
+    const json = JSON.stringify(payload).replace(/<\/script/gi, '<\\/script');
+    win.webContents.executeJavaScript(`
+      (function() {
+        try {
+          window.__mebbisStore = ${json};
+          if (typeof window.__mebbisRenderStore === 'function') {
+            window.__mebbisRenderStore();
+            console.log('[MEBBIS_SIDEBAR] Store re-rendered: ' + window.__mebbisStore.students.length + ' students, ' + window.__mebbisStore.plates.length + ' plates');
+          } else {
+            console.log('[MEBBIS_SIDEBAR] Store stashed but no renderer yet');
+          }
+        } catch (e) {
+          console.log('[MEBBIS_SIDEBAR] Push failed: ' + e);
+        }
+      })();
+    `).catch((e) => console.error(`[Sidebar][${account.label}] Push failed:`, e));
+  }
+
+  private openStudent(win: BrowserWindow, account: Account, tc: string): void {
+    if (win.isDestroyed()) {
+      console.log(`[OpenStudent][${account.label}] Window destroyed, aborting tc=${tc}`);
+      return;
+    }
+    if (!tc || !/^\d{11}$/.test(tc)) {
+      console.log(`[OpenStudent][${account.label}] Invalid TC '${tc}', aborting`);
+      return;
+    }
+    if (this.pendingDownload || this.pendingBatchDownload || this.pendingSimulatorReport) {
+      console.log(`[OpenStudent][${account.label}] A download/batch is in progress, ignoring open-student tc=${tc}`);
+      return;
+    }
+    console.log(`[OpenStudent][${account.label}] Navigating to skt00001 to open tc=${tc}`);
+    this.pendingOpenStudent.set(account.id, { tc, phase: 'skt-module' });
+    win.loadURL('https://mebbis.meb.gov.tr/SKT/skt00001.aspx').catch((e) => {
+      console.error(`[OpenStudent][${account.label}] loadURL failed:`, e);
+      this.pendingOpenStudent.delete(account.id);
+    });
+  }
+
+  private fillTcAndSubmit(win: BrowserWindow, tc: string): void {
+    if (win.isDestroyed()) return;
+    win.webContents.executeJavaScript(`
+      (function() {
+        const tcInput = document.getElementById('txtTcKimlikNo');
+        if (!tcInput) {
+          console.log('[MEBBIS] fillTcAndSubmit: txtTcKimlikNo not found');
+          return;
+        }
+        tcInput.value = '${tc}';
+        tcInput.dispatchEvent(new Event('change', { bubbles: true }));
+        tcInput.dispatchEvent(new Event('input', { bubbles: true }));
+        setTimeout(() => {
+          const btn = document.getElementById('ImageButton1') ||
+                      document.querySelector('input[id*="ImageButton"]') ||
+                      document.querySelector('input[type="image"]');
+          if (btn) {
+            console.log('[MEBBIS] fillTcAndSubmit: clicking search button');
+            btn.click();
+          } else {
+            const form = tcInput.closest('form');
+            if (form) { console.log('[MEBBIS] fillTcAndSubmit: submitting form'); form.submit(); }
+            else { console.log('[MEBBIS] fillTcAndSubmit: no submit target found'); }
+          }
+        }, 300);
+      })();
+    `).catch((e) => console.error(`[OpenStudent] fillTcAndSubmit failed:`, e));
+  }
+
+  private async injectLeftMenu(win: BrowserWindow, account: Account) {
     if (win.isDestroyed()) return;
 
     // ─── Hardcoded fallback (used only when remote bundle has not been cached yet) ───
@@ -764,6 +1042,123 @@ export class MebbisManager {
     `;
 
     await getCodeLoader().runScriptOrFallback(win, 'scripts/left-menu.js', fallback);
+
+    // After main menu is injected, attach Öğrenciler & Araçlar sections + renderer.
+    await this.injectStoreSidebarSections(win, account);
+    // And immediately push current store state.
+    this.pushStoreToSidebar(win, account);
+  }
+
+  private async injectStoreSidebarSections(win: BrowserWindow, account: Account): Promise<void> {
+    if (win.isDestroyed()) return;
+    console.log(`[Sidebar][${account.label}] Injecting Öğrenciler & Araçlar sections + renderer`);
+    const script = `
+      (function() {
+        const sidebar = document.getElementById('mebbis-left-menu');
+        if (!sidebar) {
+          console.log('[MEBBIS_SIDEBAR] No #mebbis-left-menu found, skipping store sections');
+          return;
+        }
+        if (document.getElementById('mebbis-store-container')) {
+          console.log('[MEBBIS_SIDEBAR] Store sections already present, skipping');
+          return;
+        }
+
+        const container = document.createElement('div');
+        container.id = 'mebbis-store-container';
+        container.style.cssText = 'border-top: 1px solid #2a2a4a; margin-top: 8px;';
+
+        // Öğrenciler section
+        const studentsHeader = document.createElement('div');
+        studentsHeader.style.cssText = 'padding: 10px 15px 6px; font-size: 12px; font-weight: bold; color: #4361ee; letter-spacing: 0.5px;';
+        studentsHeader.textContent = 'ÖĞRENCİLER';
+        container.appendChild(studentsHeader);
+        const studentsList = document.createElement('div');
+        studentsList.id = 'mebbis-students-list';
+        studentsList.style.cssText = 'display: flex; flex-direction: column;';
+        container.appendChild(studentsList);
+
+        // Araçlar section
+        const carsHeader = document.createElement('div');
+        carsHeader.style.cssText = 'padding: 10px 15px 6px; font-size: 12px; font-weight: bold; color: #4361ee; letter-spacing: 0.5px; border-top: 1px solid #2a2a4a; margin-top: 6px;';
+        carsHeader.textContent = 'ARAÇLAR';
+        container.appendChild(carsHeader);
+        const carsList = document.createElement('div');
+        carsList.id = 'mebbis-cars-list';
+        carsList.style.cssText = 'display: flex; flex-direction: column;';
+        container.appendChild(carsList);
+
+        sidebar.appendChild(container);
+        console.log('[MEBBIS_SIDEBAR] Store sections injected');
+
+        window.__mebbisRenderStore = function() {
+          const store = window.__mebbisStore || { students: [], plates: [] };
+          const sList = document.getElementById('mebbis-students-list');
+          const cList = document.getElementById('mebbis-cars-list');
+          if (!sList || !cList) {
+            console.log('[MEBBIS_SIDEBAR] Lists missing during render');
+            return;
+          }
+          sList.innerHTML = '';
+          cList.innerHTML = '';
+
+          if (!store.students.length) {
+            const empty = document.createElement('div');
+            empty.style.cssText = 'padding: 8px 15px; font-size: 12px; color: #666; font-style: italic;';
+            empty.textContent = '— henüz yok —';
+            sList.appendChild(empty);
+          } else {
+            store.students.forEach(s => {
+              const row = document.createElement('div');
+              row.style.cssText = 'padding: 8px 12px 8px 15px; display: flex; align-items: center; justify-content: space-between; gap: 8px; border-bottom: 1px solid #20203a;';
+              const info = document.createElement('div');
+              info.style.cssText = 'flex: 1; min-width: 0; overflow: hidden;';
+              const name = document.createElement('div');
+              name.style.cssText = 'font-size: 12px; color: #ddd; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;';
+              name.textContent = s.adSoyad || '(isimsiz)';
+              const tcEl = document.createElement('div');
+              tcEl.style.cssText = 'font-size: 10px; color: #777; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;';
+              tcEl.textContent = s.tc;
+              info.appendChild(name);
+              info.appendChild(tcEl);
+              row.appendChild(info);
+              const btn = document.createElement('button');
+              btn.style.cssText = 'background: #2a2a4a; border: none; color: #4361ee; cursor: pointer; padding: 4px 8px; font-size: 11px; border-radius: 3px; flex-shrink: 0;';
+              btn.textContent = 'Detay';
+              btn.onclick = () => {
+                console.log('[MEBBIS_SIDEBAR] Detay clicked for tc=' + s.tc);
+                console.log('MEBBIS_OPEN_STUDENT:' + s.tc);
+              };
+              row.appendChild(btn);
+              sList.appendChild(row);
+            });
+          }
+
+          if (!store.plates.length) {
+            const empty = document.createElement('div');
+            empty.style.cssText = 'padding: 8px 15px; font-size: 12px; color: #666; font-style: italic;';
+            empty.textContent = '— henüz yok —';
+            cList.appendChild(empty);
+          } else {
+            store.plates.forEach(p => {
+              const row = document.createElement('div');
+              row.style.cssText = 'padding: 6px 15px; font-size: 12px; color: #ccc; border-bottom: 1px solid #20203a;';
+              row.textContent = p;
+              cList.appendChild(row);
+            });
+          }
+
+          console.log('[MEBBIS_SIDEBAR] Rendered ' + store.students.length + ' students, ' + store.plates.length + ' plates');
+        };
+
+        if (window.__mebbisStore) {
+          window.__mebbisRenderStore();
+        }
+      })();
+    `;
+    await win.webContents.executeJavaScript(script).catch((e) => {
+      console.error(`[Sidebar][${account.label}] Section injection failed:`, e);
+    });
   }
 
   stop(accountId: string) {
@@ -777,6 +1172,8 @@ export class MebbisManager {
       entry.window.close();
     }
     this.running.delete(accountId);
+    // Persisted student/plate data is intentionally kept on stop; clear via a separate action if ever needed.
+    this.pendingOpenStudent.delete(accountId);
   }
 
   focus(accountId: string) {

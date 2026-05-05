@@ -9,7 +9,6 @@ import {
   CityEntity,
   DistrictEntity,
   SubscriptionEntity,
-  DrivingSchoolStudentIntegrationInfoEntity,
   SystemLogsEntity,
 } from '@surucukursu/shared';
 import { config } from 'dotenv';
@@ -36,7 +35,6 @@ const AppDataSource = new DataSource({
     CityEntity,
     DistrictEntity,
     SubscriptionEntity,
-    DrivingSchoolStudentIntegrationInfoEntity,
     SystemLogsEntity,
   ],
   synchronize: false,

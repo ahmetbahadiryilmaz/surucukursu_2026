@@ -104,12 +104,22 @@ export class DrivingSchoolService {
       throw new NotFoundException('No driving school found for this account');
     }
 
-    const students = await this.studentRepository.find({
-      where: { school_id: school.id },
-      select: ['id', 'name', 'tc_number', 'license_class', 'mebbis_status'],
-    });
+    // MEBBIS-derived fields (license_class / mebbis_status) live on the
+    // driving_school_student_mebbis 1:1 child table now. Pull them via JOIN.
+    const rows = await this.studentRepository
+      .createQueryBuilder('s')
+      .leftJoin('s.mebbis', 'm')
+      .where('s.school_id = :schoolId', { schoolId: school.id })
+      .select([
+        's.id AS id',
+        's.name AS name',
+        's.tc_number AS tc_number',
+        'm.istenen_sertifika AS license_class',
+        'm.durum AS mebbis_status',
+      ])
+      .getRawMany();
 
-    return students;
+    return rows;
   }
 
   /** Returns MEBBIS accounts (one per school) for the logged-in user. */

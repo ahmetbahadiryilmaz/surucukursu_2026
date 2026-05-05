@@ -8,7 +8,6 @@ import {
   DrivingSchoolEntity,
   DrivingSchoolCarEntity,
   DrivingSchoolStudentEntity,
-  DrivingSchoolStudentIntegrationInfoEntity,
   DrivingSchoolOwnerEntity,
   DrivingSchoolManagerEntity,
   TextEncryptor
@@ -30,7 +29,6 @@ export class SchoolsSeeder extends Seeder {
     const schoolRepository = dataSource.getRepository(DrivingSchoolEntity);
     const carRepository = dataSource.getRepository(DrivingSchoolCarEntity);
     const studentRepository = dataSource.getRepository(DrivingSchoolStudentEntity);
-    const integrationRepository = dataSource.getRepository(DrivingSchoolStudentIntegrationInfoEntity);
     const ownerRepository = dataSource.getRepository(DrivingSchoolOwnerEntity);
     const managerRepository = dataSource.getRepository(DrivingSchoolManagerEntity);
 
@@ -136,38 +134,24 @@ export class SchoolsSeeder extends Seeder {
       .values(allCarsData)
       .execute();
 
-    // Prepare students data
+    // Prepare students data — manual CRM rows only.
+    // MEBBIS-derived data (durum, hak counts, exams, lessons) lands via the
+    // desktop scraper into driving_school_student_mebbis at runtime.
     const studentsData = [];
-    const integrationInfoData = [];
 
     for (const school of allSchools) {
       const studentCount = Math.floor(Math.random() * 50) + 20;
       for (let i = 0; i < studentCount; i++) {
-        const tcNumber = generateTcNumber();
         studentsData.push({
           name: getRandomName(),
           email: Math.random() > 0.3 ? `student${Date.now()}_${Math.random().toString(36).substring(7)}@example.com` : undefined,
           phone: generatePhoneNumber(),
-          tc_number: tcNumber,
-          school_id: school.id
-        });
-
-        // Prepare integration info
-        integrationInfoData.push({
-          external_id: `EXT_${school.id}_${i + 1}`,
-          integration_data: JSON.stringify({
-            course_progress: Math.floor(Math.random() * 101),
-            last_exam_score: Math.floor(Math.random() * 41) + 60,
-            exam_attempts: Math.floor(Math.random() * 4) + 1,
-            practical_hours: Math.floor(Math.random() * 50) + 10,
-            theory_completed: Math.random() > 0.3
-          }),
-          tc_number: tcNumber
+          tc_number: generateTcNumber(),
+          school_id: school.id,
         });
       }
     }
 
-    // Bulk insert students
     console.log(`👨‍🎓 Inserting ${studentsData.length} students in batch...`);
     await studentRepository
       .createQueryBuilder()
@@ -176,39 +160,6 @@ export class SchoolsSeeder extends Seeder {
       .values(studentsData)
       .execute();
 
-    // Get created students
-    const allStudents = await studentRepository.find();
-
-    // Create map of TC to student ID
-    const tcToStudentMap = new Map();
-    allStudents.forEach(student => {
-      tcToStudentMap.set(student.tc_number, student.id);
-    });
-
-    // Prepare integration info with student IDs
-    const finalIntegrationData = [];
-    for (const info of integrationInfoData) {
-      const studentId = tcToStudentMap.get(info.tc_number);
-      if (studentId) {
-        finalIntegrationData.push({
-          external_id: info.external_id,
-          integration_data: info.integration_data,
-          student_id: studentId
-        });
-      }
-    }
-
-    // Bulk insert integration info
-    if (finalIntegrationData.length > 0) {
-      console.log(`📊 Inserting ${finalIntegrationData.length} integration records in batch...`);
-      await integrationRepository
-        .createQueryBuilder()
-        .insert()
-        .into(DrivingSchoolStudentIntegrationInfoEntity)
-        .values(finalIntegrationData)
-        .execute();
-    }
-
-    console.log(`✅ Created ${allSchools.length} schools, ${allCarsData.length} cars, ${allStudents.length} students using batch inserts`);
+    console.log(`✅ Created ${allSchools.length} schools, ${allCarsData.length} cars, ${studentsData.length} students using batch inserts`);
   }
 }
