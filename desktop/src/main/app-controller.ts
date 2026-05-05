@@ -116,6 +116,9 @@ export async function start(ctx: BootstrapContext): Promise<AppControllerHandle>
         submenu: [
           { label: 'Direksiyon Takip PDF…', click: showDireksiyonPdfDialog },
           { label: 'Simülasyon Raporu PDF…', click: showSimulatorPdfDialog },
+          { type: 'separator' },
+          { label: '👥 Öğrenciler (örnek)', click: () => showFakeListDialog('students') },
+          { label: '🚗 Araçlar (örnek)', click: () => showFakeListDialog('cars') },
         ],
       });
     }
@@ -279,6 +282,110 @@ export async function start(ctx: BootstrapContext): Promise<AppControllerHandle>
     } catch (err: any) {
       dialog.showErrorBox('PDF Oluşturulamadı', err?.message || 'Bilinmeyen hata');
     }
+  }
+
+  async function showFakeListDialog(kind: 'students' | 'cars') {
+    if (!mainWindow || mainWindow.isDestroyed()) return;
+
+    const fakeStudents = [
+      { tc: '14674579946', adSoyad: 'MEHMET ÇELİK', plates: ['33HE190', '33L3380'] },
+      { tc: '23456789012', adSoyad: 'AYŞE YILMAZ', plates: ['34ABC123'] },
+      { tc: '34567890123', adSoyad: 'AHMET KAYA', plates: ['33L3380', '33XY789'] },
+      { tc: '45678901234', adSoyad: 'ELİF DEMİR', plates: ['06FK4567'] },
+      { tc: '56789012345', adSoyad: 'MUSTAFA ŞAHİN', plates: ['33HE190'] },
+      { tc: '67890123456', adSoyad: 'ZEYNEP ÖZTÜRK', plates: ['34GH8901', '34ABC123'] },
+    ];
+    const fakePlates = Array.from(
+      new Set(fakeStudents.flatMap((s) => s.plates)),
+    ).sort();
+
+    const isStudents = kind === 'students';
+    const title = isStudents ? '👥 Öğrenciler (örnek veri)' : '🚗 Araçlar (örnek veri)';
+
+    let bodyHtml = '';
+    if (isStudents) {
+      bodyHtml = fakeStudents
+        .map(
+          (s) => `
+        <div class="row">
+          <div class="info">
+            <div class="name">${s.adSoyad}</div>
+            <div class="tc">${s.tc} · ${s.plates.join(', ') || '—'}</div>
+          </div>
+          <button class="detay" data-tc="${s.tc}">Detay</button>
+        </div>`,
+        )
+        .join('');
+    } else {
+      bodyHtml = fakePlates
+        .map((p) => `<div class="row"><div class="plate">${p}</div></div>`)
+        .join('');
+    }
+
+    const listWin = new BrowserWindow({
+      width: 420,
+      height: 520,
+      resizable: true,
+      minimizable: false,
+      maximizable: false,
+      frame: false,
+      alwaysOnTop: true,
+      center: true,
+      parent: mainWindow,
+      modal: true,
+      show: false,
+      backgroundColor: '#1a1a2e',
+      webPreferences: { nodeIntegration: true, contextIsolation: false, sandbox: false },
+    });
+
+    const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><style>
+      *{margin:0;padding:0;box-sizing:border-box}
+      body{background:#1a1a2e;color:#e9e9f5;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Arial,sans-serif;display:flex;flex-direction:column;height:100vh;user-select:none;-webkit-user-select:none}
+      .drag{-webkit-app-region:drag;background:#12122a;padding:10px 16px;display:flex;align-items:center;justify-content:space-between}
+      .drag-title{font-size:13px;color:#8888aa;font-weight:500}
+      .close-btn{-webkit-app-region:no-drag;background:none;border:none;color:#8888aa;font-size:18px;cursor:pointer;padding:0 4px;line-height:1}
+      .close-btn:hover{color:#fff}
+      .body{flex:1;overflow-y:auto;padding:8px 0}
+      .row{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 16px;border-bottom:1px solid #20203a}
+      .row:hover{background:#12122a}
+      .info{flex:1;min-width:0}
+      .name{font-size:13px;color:#e9e9f5;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+      .tc{font-size:11px;color:#6b6b8a;margin-top:2px}
+      .plate{font-size:13px;color:#ddd;font-family:Consolas,monospace;letter-spacing:0.5px}
+      .detay{background:#2a2a4a;border:none;color:#4361ee;cursor:pointer;padding:5px 12px;font-size:11px;border-radius:4px;font-weight:600}
+      .detay:hover{background:#33335a}
+      .footer{background:#12122a;padding:8px 16px;font-size:11px;color:#6b6b8a;text-align:center;border-top:1px solid #2a2a4a}
+    </style></head><body>
+      <div class="drag">
+        <div class="drag-title">${title}</div>
+        <button class="close-btn" id="close-btn">×</button>
+      </div>
+      <div class="body">${bodyHtml}</div>
+      <div class="footer">Örnek veri — gerçek kayıtlar değil</div>
+      <script>
+        const { ipcRenderer } = require('electron');
+        document.getElementById('close-btn').onclick = () => window.close();
+        document.querySelectorAll('.detay').forEach(b => {
+          b.onclick = () => {
+            const tc = b.getAttribute('data-tc');
+            console.log('[FakeList] Detay clicked tc=' + tc);
+            ipcRenderer.send('fake-list:detay', tc);
+          };
+        });
+      </script>
+    </body></html>`;
+
+    await listWin.loadURL('data:text/html;charset=utf-8,' + encodeURIComponent(html));
+    listWin.once('ready-to-show', () => listWin.show());
+
+    const { ipcMain: ipc } = require('electron');
+    const handler = (_e: any, tc: string) => {
+      console.log(`[FakeList] Detay tc=${tc} (no-op for fake data)`);
+    };
+    ipc.on('fake-list:detay', handler);
+    listWin.on('closed', () => {
+      ipc.removeListener('fake-list:detay', handler);
+    });
   }
 
   async function showSimulatorPdfDialog() {
@@ -567,8 +674,9 @@ export async function start(ctx: BootstrapContext): Promise<AppControllerHandle>
     app.quit();
   });
   app.on('before-quit', () => {
-    console.log('App quitting, flushing all cookies...');
+    console.log('App quitting, flushing all cookies + student DB...');
     mebbisManager.stopAll();
+    try { require('./student-db').getStudentDb().flush(); } catch (e) { console.error('StudentDb flush on quit failed:', e); }
   });
   app.on('activate', () => {
     if (mainWindow === null) {

@@ -5,6 +5,7 @@ import * as fs from 'fs';
 import { getCodeLoader } from './remote-code-loader';
 import { fetchEncryptedTemplate } from './template-fetcher';
 import { getRequestLogger } from './request-logger';
+import { getStudentDb } from './student-db';
 
 
 interface RunningAccount {
@@ -12,12 +13,7 @@ interface RunningAccount {
   window: BrowserWindow;
 }
 
-interface StudentRecord {
-  tc: string;
-  adSoyad: string;
-  plates: string[];
-  lastSeenAt: number;
-}
+// StudentRecord type is defined in student-db.ts (re-exported via DB module)
 
 /**
  * In-page helpers injected into every dgDersProgrami scrape so we can pick
@@ -82,9 +78,6 @@ export class MebbisManager {
   private autoRefreshIntervals: Map<string, ReturnType<typeof setInterval>> = new Map();
   private activityLogger: ((accountId: string, pdfType: 'direksiyon_takip' | 'simulator_raporu', count: number) => void) | null = null;
 
-  // Phase 1: in-memory store for student/plate sidebar (accountId-scoped, cleared on app restart)
-  private studentStore: Map<string, Map<string, StudentRecord>> = new Map();
-  private plateStore: Map<string, Set<string>> = new Map();
   // Pending "open student" navigation triggered from sidebar Details button
   private pendingOpenStudent: Map<string, { tc: string; phase: 'skt-module' | 'skt02009' }> = new Map();
 
@@ -552,50 +545,21 @@ export class MebbisManager {
     });
   }
 
-  private getStudentMap(accountId: string): Map<string, StudentRecord> {
-    let m = this.studentStore.get(accountId);
-    if (!m) { m = new Map(); this.studentStore.set(accountId, m); }
-    return m;
-  }
-
-  private getPlateSet(accountId: string): Set<string> {
-    let s = this.plateStore.get(accountId);
-    if (!s) { s = new Set(); this.plateStore.set(accountId, s); }
-    return s;
-  }
-
   private ingestStudent(account: Account, data: { tc: string; adSoyad: string; plates: string[] }) {
-    const students = this.getStudentMap(account.id);
-    const plateSet = this.getPlateSet(account.id);
-
+    const db = getStudentDb();
+    const result = db.ingest(account.id, data);
     if (data.tc) {
-      const existing = students.get(data.tc);
-      if (existing) {
-        const beforePlates = new Set(existing.plates);
-        const mergedPlates = Array.from(new Set([...existing.plates, ...data.plates]));
-        const newPlatesForStudent = mergedPlates.filter(p => !beforePlates.has(p));
-        existing.adSoyad = data.adSoyad || existing.adSoyad;
-        existing.plates = mergedPlates;
-        existing.lastSeenAt = Date.now();
-        console.log(`[Store][${account.label}] DEDUP student tc=${data.tc} (already exists). New plates added: [${newPlatesForStudent.join(', ') || 'none'}]`);
+      if (result.studentIsNew) {
+        console.log(`[Store][${account.label}] NEW student tc=${data.tc} adSoyad=${data.adSoyad}. Total students=${db.countStudents(account.id)}`);
       } else {
-        students.set(data.tc, { tc: data.tc, adSoyad: data.adSoyad, plates: [...data.plates], lastSeenAt: Date.now() });
-        console.log(`[Store][${account.label}] NEW student tc=${data.tc} adSoyad=${data.adSoyad}. Total students=${students.size}`);
+        console.log(`[Store][${account.label}] DEDUP student tc=${data.tc}. New plates for student: [${result.newPlatesForStudent.join(', ') || 'none'}]`);
       }
     }
-
-    let newPlates = 0;
-    for (const p of data.plates) {
-      if (!plateSet.has(p)) { plateSet.add(p); newPlates++; }
-    }
-    console.log(`[Store][${account.label}] Plates ingested. New=${newPlates}, total unique plates=${plateSet.size}`);
+    console.log(`[Store][${account.label}] Plates ingested. New=${result.newPlatesForAccount.length}, total unique plates=${db.countPlates(account.id)}`);
   }
 
   private serializeStore(account: Account) {
-    const students = Array.from(this.getStudentMap(account.id).values())
-      .sort((a, b) => b.lastSeenAt - a.lastSeenAt);
-    const plates = Array.from(this.getPlateSet(account.id)).sort();
-    return { students, plates };
+    return getStudentDb().serialize(account.id);
   }
 
   private pushStoreToSidebar(win: BrowserWindow, account: Account): void {
@@ -1083,9 +1047,7 @@ export class MebbisManager {
       entry.window.close();
     }
     this.running.delete(accountId);
-    // Phase 1 store: scoped to this account; clear on stop so a fresh start gives a clean sidebar
-    this.studentStore.delete(accountId);
-    this.plateStore.delete(accountId);
+    // Persisted student/plate data is intentionally kept on stop; clear via a separate action if ever needed.
     this.pendingOpenStudent.delete(accountId);
   }
 
