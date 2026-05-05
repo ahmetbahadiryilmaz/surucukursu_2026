@@ -68,8 +68,9 @@ function setupIPC() {
   // Dev mode flag
   ipcMain.handle('app:is-dev', () => IS_DEV);
 
-  // Remote code version (e.g. "1.2.4.001") — falls back to app version if not yet synced
-  ipcMain.handle('desktop-code:version', () => getCodeLoader().getVersion() ?? app.getVersion());
+  // Remote code version (e.g. "1.2.4.001"). Returns null until first sync
+  // completes — renderer subscribes to 'code-version-updated' for live updates.
+  ipcMain.handle('desktop-code:version', () => getCodeLoader().getVersion());
 
   // Installed desktop app version from package.json (e.g. "1.2.5")
   ipcMain.handle('app:version', () => app.getVersion());
@@ -348,7 +349,20 @@ app.whenReady().then(async () => {
   // Version is OK — sync remote code files in the background.
   // This updates scripts/renderer without requiring a reinstall.
   // Errors are caught inside sync(); app always starts even if server is down.
-  getCodeLoader().sync().catch(() => {});
+  const syncPromise = getCodeLoader().sync().catch(() => {});
+
+  // Start polling for new server-side deploys. On change, prompt user to
+  // restart so the new code loads fresh. No mid-session live-swap.
+  getCodeLoader().startVersionPolling(() => mainWindow);
+
+  // After the initial sync resolves, show the post-update "Yenilikler"
+  // dialog if the server provided a whatsNew message and the user hasn't
+  // already seen this version's notes (or opted out). Safe no-op otherwise.
+  syncPromise.then(() => {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      getCodeLoader().showCodeWhatsNewIfPending(mainWindow).catch(() => {});
+    }
+  });
 
   // Register IPC handlers before creating window so they're ready
   // when the renderer loads and immediately calls accounts:list

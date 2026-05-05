@@ -1,5 +1,6 @@
 import {
   Controller,
+  Get,
   Post,
   Body,
   Res,
@@ -34,8 +35,11 @@ function resolveCodeBase(): string {
 const CODE_BASE = resolveCodeBase();
 const CODE_BASE_RESOLVED = path.resolve(CODE_BASE);
 
-// Whitelisted layout: scripts/<name>.js  and (optionally) renderer/<name>.{html,js,css}
-const ALLOWED_PATH_PATTERN = /^(scripts\/[A-Za-z0-9_\-./]+\.js|renderer\/[A-Za-z0-9_\-./]+\.(html|js|css))$/;
+// Whitelisted layout:
+//   scripts/<name>.js       — webContents-injected scripts (legacy)
+//   main/<name>.js          — main-process bundle (esbuild output)
+//   renderer/<name>.{html,js,css} — renderer files served via mtsk-ui:// protocol
+const ALLOWED_PATH_PATTERN = /^((scripts|main)\/[A-Za-z0-9_\-./]+\.js|renderer\/[A-Za-z0-9_\-./]+\.(html|js|css))$/;
 
 interface SignedBody {
   timestamp: number;
@@ -53,6 +57,38 @@ const MANIFEST_PATH_TOKEN = '__manifest__';
 @Controller('desktop-code')
 export class DesktopCodeController {
   private readonly logger = new Logger(DesktopCodeController.name);
+
+  @Public()
+  @Get('version')
+  @ApiOperation({
+    summary: 'Plaintext remote-code version + optional whatsNew. Cheap to poll — no auth, no encryption.',
+  })
+  @ApiResponse({ status: 200, description: 'JSON {version: string, whatsNew?: string}' })
+  @ApiResponse({ status: 404, description: 'version.json missing on server' })
+  getVersion(@Res() res: FastifyReply) {
+    const versionFilePath = path.join(CODE_BASE_RESOLVED, 'version.json');
+    if (!fs.existsSync(versionFilePath)) {
+      throw new HttpException('version.json not deployed', HttpStatus.NOT_FOUND);
+    }
+    let version: string | undefined;
+    let whatsNew: string | undefined;
+    try {
+      const data = JSON.parse(fs.readFileSync(versionFilePath, 'utf-8'));
+      if (typeof data.version === 'string') version = data.version;
+      if (typeof data.whatsNew === 'string' && data.whatsNew.trim()) {
+        whatsNew = data.whatsNew;
+      }
+    } catch {
+      throw new HttpException('version.json malformed', HttpStatus.INTERNAL_SERVER_ERROR);
+    }
+    if (!version) {
+      throw new HttpException('version field missing', HttpStatus.INTERNAL_SERVER_ERROR);
+    }
+    res
+      .header('Content-Type', 'application/json')
+      .header('Cache-Control', 'no-store')
+      .send(whatsNew ? { version, whatsNew } : { version });
+  }
 
   @Public()
   @Post('manifest')

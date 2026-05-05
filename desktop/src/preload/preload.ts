@@ -50,8 +50,14 @@ contextBridge.exposeInMainWorld('mebbisAPI', {
   devTestDireksiyonPdf: (sinif: string) => ipcRenderer.invoke('dev:test-direksiyon-pdf', sinif),
   devTestSimulatorPdf: (simType: string) => ipcRenderer.invoke('dev:test-simulator-pdf', simType),
 
-  // Remote code version (e.g. "1.2.4.001")
+  // Remote code version (e.g. "1.2.4.001"). Returns null until first sync completes.
   getCodeVersion: () => ipcRenderer.invoke('desktop-code:version'),
+
+  // Live updates: fires whenever the main-process loader sees a new server version
+  // (initial sync, subsequent re-syncs, or background polling).
+  onCodeVersionUpdated: (callback: (version: string) => void) => {
+    ipcRenderer.on('code-version-updated', (_event, version) => callback(version));
+  },
 
   // Installed desktop app version (e.g. "1.2.5")
   getAppVersion: () => ipcRenderer.invoke('app:version'),

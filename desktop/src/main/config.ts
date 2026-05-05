@@ -101,6 +101,18 @@ export const DESKTOP_CODE_BASE_URL = `${API_BASE_URL}/desktop/desktop-service/de
  */
 export const FORCE_REMOTE_CODE_IN_DEV = /^(1|true|yes)$/i.test(envOr('DESKTOP_FORCE_REMOTE_CODE', ''));
 
+/**
+ * How often (in seconds) the desktop polls /desktop-code/version to detect
+ * new server-side deploys. On change, the user is prompted to restart.
+ * Default 300s (5 min). Set DESKTOP_VERSION_POLL_SECONDS=10 in .env.local
+ * for fast iteration during testing. Min clamp = 5s.
+ */
+export const VERSION_POLL_SECONDS = (() => {
+  const raw = parseInt(envOr('DESKTOP_VERSION_POLL_SECONDS', '300'), 10);
+  if (!Number.isFinite(raw) || raw < 5) return 300;
+  return raw;
+})();
+
 if (IS_DEV) {
   // Helpful one-line confirmation of which backend dev mode is pointing at.
   // eslint-disable-next-line no-console

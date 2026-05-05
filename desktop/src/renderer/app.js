@@ -747,6 +747,17 @@ document.getElementById('btn-about').addEventListener('click', () => {
   aboutOverlay.style.display = 'flex';
 });
 
+function renderVersionBadge() {
+  const badge = document.getElementById('code-version');
+  if (!badge) return;
+  const parts = [];
+  if (cachedAppVersion) parts.push(`app v${cachedAppVersion}`);
+  if (cachedCodeVersion && cachedCodeVersion !== cachedAppVersion) {
+    parts.push(`code v${cachedCodeVersion}`);
+  }
+  badge.textContent = parts.join(' · ');
+}
+
 document.getElementById('btn-about-close').addEventListener('click', () => {
   aboutOverlay.style.display = 'none';
 });
@@ -764,12 +775,16 @@ document.getElementById('btn-about-close').addEventListener('click', () => {
   ]);
   cachedAppVersion = appVer;
   cachedCodeVersion = codeVer;
-  const badge = document.getElementById('code-version');
-  if (badge) {
-    const parts = [];
-    if (appVer) parts.push(`app v${appVer}`);
-    if (codeVer && codeVer !== appVer) parts.push(`code v${codeVer}`);
-    badge.textContent = parts.join(' · ');
+  renderVersionBadge();
+
+  // Subscribe to live version updates from the main-process code loader.
+  // Fires after first sync completes (if it lagged the renderer init) and
+  // any time background polling detects a server-side bump.
+  if (api.onCodeVersionUpdated) {
+    api.onCodeVersionUpdated((newVersion) => {
+      cachedCodeVersion = newVersion;
+      renderVersionBadge();
+    });
   }
 
   // Always start at the login screen — never bypass it with a cached token.
