@@ -43,6 +43,58 @@ function shouldSkip(): boolean {
   return false;
 }
 
+/**
+ * Returns the first existing mysqldump executable. Tries the PATH first,
+ * then a list of common Windows install locations. Returns null if none found.
+ */
+function findMysqldump(): string | null {
+  const isWin = process.platform === 'win32';
+  const exe = isWin ? 'mysqldump.exe' : 'mysqldump';
+  // 1. PATH
+  const pathEnv = process.env.PATH || '';
+  const sep = isWin ? ';' : ':';
+  for (const dir of pathEnv.split(sep)) {
+    if (!dir) continue;
+    const candidate = path.join(dir, exe);
+    if (fs.existsSync(candidate)) return candidate;
+  }
+  if (!isWin) return null;
+  // 2. Windows common install locations (MySQL Server, MariaDB, XAMPP, WAMP, Laragon)
+  const programFiles = [process.env['ProgramFiles'], process.env['ProgramFiles(x86)']]
+    .filter((p): p is string => !!p);
+  const fallbacks: string[] = [];
+  for (const pf of programFiles) {
+    fallbacks.push(
+      path.join(pf, 'MySQL', 'MySQL Server 8.0', 'bin', exe),
+      path.join(pf, 'MySQL', 'MySQL Server 5.7', 'bin', exe),
+      path.join(pf, 'MariaDB 10.11', 'bin', exe),
+      path.join(pf, 'MariaDB 10.6', 'bin', exe),
+    );
+  }
+  fallbacks.push(
+    'C:\\xampp\\mysql\\bin\\' + exe,
+    'C:\\wamp64\\bin\\mysql\\mysql8.0.31\\bin\\' + exe,
+    'C:\\laragon\\bin\\mysql\\mysql-8.0.30-winx64\\bin\\' + exe,
+    'C:\\Program Files\\MySQL\\MySQL Workbench 8.0 CE\\' + exe,
+  );
+  // Also walk MySQL\* and MariaDB\* directories under Program Files (any version)
+  for (const pf of programFiles) {
+    for (const root of ['MySQL', 'MariaDB']) {
+      const dir = path.join(pf, root);
+      if (!fs.existsSync(dir)) continue;
+      try {
+        for (const sub of fs.readdirSync(dir)) {
+          fallbacks.push(path.join(dir, sub, 'bin', exe));
+        }
+      } catch { /* ignore */ }
+    }
+  }
+  for (const cand of fallbacks) {
+    if (fs.existsSync(cand)) return cand;
+  }
+  return null;
+}
+
 function timestamp(): string {
   const d = new Date();
   const pad = (n: number) => String(n).padStart(2, '0');
@@ -88,6 +140,18 @@ async function runDump(): Promise<void> {
   const reason = process.env.DUMP_REASON || 'manual';
   const file = path.join(dir, `${timestamp()}_${reason}_${cfg.database}.sql`);
 
+  const dumpBin = findMysqldump();
+  if (!dumpBin) {
+    throw new Error(
+      'mysqldump not found on PATH or in common install locations.\n' +
+      '  Install MySQL/MariaDB client tools, or add the bin directory to PATH.\n' +
+      '  To bypass the dump (NOT recommended — you will lose data on schema change):\n' +
+      '    SKIP_DB_DUMP=1 pnpm migrate    (Linux/macOS)\n' +
+      '    set SKIP_DB_DUMP=1 && pnpm migrate    (Windows cmd)\n' +
+      '    $env:SKIP_DB_DUMP="1"; pnpm migrate    (PowerShell)',
+    );
+  }
+
   // Use --result-file when available so password warnings on stderr don't
   // pollute stdout/the file. Pass password via env (MYSQL_PWD) — that keeps
   // it out of the process arg list (no leak in `ps`).
@@ -105,10 +169,11 @@ async function runDump(): Promise<void> {
     cfg.database,
   ];
 
+  console.log(`[dump-db] Using ${dumpBin}`);
   console.log(`[dump-db] Dumping ${cfg.database}@${cfg.host}:${cfg.port} → ${path.relative(process.cwd(), file)}`);
 
   await new Promise<void>((resolve, reject) => {
-    const child = spawn('mysqldump', args, {
+    const child = spawn(dumpBin, args, {
       env: { ...process.env, MYSQL_PWD: cfg.password },
       stdio: ['ignore', 'inherit', 'pipe'],
       shell: false,
@@ -116,11 +181,6 @@ async function runDump(): Promise<void> {
     let stderrBuf = '';
     child.stderr?.on('data', (chunk) => { stderrBuf += chunk.toString(); });
     child.on('error', (err: NodeJS.ErrnoException) => {
-      if (err.code === 'ENOENT') {
-        console.warn('[dump-db] mysqldump not on PATH — skipping (install MySQL client or set SKIP_DB_DUMP=1)');
-        resolve();
-        return;
-      }
       reject(err);
     });
     child.on('close', (code) => {
