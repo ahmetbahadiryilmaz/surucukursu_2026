@@ -199,7 +199,7 @@ export async function start(ctx: BootstrapContext): Promise<AppControllerHandle>
           <div class="divider"></div>
           <div class="info-row"><span class="info-label">Durum</span><span class="info-val">${statusLine}</span></div>
           <div class="divider"></div>
-          <div class="info-row"><span class="info-label">Web</span><span class="info-val">online.mtsk.app</span></div>
+          <div class="info-row"><span class="info-label">Web</span><span class="info-val">mtsk.app</span></div>
           <div class="info-row"><span class="info-label">WhatsApp</span><span class="info-val">+90 552 187 03 34</span></div>
         </div>
         <div class="btns">
@@ -226,7 +226,7 @@ export async function start(ctx: BootstrapContext): Promise<AppControllerHandle>
         ipc.removeListener('about:action', handler);
         if (!aboutWin.isDestroyed()) aboutWin.close();
         if (action === 'wa') shell.openExternal('https://wa.me/905521870334');
-        else if (action === 'web') shell.openExternal('https://online.mtsk.app');
+        else if (action === 'web') shell.openExternal('https://mtsk.app');
         resolve();
       };
       ipc.on('about:action', handler);
