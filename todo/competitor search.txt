@@ -1,0 +1,57 @@
+# Competitor Research — Turkish Driving School Management Software
+
+Date: 2026-05-06
+
+## Our Product (mtsk.app)
+
+Cloud + desktop platform for Turkish MTSK driving schools:
+- MEBBIS integration (browser automation against mebbis.meb.gov.tr)
+- Student & vehicle management, multi-role auth (Super Admin, Admin, Owner, Manager)
+- PDF generation (Direksiyon Takip, Simulasyon Raporu) via PHP/RabbitMQ worker
+- Electron desktop app — multi-account MEBBIS sessions, auto-login, batch PDF downloads
+- Modern React + TypeScript SPA, NestJS microservices
+- Real-time WebSocket notifications
+
+## MEBBIS Integration Verdicts
+
+Legend: **A = Scrapes MEBBIS** | **B = No MEBBIS integration** | **C = Manual file import/export** | **D = Unknown**
+
+**Critical industry finding: NO official MEB/MEBBIS API exists.** Every vendor that integrates does so via browser automation / web scraping. Confirmed by Tabim's public changelog literally documenting rewriting their integration after MEB changed activation/security codes (2FA).
+
+## Competitor Table
+
+| Vendor | Website | MEBBIS | Evidence | Pricing |
+|---|---|---|---|---|
+| **AKINSOFT NetSürücü Plus** | akinsoft.com.tr | **A — Scrapes** | "MEBBİS otomatik işleme modülleri"; exam apply + result transfer via program interface; lesson-limit auto-checks via MEBBIS | **Not published** (call-for-quote / dealer) |
+| **WENNTEC** | wenntec.com.tr | **A — Scrapes** (most aggressive surface) | Webcam → MEBBIS photo upload; pulls ders programları from MEBBIS; K-belgesi/direksiyon takip export | **Not published** (phone 0312 418 05 08) |
+| **Makrokey** | makrokey.com | **A — Scrapes** (implied) | Identical "MEBBİS otomatik işleme" wording as AKINSOFT — likely same integration pattern | **Not published** |
+| **Tabim Bilişim** | tabim.com.tr | **A — Scrapes (definitive)** | Public changelog v2.84.3.27 "Mebbis Güncellemesi": *"Bakanlığın yapmış olduğu alt yapı değişikliğine, Aktivasyon kodu ve Güvenlik koduna göre yeniden yazılmıştır"*. Win7 dropped after MEB upgrade. Ships separate "MEBBİS Aktarım Programı" installer. | **Not published** (444 0 940) |
+| **kursum.app** | kursum.app | **D / likely B** | Zero MEBBIS mention in any feature page; positioned as customer-facing CRM/digital assistant | **Not published** (contact 0534 456 79 36; 45 TL+VAT/mo only for GPS device add-on) |
+| **Sürücü Eğitim** | surucuegitim.com | **B — None** | Kursiyer-facing study portal/app only — no MEBBIS features | **Has /fiyatlar page** (self-serve credit card/EFT; specific TL figures not publicly retrievable) |
+| **drkdersi.com / Aysoft** | drkdersi.com | **B — None** | Randevu/appointment script; vehicle/maintenance tracking only; downloadable PHP product | **Not published** ("standart ve makul fiyatlar") |
+| **E-Sürücü** | e-surucu.com | **B — None** | E-sınav practice content only — not a school management product | **Published per-pack**: 5 deneme = 25 TL · 10 = 40 TL · 20 = 60 TL · 50 = 100 TL |
+| **Drivbi** | drivbi.demobi.info | **B — None** | Website/CMS script for driving school sites; MEBBIS not in feature list | **Published**: 3,450 TL one-time, lifetime per-domain license |
+
+## Strategic Findings
+
+1. **Only the 4 legacy desktop products (AKINSOFT, WENNTEC, Makrokey, Tabim) integrate with MEBBIS — all 4 by scraping**, not API. Every MEB UI/2FA change breaks them. This is the competitive moat we share with them, but they're stuck on Windows desktop.
+
+2. **All 5 "modern/web" competitors (kursum, surucuegitim, drkdersi, e-surucu, drivbi) avoid MEBBIS entirely.** They're student-facing portals, exam-prep content, or website builders. None solve the actual MEBBIS pain.
+
+3. **Our differentiation remains unique:** Modern web SaaS + deep MEBBIS automation + Electron desktop batch tool. No competitor combines all three.
+
+4. **Pricing is opaque industry-wide.** Only 2 of 9 publish numbers (E-Sürücü per-pack, Drivbi 3,450 TL one-time). The 4 MEBBIS-scrapers all use dealer/call-for-quote. Real benchmarking requires sales-call data gathering.
+
+## Sources
+
+- akinsoft.com.tr/programlar/detay/surucu-kursu-programi--wsr6
+- wenntec.com.tr/surucu-kursu-programi
+- makrokey.com/surucu-kursu-yazilimi
+- tabim.com.tr/surucu-kursu-programi
+- ehliyetadresi.com — Tabim 2.84.3.27 Mebbis Güncellemesi changelog
+- kursum.app/cozumlerimiz
+- surucuegitim.com/fiyatlar
+- drkdersi.com
+- e-surucu.com/satinal
+- metbi.net/drivbi
+- mebbis.oidb.net/node/34 (Özel MTSK Modülü)
