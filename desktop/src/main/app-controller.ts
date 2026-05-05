@@ -361,15 +361,25 @@ export async function start(ctx: BootstrapContext): Promise<AppControllerHandle>
         <button class="close-btn" id="close-btn">×</button>
       </div>
       <div class="body">${bodyHtml}</div>
-      <div class="footer">Örnek veri — gerçek kayıtlar değil</div>
+      <div class="footer" id="footer">Örnek veri — gerçek kayıtlar değil</div>
       <script>
-        const { ipcRenderer } = require('electron');
         document.getElementById('close-btn').onclick = () => window.close();
+        const footer = document.getElementById('footer');
         document.querySelectorAll('.detay').forEach(b => {
           b.onclick = () => {
             const tc = b.getAttribute('data-tc');
             console.log('[FakeList] Detay clicked tc=' + tc);
-            ipcRenderer.send('fake-list:detay', tc);
+            const row = b.closest('.row');
+            const name = row.querySelector('.name').textContent;
+            // visual feedback: flash row + update footer
+            row.style.transition = 'background 0.3s';
+            row.style.background = '#1a3a5a';
+            setTimeout(() => { row.style.background = ''; }, 600);
+            const orig = b.textContent;
+            b.textContent = '✓';
+            b.disabled = true;
+            setTimeout(() => { b.textContent = orig; b.disabled = false; }, 800);
+            footer.textContent = 'Detay tıklandı: ' + name + ' (TC ' + tc + ') — örnek veri, gerçek bir işlem yapılmadı';
           };
         });
       </script>
@@ -377,15 +387,6 @@ export async function start(ctx: BootstrapContext): Promise<AppControllerHandle>
 
     await listWin.loadURL('data:text/html;charset=utf-8,' + encodeURIComponent(html));
     listWin.once('ready-to-show', () => listWin.show());
-
-    const { ipcMain: ipc } = require('electron');
-    const handler = (_e: any, tc: string) => {
-      console.log(`[FakeList] Detay tc=${tc} (no-op for fake data)`);
-    };
-    ipc.on('fake-list:detay', handler);
-    listWin.on('closed', () => {
-      ipc.removeListener('fake-list:detay', handler);
-    });
   }
 
   async function showSimulatorPdfDialog() {
