@@ -19,6 +19,20 @@ export class MebbisStudentStore1715000000000 implements MigrationInterface {
   name = 'MebbisStudentStore1715000000000';
 
   public async up(queryRunner: QueryRunner): Promise<void> {
+    // ── 0. Bail out cleanly on a fresh DB ─────────────────────────────
+    // This migration only makes sense when the legacy `driving_school_students`
+    // table already exists (we ALTER it in-place). On a fresh DB the
+    // `synchronize()` step that ran before us has already created the new
+    // schema directly from entity decorators — our work is done.
+    const parentExists = await queryRunner.query(`
+      SELECT COUNT(*) AS c FROM information_schema.tables
+      WHERE table_schema = DATABASE() AND table_name = 'driving_school_students'
+    `);
+    if (!parentExists?.[0]?.c) {
+      console.log('[migration] driving_school_students does not exist — fresh DB, nothing to migrate.');
+      return;
+    }
+
     // ── 1. New tables ─────────────────────────────────────────────────
     await queryRunner.query(`
       CREATE TABLE IF NOT EXISTS \`driving_school_student_mebbis\` (
