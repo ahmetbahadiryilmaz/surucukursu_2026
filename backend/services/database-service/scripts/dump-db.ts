@@ -3,6 +3,7 @@ import { config } from 'dotenv';
 import { spawn } from 'child_process';
 import * as fs from 'fs';
 import * as path from 'path';
+import { dumpDatabaseJs } from './dump-db-js';
 
 // .env lives at backend/.env (one level above services/<svc>/scripts/).
 config({ path: path.resolve(__dirname, '..', '..', '..', '.env') });
@@ -142,14 +143,24 @@ async function runDump(): Promise<void> {
 
   const dumpBin = findMysqldump();
   if (!dumpBin) {
-    throw new Error(
-      'mysqldump not found on PATH or in common install locations.\n' +
-      '  Install MySQL/MariaDB client tools, or add the bin directory to PATH.\n' +
-      '  To bypass the dump (NOT recommended — you will lose data on schema change):\n' +
-      '    SKIP_DB_DUMP=1 pnpm migrate    (Linux/macOS)\n' +
-      '    set SKIP_DB_DUMP=1 && pnpm migrate    (Windows cmd)\n' +
-      '    $env:SKIP_DB_DUMP="1"; pnpm migrate    (PowerShell)',
-    );
+    // Fall back to pure-JS dump using the mysql2 driver (already in deps).
+    // Slower than mysqldump and skips routines/triggers/views, but covers
+    // tables + data, which is what the migration safety net actually needs.
+    console.log('[dump-db] mysqldump not found — falling back to pure-JS dumper');
+    console.log(`[dump-db] Dumping ${cfg.database}@${cfg.host}:${cfg.port} → ${path.relative(process.cwd(), file)}`);
+    const t0 = Date.now();
+    const result = await dumpDatabaseJs({
+      host: cfg.host,
+      port: cfg.port,
+      user: cfg.username,
+      password: cfg.password,
+      database: cfg.database,
+      outFile: file,
+    });
+    const ms = Date.now() - t0;
+    console.log(`[dump-db] ✓ JS dump complete: ${result.tables} tables, ${result.rows} rows, ${(result.bytes / 1024).toFixed(1)} KB in ${ms}ms`);
+    pruneOldDumps(resolveDumpDir());
+    return;
   }
 
   // Use --result-file when available so password warnings on stderr don't
