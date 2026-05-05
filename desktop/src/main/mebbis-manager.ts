@@ -12,6 +12,13 @@ interface RunningAccount {
   window: BrowserWindow;
 }
 
+interface StudentRecord {
+  tc: string;
+  adSoyad: string;
+  plates: string[];
+  lastSeenAt: number;
+}
+
 /**
  * In-page helpers injected into every dgDersProgrami scrape so we can pick
  * the right Dönem (period) regardless of MEBBIS row order. Parses
@@ -74,6 +81,12 @@ export class MebbisManager {
   private loginAttempts: Map<string, number> = new Map();
   private autoRefreshIntervals: Map<string, ReturnType<typeof setInterval>> = new Map();
   private activityLogger: ((accountId: string, pdfType: 'direksiyon_takip' | 'simulator_raporu', count: number) => void) | null = null;
+
+  // Phase 1: in-memory store for student/plate sidebar (accountId-scoped, cleared on app restart)
+  private studentStore: Map<string, Map<string, StudentRecord>> = new Map();
+  private plateStore: Map<string, Set<string>> = new Map();
+  // Pending "open student" navigation triggered from sidebar Details button
+  private pendingOpenStudent: Map<string, { tc: string; phase: 'skt-module' | 'skt02009' }> = new Map();
 
   setActivityLogger(fn: (accountId: string, pdfType: 'direksiyon_takip' | 'simulator_raporu', count: number) => void) {
     this.activityLogger = fn;
@@ -219,6 +232,11 @@ export class MebbisManager {
           console.error(`[${account.label}] Batch start parse error:`, e);
         }
       }
+      if (message.startsWith('MEBBIS_OPEN_STUDENT:')) {
+        const tc = message.replace('MEBBIS_OPEN_STUDENT:', '').trim();
+        console.log(`[OpenStudent][${account.label}] Sidebar requested open for tc=${tc}`);
+        this.openStudent(win, account, tc);
+      }
       if (message === 'MEBBIS_BATCH_CANCEL') {
         console.log(`[${account.label}] Batch cancelled by user`);
         this.pendingBatchDownload = null;
@@ -300,6 +318,20 @@ export class MebbisManager {
           this.showStatus(win, 'TRYING LOGIN...', '#FF6B6B');
           this.autoFillLogin(win, account);
         }
+      } else if (this.pendingOpenStudent.has(account.id) && currentURL.toLowerCase().includes('skt00001')) {
+        // Sidebar Detay flow: SKT module loaded, click into skt02009
+        const pending = this.pendingOpenStudent.get(account.id)!;
+        console.log(`[OpenStudent][${account.label}] skt00001 loaded, clicking skt02009 menu for tc=${pending.tc}`);
+        pending.phase = 'skt02009';
+        this.injectLeftMenu(win, account);
+        this.clickMenuItemForSkt02009(win, account);
+      } else if (this.pendingOpenStudent.has(account.id) && currentURL.toLowerCase().includes('skt02009')) {
+        // Sidebar Detay flow: skt02009 loaded, fill TC and submit (then clear pending so results land in normal-visit parser)
+        const pending = this.pendingOpenStudent.get(account.id)!;
+        this.pendingOpenStudent.delete(account.id);
+        console.log(`[OpenStudent][${account.label}] skt02009 loaded, filling tc=${pending.tc} and submitting search`);
+        this.injectLeftMenu(win, account);
+        this.fillTcAndSubmit(win, pending.tc);
       } else if ((this.pendingDownload || this.pendingSimulatorReport) && this.pendingDownloadPhase === 'skt-module' && currentURL.toLowerCase().includes('skt00001')) {
         // Phase 1: SKT module loaded, now click the menu item for skt02009
         console.log(`[${account.label}] SKT module loaded, clicking Aday Durum Görüntüleme...`);
@@ -487,38 +519,158 @@ export class MebbisManager {
 
   private parseAndLogStudentPage(win: BrowserWindow, account: Account): void {
     if (win.isDestroyed()) return;
+    console.log(`[StudentParser][${account.label}] Running DOM scrape on skt02009`);
     win.webContents.executeJavaScript(`
       (function() {
-        // TC Kimlik No — search form field (always filled when results show)
         const tc = (document.querySelector('#txtTcKimlikNo')?.value || '').trim();
-
-        // Ad Soyad — first data row of the dönem bilgileri grid, 2nd column
         const adSoyadCell = document.querySelector('#dgDonemBilgileri tr:not(.frmListBaslik) td:nth-child(2)');
         const adSoyad = (adSoyadCell?.textContent || '').trim();
-
-        // Plates from exam grid (Araç Plaka column = 6th td)
         const examPlates = Array.from(
           document.querySelectorAll('#dgUygulamaNot tr:not(.frmListBaslik) td:nth-child(6)')
         ).map(td => td.textContent.trim()).filter(Boolean);
-
-        // Plates from schedule grid (Araç Plakası column = 5th td, may include "(Manuel)")
         const schedPlates = Array.from(
           document.querySelectorAll('#dgDersProgrami tr:not(.frmListBaslik) td:nth-child(5)')
         ).map(td => td.textContent.trim().replace(/\\s*\\(.*?\\)/g, '').trim()).filter(Boolean);
-
         const plates = [...new Set([...examPlates, ...schedPlates])];
-
-        if (!tc && !adSoyad) {
-          console.log('[StudentParser] skt02009 loaded but no student data found (blank search form?)');
-          return;
-        }
-
-        console.log('[StudentParser] Student:', JSON.stringify({ tc, adSoyad, plates }));
+        return { tc, adSoyad, plates };
       })();
-    `).catch(() => {});
+    `).then((result: { tc: string; adSoyad: string; plates: string[] } | null) => {
+      if (!result) {
+        console.log(`[StudentParser][${account.label}] No result returned from DOM scrape`);
+        return;
+      }
+      const { tc, adSoyad, plates } = result;
+      if (!tc && !adSoyad) {
+        console.log(`[StudentParser][${account.label}] skt02009 loaded but no student data found (blank form)`);
+        return;
+      }
+      console.log(`[StudentParser][${account.label}] Scraped: tc=${tc}, adSoyad=${adSoyad}, plates=[${plates.join(', ')}]`);
+      this.ingestStudent(account, { tc, adSoyad, plates });
+      this.pushStoreToSidebar(win, account);
+    }).catch((e: any) => {
+      console.error(`[StudentParser][${account.label}] DOM scrape failed:`, e);
+    });
   }
 
-  private async injectLeftMenu(win: BrowserWindow, _account: Account) {
+  private getStudentMap(accountId: string): Map<string, StudentRecord> {
+    let m = this.studentStore.get(accountId);
+    if (!m) { m = new Map(); this.studentStore.set(accountId, m); }
+    return m;
+  }
+
+  private getPlateSet(accountId: string): Set<string> {
+    let s = this.plateStore.get(accountId);
+    if (!s) { s = new Set(); this.plateStore.set(accountId, s); }
+    return s;
+  }
+
+  private ingestStudent(account: Account, data: { tc: string; adSoyad: string; plates: string[] }) {
+    const students = this.getStudentMap(account.id);
+    const plateSet = this.getPlateSet(account.id);
+
+    if (data.tc) {
+      const existing = students.get(data.tc);
+      if (existing) {
+        const beforePlates = new Set(existing.plates);
+        const mergedPlates = Array.from(new Set([...existing.plates, ...data.plates]));
+        const newPlatesForStudent = mergedPlates.filter(p => !beforePlates.has(p));
+        existing.adSoyad = data.adSoyad || existing.adSoyad;
+        existing.plates = mergedPlates;
+        existing.lastSeenAt = Date.now();
+        console.log(`[Store][${account.label}] DEDUP student tc=${data.tc} (already exists). New plates added: [${newPlatesForStudent.join(', ') || 'none'}]`);
+      } else {
+        students.set(data.tc, { tc: data.tc, adSoyad: data.adSoyad, plates: [...data.plates], lastSeenAt: Date.now() });
+        console.log(`[Store][${account.label}] NEW student tc=${data.tc} adSoyad=${data.adSoyad}. Total students=${students.size}`);
+      }
+    }
+
+    let newPlates = 0;
+    for (const p of data.plates) {
+      if (!plateSet.has(p)) { plateSet.add(p); newPlates++; }
+    }
+    console.log(`[Store][${account.label}] Plates ingested. New=${newPlates}, total unique plates=${plateSet.size}`);
+  }
+
+  private serializeStore(account: Account) {
+    const students = Array.from(this.getStudentMap(account.id).values())
+      .sort((a, b) => b.lastSeenAt - a.lastSeenAt);
+    const plates = Array.from(this.getPlateSet(account.id)).sort();
+    return { students, plates };
+  }
+
+  private pushStoreToSidebar(win: BrowserWindow, account: Account): void {
+    if (win.isDestroyed()) return;
+    const payload = this.serializeStore(account);
+    console.log(`[Sidebar][${account.label}] Pushing store: ${payload.students.length} students, ${payload.plates.length} plates`);
+    const json = JSON.stringify(payload).replace(/<\/script/gi, '<\\/script');
+    win.webContents.executeJavaScript(`
+      (function() {
+        try {
+          window.__mebbisStore = ${json};
+          if (typeof window.__mebbisRenderStore === 'function') {
+            window.__mebbisRenderStore();
+            console.log('[MEBBIS_SIDEBAR] Store re-rendered: ' + window.__mebbisStore.students.length + ' students, ' + window.__mebbisStore.plates.length + ' plates');
+          } else {
+            console.log('[MEBBIS_SIDEBAR] Store stashed but no renderer yet');
+          }
+        } catch (e) {
+          console.log('[MEBBIS_SIDEBAR] Push failed: ' + e);
+        }
+      })();
+    `).catch((e) => console.error(`[Sidebar][${account.label}] Push failed:`, e));
+  }
+
+  private openStudent(win: BrowserWindow, account: Account, tc: string): void {
+    if (win.isDestroyed()) {
+      console.log(`[OpenStudent][${account.label}] Window destroyed, aborting tc=${tc}`);
+      return;
+    }
+    if (!tc || !/^\d{11}$/.test(tc)) {
+      console.log(`[OpenStudent][${account.label}] Invalid TC '${tc}', aborting`);
+      return;
+    }
+    if (this.pendingDownload || this.pendingBatchDownload || this.pendingSimulatorReport) {
+      console.log(`[OpenStudent][${account.label}] A download/batch is in progress, ignoring open-student tc=${tc}`);
+      return;
+    }
+    console.log(`[OpenStudent][${account.label}] Navigating to skt00001 to open tc=${tc}`);
+    this.pendingOpenStudent.set(account.id, { tc, phase: 'skt-module' });
+    win.loadURL('https://mebbis.meb.gov.tr/SKT/skt00001.aspx').catch((e) => {
+      console.error(`[OpenStudent][${account.label}] loadURL failed:`, e);
+      this.pendingOpenStudent.delete(account.id);
+    });
+  }
+
+  private fillTcAndSubmit(win: BrowserWindow, tc: string): void {
+    if (win.isDestroyed()) return;
+    win.webContents.executeJavaScript(`
+      (function() {
+        const tcInput = document.getElementById('txtTcKimlikNo');
+        if (!tcInput) {
+          console.log('[MEBBIS] fillTcAndSubmit: txtTcKimlikNo not found');
+          return;
+        }
+        tcInput.value = '${tc}';
+        tcInput.dispatchEvent(new Event('change', { bubbles: true }));
+        tcInput.dispatchEvent(new Event('input', { bubbles: true }));
+        setTimeout(() => {
+          const btn = document.getElementById('ImageButton1') ||
+                      document.querySelector('input[id*="ImageButton"]') ||
+                      document.querySelector('input[type="image"]');
+          if (btn) {
+            console.log('[MEBBIS] fillTcAndSubmit: clicking search button');
+            btn.click();
+          } else {
+            const form = tcInput.closest('form');
+            if (form) { console.log('[MEBBIS] fillTcAndSubmit: submitting form'); form.submit(); }
+            else { console.log('[MEBBIS] fillTcAndSubmit: no submit target found'); }
+          }
+        }, 300);
+      })();
+    `).catch((e) => console.error(`[OpenStudent] fillTcAndSubmit failed:`, e));
+  }
+
+  private async injectLeftMenu(win: BrowserWindow, account: Account) {
     if (win.isDestroyed()) return;
 
     // ─── Hardcoded fallback (used only when remote bundle has not been cached yet) ───
@@ -801,6 +953,123 @@ export class MebbisManager {
     `;
 
     await getCodeLoader().runScriptOrFallback(win, 'scripts/left-menu.js', fallback);
+
+    // After main menu is injected, attach Öğrenciler & Araçlar sections + renderer.
+    await this.injectStoreSidebarSections(win, account);
+    // And immediately push current store state.
+    this.pushStoreToSidebar(win, account);
+  }
+
+  private async injectStoreSidebarSections(win: BrowserWindow, account: Account): Promise<void> {
+    if (win.isDestroyed()) return;
+    console.log(`[Sidebar][${account.label}] Injecting Öğrenciler & Araçlar sections + renderer`);
+    const script = `
+      (function() {
+        const sidebar = document.getElementById('mebbis-left-menu');
+        if (!sidebar) {
+          console.log('[MEBBIS_SIDEBAR] No #mebbis-left-menu found, skipping store sections');
+          return;
+        }
+        if (document.getElementById('mebbis-store-container')) {
+          console.log('[MEBBIS_SIDEBAR] Store sections already present, skipping');
+          return;
+        }
+
+        const container = document.createElement('div');
+        container.id = 'mebbis-store-container';
+        container.style.cssText = 'border-top: 1px solid #2a2a4a; margin-top: 8px;';
+
+        // Öğrenciler section
+        const studentsHeader = document.createElement('div');
+        studentsHeader.style.cssText = 'padding: 10px 15px 6px; font-size: 12px; font-weight: bold; color: #4361ee; letter-spacing: 0.5px;';
+        studentsHeader.textContent = 'ÖĞRENCİLER';
+        container.appendChild(studentsHeader);
+        const studentsList = document.createElement('div');
+        studentsList.id = 'mebbis-students-list';
+        studentsList.style.cssText = 'display: flex; flex-direction: column;';
+        container.appendChild(studentsList);
+
+        // Araçlar section
+        const carsHeader = document.createElement('div');
+        carsHeader.style.cssText = 'padding: 10px 15px 6px; font-size: 12px; font-weight: bold; color: #4361ee; letter-spacing: 0.5px; border-top: 1px solid #2a2a4a; margin-top: 6px;';
+        carsHeader.textContent = 'ARAÇLAR';
+        container.appendChild(carsHeader);
+        const carsList = document.createElement('div');
+        carsList.id = 'mebbis-cars-list';
+        carsList.style.cssText = 'display: flex; flex-direction: column;';
+        container.appendChild(carsList);
+
+        sidebar.appendChild(container);
+        console.log('[MEBBIS_SIDEBAR] Store sections injected');
+
+        window.__mebbisRenderStore = function() {
+          const store = window.__mebbisStore || { students: [], plates: [] };
+          const sList = document.getElementById('mebbis-students-list');
+          const cList = document.getElementById('mebbis-cars-list');
+          if (!sList || !cList) {
+            console.log('[MEBBIS_SIDEBAR] Lists missing during render');
+            return;
+          }
+          sList.innerHTML = '';
+          cList.innerHTML = '';
+
+          if (!store.students.length) {
+            const empty = document.createElement('div');
+            empty.style.cssText = 'padding: 8px 15px; font-size: 12px; color: #666; font-style: italic;';
+            empty.textContent = '— henüz yok —';
+            sList.appendChild(empty);
+          } else {
+            store.students.forEach(s => {
+              const row = document.createElement('div');
+              row.style.cssText = 'padding: 8px 12px 8px 15px; display: flex; align-items: center; justify-content: space-between; gap: 8px; border-bottom: 1px solid #20203a;';
+              const info = document.createElement('div');
+              info.style.cssText = 'flex: 1; min-width: 0; overflow: hidden;';
+              const name = document.createElement('div');
+              name.style.cssText = 'font-size: 12px; color: #ddd; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;';
+              name.textContent = s.adSoyad || '(isimsiz)';
+              const tcEl = document.createElement('div');
+              tcEl.style.cssText = 'font-size: 10px; color: #777; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;';
+              tcEl.textContent = s.tc;
+              info.appendChild(name);
+              info.appendChild(tcEl);
+              row.appendChild(info);
+              const btn = document.createElement('button');
+              btn.style.cssText = 'background: #2a2a4a; border: none; color: #4361ee; cursor: pointer; padding: 4px 8px; font-size: 11px; border-radius: 3px; flex-shrink: 0;';
+              btn.textContent = 'Detay';
+              btn.onclick = () => {
+                console.log('[MEBBIS_SIDEBAR] Detay clicked for tc=' + s.tc);
+                console.log('MEBBIS_OPEN_STUDENT:' + s.tc);
+              };
+              row.appendChild(btn);
+              sList.appendChild(row);
+            });
+          }
+
+          if (!store.plates.length) {
+            const empty = document.createElement('div');
+            empty.style.cssText = 'padding: 8px 15px; font-size: 12px; color: #666; font-style: italic;';
+            empty.textContent = '— henüz yok —';
+            cList.appendChild(empty);
+          } else {
+            store.plates.forEach(p => {
+              const row = document.createElement('div');
+              row.style.cssText = 'padding: 6px 15px; font-size: 12px; color: #ccc; border-bottom: 1px solid #20203a;';
+              row.textContent = p;
+              cList.appendChild(row);
+            });
+          }
+
+          console.log('[MEBBIS_SIDEBAR] Rendered ' + store.students.length + ' students, ' + store.plates.length + ' plates');
+        };
+
+        if (window.__mebbisStore) {
+          window.__mebbisRenderStore();
+        }
+      })();
+    `;
+    await win.webContents.executeJavaScript(script).catch((e) => {
+      console.error(`[Sidebar][${account.label}] Section injection failed:`, e);
+    });
   }
 
   stop(accountId: string) {
@@ -814,6 +1083,10 @@ export class MebbisManager {
       entry.window.close();
     }
     this.running.delete(accountId);
+    // Phase 1 store: scoped to this account; clear on stop so a fresh start gives a clean sidebar
+    this.studentStore.delete(accountId);
+    this.plateStore.delete(accountId);
+    this.pendingOpenStudent.delete(accountId);
   }
 
   focus(accountId: string) {
