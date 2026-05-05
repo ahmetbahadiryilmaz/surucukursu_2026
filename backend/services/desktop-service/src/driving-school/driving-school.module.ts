@@ -3,6 +3,9 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import {
   DrivingSchoolEntity,
   DrivingSchoolStudentEntity,
+  DrivingSchoolStudentMebbisEntity,
+  DrivingSchoolStudentMebbisExamEntity,
+  DrivingSchoolStudentMebbisLessonEntity,
   DrivingSchoolSettingsEntity,
   DrivingSchoolManagerEntity,
   DrivingSchoolOwnerEntity,
@@ -18,6 +21,11 @@ import { AuthModule } from '../auth/auth.module';
     TypeOrmModule.forFeature([
       DrivingSchoolEntity,
       DrivingSchoolStudentEntity,
+      // Mebbis entities registered alongside the student entity so TypeORM can
+      // resolve the OneToOne / OneToMany inverse metadata.
+      DrivingSchoolStudentMebbisEntity,
+      DrivingSchoolStudentMebbisExamEntity,
+      DrivingSchoolStudentMebbisLessonEntity,
       DrivingSchoolSettingsEntity,
       DrivingSchoolManagerEntity,
       DrivingSchoolOwnerEntity,
