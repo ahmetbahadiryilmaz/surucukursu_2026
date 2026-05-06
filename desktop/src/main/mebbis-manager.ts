@@ -936,26 +936,67 @@ export class MebbisManager {
             sinifSelect.onfocus = () => { sinifSelect.style.borderColor = '#4361ee'; };
             sinifSelect.onblur = () => { sinifSelect.style.borderColor = '#2a2a4a'; };
             const sinifOptions = [
+              { label: 'Otomatik (ders sayısına göre)', value: '' },
               { label: 'Yeni B (16 ders)', value: '0,B|16' },
               { label: 'Yeni A (14 ders)', value: '0,A|14' },
-              { label: 'A1 \u2192 A2 (6 ders)', value: 'A1,A2|6' },
-              { label: 'A2 \u2192 A (12 ders)', value: 'A2,A|12' },
-              { label: 'A \u2192 B (14 ders)', value: 'A,B|14' },
-              { label: 'B \u2192 A1 (12 ders)', value: 'B,A1|12' },
-              { label: 'B \u2192 A2 (12 ders)', value: 'B,A2|12' },
-              { label: 'B \u2192 A (12 ders)', value: 'B,A|12' },
-              { label: 'B \u2192 BE (6 ders)', value: 'B,BE|6' },
-              { label: 'B \u2192 C (12 ders)', value: 'B,C|12' },
-              { label: 'B \u2192 D1 (7 ders)', value: 'B,D1|7' },
-              { label: 'B(2016 \u00d6ncesi) \u2192 C (12 ders)', value: 'B(2016 \u00d6ncesi),C|12' },
-              { label: 'B(2016 Sonras\u0131) \u2192 C (20 ders)', value: 'B(2016 Sonras\u0131),C|20' },
-              { label: 'B(2016 \u00d6ncesi) \u2192 D (7 ders)', value: 'B(2016 \u00d6ncesi),D|7' },
-              { label: 'C \u2192 CE (6 ders)', value: 'C,CE|6' },
-              { label: 'C \u2192 D (7 ders)', value: 'C,D|7' },
-              { label: 'C \u2192 D1 (4 ders)', value: 'C,D1|4' },
-              { label: 'C \u2192 A2 (12 ders)', value: 'C,A2|12' },
-              { label: 'D \u2192 C (10 ders)', value: 'D,C|10' },
-              { label: 'D1 \u2192 D (6 ders)', value: 'D1,D|6' },
+              { label: 'Yeni A1 (14 ders)', value: '0,A1|14' },
+              { label: 'Yeni A2 (14 ders)', value: '0,A2|14' },
+              { label: 'Yeni M (14 ders)', value: '0,M|14' },
+              { label: 'Yeni B1 (14 ders)', value: '0,B1|14' },
+              { label: 'Yeni F (14 ders)', value: '0,F|14' },
+              // --- Motosiklet S\u0131n\u0131f\u0131 Ge\u00e7i\u015fleri ---
+              { label: 'A1 \u2192 A2 (8 ders)', value: 'A1,A2|8' },
+              { label: 'A1-A2 \u2192 A (8 ders)', value: 'A1-A2,A|8' },
+              { label: 'M \u2192 A (14 ders)', value: 'M,A|14' },
+              { label: 'M-B1 \u2192 A1 (14 ders)', value: 'M-B1,A1|14' },
+              { label: 'M-B1 \u2192 A2 (14 ders)', value: 'M-B1,A2|14' },
+              { label: 'B-C-D-F-G \u2192 A1 (14 ders)', value: 'B-C-D-F-G,A1|14' },
+              { label: 'B-C-D-F-G \u2192 A2 (14 ders)', value: 'B-C-D-F-G,A2|14' },
+              { label: 'B-C-D-F-G \u2192 A (14 ders)', value: 'B-C-D-F-G,A|14' },
+              { label: 'B1 \u2192 A1-A2-A (14 ders)', value: 'B1,A1-A2-A|14' },
+              { label: 'E (17.04.2015 \u00d6ncesi) \u2192 A1 (14 ders)', value: 'E(17.04.2015 \u00d6ncesi),A1|14' },
+              { label: 'E (17.04.2015 \u00d6ncesi) \u2192 A2 (14 ders)', value: 'E(17.04.2015 \u00d6ncesi),A2|14' },
+              { label: 'E (17.04.2015 \u00d6ncesi) \u2192 A (14 ders)', value: 'E(17.04.2015 \u00d6ncesi),A|14' },
+
+              // --- B / B1 Ge\u00e7i\u015fleri ---
+              { label: 'A1-A2-A \u2192 B (16 ders)', value: 'A1-A2-A,B|16' },
+              { label: 'A1-A2-A \u2192 B1 (8 ders)', value: 'A1-A2-A,B1|8' },
+              { label: 'A1-A2-A (17.04.2015 \u00d6ncesi) \u2192 B1 (8 ders)', value: 'A1-A2-A(17.04.2015 \u00d6ncesi),B1|8' },
+              { label: 'F \u2192 B (16 ders)', value: 'F,B|16' },
+              { label: 'G \u2192 B (16 ders)', value: 'G,B|16' },
+              { label: 'M \u2192 B (16 ders)', value: 'M,B|16' },
+              { label: 'M \u2192 B1 (14 ders)', value: 'M,B1|14' },
+              { label: 'B1 \u2192 B (14 ders)', value: 'B1,B|14' },
+              { label: 'G \u2192 F (14 ders)', value: 'G,F|14' },
+
+              // --- A\u011f\u0131r Vas\u0131ta (C / C1 / D / D1) ---
+              { label: 'B \u2192 C (22 ders)', value: 'B,C|22' },
+              { label: 'B (17.04.2015 \u00d6ncesi) \u2192 C (16 ders)', value: 'B(17.04.2015 \u00d6ncesi),C|16' },
+              { label: 'B \u2192 D (16 ders)', value: 'B,D|16' },
+              { label: 'B (17.04.2015 \u00d6ncesi) \u2192 D (9 ders)', value: 'B(17.04.2015 \u00d6ncesi),D|9' },
+              { label: 'B \u2192 D1 (9 ders)', value: 'B,D1|9' },
+              { label: 'B \u2192 C1 (12 ders)', value: 'B,C1|12' },
+              { label: 'B (17.04.2015 \u00d6ncesi) \u2192 C1 (7 ders)', value: 'B(17.04.2015 \u00d6ncesi),C1|7' },
+              { label: 'C1 \u2192 C-D (12 ders)', value: 'C1,C-D|12' },
+              { label: 'C1-C \u2192 D1 (6 ders)', value: 'C1-C,D1|6' },
+              { label: 'C \u2192 D (9 ders)', value: 'C,D|9' },
+              { label: 'D \u2192 C (12 ders)', value: 'D,C|12' },
+              { label: 'D1 \u2192 C (16 ders)', value: 'D1,C|16' },
+              { label: 'D1 \u2192 D (9 ders)', value: 'D1,D|9' },
+              { label: 'D1-D \u2192 C1 (7 ders)', value: 'D1-D,C1|7' },
+
+              // --- Otomatik \u2192 Manuel ---
+              { label: 'A Otomatik \u2192 A Manuel (9 ders)', value: 'A Otomatik,A Manuel|9' },
+              { label: 'B Otomatik \u2192 B Manuel (10 ders)', value: 'B Otomatik,B Manuel|10' },
+              { label: 'C Otomatik \u2192 C Manuel (12 ders)', value: 'C Otomatik,C Manuel|12' },
+              { label: 'D Otomatik \u2192 D Manuel (9 ders)', value: 'D Otomatik,D Manuel|9' },
+
+              // --- R\u00f6mork (E S\u0131n\u0131flar\u0131) ---
+              { label: 'B \u2192 BE (8 ders)', value: 'B,BE|8' },
+              { label: 'C \u2192 CE (8 ders)', value: 'C,CE|8' },
+              { label: 'D \u2192 DE (8 ders)', value: 'D,DE|8' },
+              { label: 'C1 \u2192 C1E (8 ders)', value: 'C1,C1E|8' },
+              { label: 'D1 \u2192 D1E (8 ders)', value: 'D1,D1E|8' },
             ];
             sinifOptions.forEach(opt => {
               const option = document.createElement('option');
@@ -1068,87 +1109,156 @@ export class MebbisManager {
         container.id = 'mebbis-store-container';
         container.style.cssText = 'border-top: 1px solid #2a2a4a; margin-top: 8px;';
 
-        // Öğrenciler section
-        const studentsHeader = document.createElement('div');
-        studentsHeader.style.cssText = 'padding: 10px 15px 6px; font-size: 12px; font-weight: bold; color: #4361ee; letter-spacing: 0.5px;';
-        studentsHeader.textContent = 'ÖĞRENCİLER';
-        container.appendChild(studentsHeader);
-        const studentsList = document.createElement('div');
-        studentsList.id = 'mebbis-students-list';
-        studentsList.style.cssText = 'display: flex; flex-direction: column;';
-        container.appendChild(studentsList);
+        function makeSectionBtn(id, label) {
+          const b = document.createElement('button');
+          b.id = id;
+          b.dataset.label = label;
+          b.style.cssText = 'background: none; border: none; color: #4361ee; font-size: 13px; font-weight: bold; padding: 12px 15px; text-align: left; cursor: pointer; width: 100%; border-bottom: 1px solid #2a2a4a; letter-spacing: 0.3px; transition: background 0.15s;';
+          b.textContent = label + ' (0)';
+          b.onmouseover = () => { b.style.background = '#2a2a4a'; };
+          b.onmouseout = () => { b.style.background = 'none'; };
+          return b;
+        }
 
-        // Araçlar section
-        const carsHeader = document.createElement('div');
-        carsHeader.style.cssText = 'padding: 10px 15px 6px; font-size: 12px; font-weight: bold; color: #4361ee; letter-spacing: 0.5px; border-top: 1px solid #2a2a4a; margin-top: 6px;';
-        carsHeader.textContent = 'ARAÇLAR';
-        container.appendChild(carsHeader);
-        const carsList = document.createElement('div');
-        carsList.id = 'mebbis-cars-list';
-        carsList.style.cssText = 'display: flex; flex-direction: column;';
-        container.appendChild(carsList);
-
+        const studentsBtn = makeSectionBtn('mebbis-students-btn', 'Öğrenciler');
+        const carsBtn = makeSectionBtn('mebbis-cars-btn', 'Araçlar');
+        container.appendChild(studentsBtn);
+        container.appendChild(carsBtn);
         sidebar.appendChild(container);
-        console.log('[MEBBIS_SIDEBAR] Store sections injected');
+        console.log('[MEBBIS_SIDEBAR] Store section buttons injected');
+
+        let activeModalKeyHandler = null;
+        function closeStoreModal() {
+          const m = document.getElementById('mebbis-store-modal');
+          if (m) m.remove();
+          if (activeModalKeyHandler) {
+            document.removeEventListener('keydown', activeModalKeyHandler);
+            activeModalKeyHandler = null;
+          }
+        }
+
+        function openTableModal(opts) {
+          closeStoreModal();
+          const overlay = document.createElement('div');
+          overlay.id = 'mebbis-store-modal';
+          if (opts.kind) overlay.dataset.kind = opts.kind;
+          overlay.style.cssText = 'position: fixed; left: 200px; top: 0; right: 0; bottom: 0; z-index: 10001; background: #16213e; color: white; font-family: Arial, sans-serif; display: flex; flex-direction: column;';
+
+          const modal = document.createElement('div');
+          modal.style.cssText = 'flex: 1; display: flex; flex-direction: column; padding: 20px; min-height: 0;';
+
+          const header = document.createElement('div');
+          header.style.cssText = 'display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; padding-bottom: 10px; border-bottom: 1px solid #2a2a4a; flex-shrink: 0;';
+          const titleEl = document.createElement('h3');
+          titleEl.style.cssText = 'margin: 0; color: #4361ee; font-size: 18px;';
+          titleEl.textContent = opts.title;
+          const closeBtn = document.createElement('button');
+          closeBtn.textContent = '✕';
+          closeBtn.style.cssText = 'background: none; border: none; color: #ccc; cursor: pointer; font-size: 18px; padding: 0 8px; line-height: 1;';
+          closeBtn.onclick = closeStoreModal;
+          header.appendChild(titleEl);
+          header.appendChild(closeBtn);
+          modal.appendChild(header);
+
+          const tableWrap = document.createElement('div');
+          tableWrap.style.cssText = 'overflow: auto; flex: 1;';
+          const table = document.createElement('table');
+          table.style.cssText = 'width: 100%; border-collapse: collapse; font-size: 13px;';
+          const thead = document.createElement('thead');
+          const trh = document.createElement('tr');
+          opts.columns.forEach(col => {
+            const th = document.createElement('th');
+            th.style.cssText = 'text-align: left; padding: 8px 12px; border-bottom: 2px solid #2a2a4a; color: #4361ee; font-weight: 600; position: sticky; top: 0; background: #16213e;';
+            th.textContent = col.label;
+            trh.appendChild(th);
+          });
+          thead.appendChild(trh);
+          table.appendChild(thead);
+          const tbody = document.createElement('tbody');
+          if (!opts.rows.length) {
+            const tr = document.createElement('tr');
+            const td = document.createElement('td');
+            td.colSpan = opts.columns.length;
+            td.style.cssText = 'padding: 20px; text-align: center; color: #888; font-style: italic;';
+            td.textContent = '— henüz yok —';
+            tr.appendChild(td);
+            tbody.appendChild(tr);
+          } else {
+            opts.rows.forEach(row => {
+              const tr = document.createElement('tr');
+              tr.style.cssText = 'border-bottom: 1px solid #20203a;';
+              opts.columns.forEach(col => {
+                const td = document.createElement('td');
+                td.style.cssText = 'padding: 8px 12px; color: #ddd;';
+                if (col.action && opts.onRowAction) {
+                  const btn = document.createElement('button');
+                  btn.style.cssText = 'background: #2a2a4a; border: none; color: #4361ee; cursor: pointer; padding: 4px 12px; font-size: 12px; border-radius: 3px;';
+                  btn.textContent = col.action;
+                  btn.onclick = () => opts.onRowAction(row);
+                  td.appendChild(btn);
+                } else {
+                  td.textContent = row[col.key] != null ? String(row[col.key]) : '';
+                }
+                tr.appendChild(td);
+              });
+              tbody.appendChild(tr);
+            });
+          }
+          table.appendChild(tbody);
+          tableWrap.appendChild(table);
+          modal.appendChild(tableWrap);
+
+          overlay.appendChild(modal);
+          overlay.onclick = (e) => { if (e.target === overlay) closeStoreModal(); };
+          document.body.appendChild(overlay);
+
+          activeModalKeyHandler = (e) => { if (e.key === 'Escape') closeStoreModal(); };
+          document.addEventListener('keydown', activeModalKeyHandler);
+        }
+
+        studentsBtn.onclick = () => {
+          const store = window.__mebbisStore || { students: [], plates: [] };
+          openTableModal({
+            kind: 'students',
+            title: 'Öğrenciler (' + store.students.length + ')',
+            columns: [
+              { key: 'tc', label: 'TC Kimlik' },
+              { key: 'adSoyad', label: 'Ad Soyad' },
+              { key: 'detay', label: '', action: 'Detay' },
+            ],
+            rows: store.students,
+            onRowAction: (row) => {
+              console.log('[MEBBIS_SIDEBAR] Detay clicked for tc=' + row.tc);
+              console.log('MEBBIS_OPEN_STUDENT:' + row.tc);
+              closeStoreModal();
+            },
+          });
+        };
+
+        carsBtn.onclick = () => {
+          const store = window.__mebbisStore || { students: [], plates: [] };
+          openTableModal({
+            kind: 'cars',
+            title: 'Araçlar (' + store.plates.length + ')',
+            columns: [{ key: 'plate', label: 'Plaka' }],
+            rows: store.plates.map(p => ({ plate: p })),
+          });
+        };
 
         window.__mebbisRenderStore = function() {
           const store = window.__mebbisStore || { students: [], plates: [] };
-          const sList = document.getElementById('mebbis-students-list');
-          const cList = document.getElementById('mebbis-cars-list');
-          if (!sList || !cList) {
-            console.log('[MEBBIS_SIDEBAR] Lists missing during render');
-            return;
+          const sBtn = document.getElementById('mebbis-students-btn');
+          const cBtn = document.getElementById('mebbis-cars-btn');
+          if (sBtn) sBtn.textContent = 'Öğrenciler (' + store.students.length + ')';
+          if (cBtn) cBtn.textContent = 'Araçlar (' + store.plates.length + ')';
+          // Refresh open modal in place to show new rows without flicker
+          const open = document.getElementById('mebbis-store-modal');
+          if (open) {
+            const kind = open.dataset.kind;
+            if (kind === 'students' && sBtn) sBtn.click();
+            else if (kind === 'cars' && cBtn) cBtn.click();
           }
-          sList.innerHTML = '';
-          cList.innerHTML = '';
-
-          if (!store.students.length) {
-            const empty = document.createElement('div');
-            empty.style.cssText = 'padding: 8px 15px; font-size: 12px; color: #666; font-style: italic;';
-            empty.textContent = '— henüz yok —';
-            sList.appendChild(empty);
-          } else {
-            store.students.forEach(s => {
-              const row = document.createElement('div');
-              row.style.cssText = 'padding: 8px 12px 8px 15px; display: flex; align-items: center; justify-content: space-between; gap: 8px; border-bottom: 1px solid #20203a;';
-              const info = document.createElement('div');
-              info.style.cssText = 'flex: 1; min-width: 0; overflow: hidden;';
-              const name = document.createElement('div');
-              name.style.cssText = 'font-size: 12px; color: #ddd; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;';
-              name.textContent = s.adSoyad || '(isimsiz)';
-              const tcEl = document.createElement('div');
-              tcEl.style.cssText = 'font-size: 10px; color: #777; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;';
-              tcEl.textContent = s.tc;
-              info.appendChild(name);
-              info.appendChild(tcEl);
-              row.appendChild(info);
-              const btn = document.createElement('button');
-              btn.style.cssText = 'background: #2a2a4a; border: none; color: #4361ee; cursor: pointer; padding: 4px 8px; font-size: 11px; border-radius: 3px; flex-shrink: 0;';
-              btn.textContent = 'Detay';
-              btn.onclick = () => {
-                console.log('[MEBBIS_SIDEBAR] Detay clicked for tc=' + s.tc);
-                console.log('MEBBIS_OPEN_STUDENT:' + s.tc);
-              };
-              row.appendChild(btn);
-              sList.appendChild(row);
-            });
-          }
-
-          if (!store.plates.length) {
-            const empty = document.createElement('div');
-            empty.style.cssText = 'padding: 8px 15px; font-size: 12px; color: #666; font-style: italic;';
-            empty.textContent = '— henüz yok —';
-            cList.appendChild(empty);
-          } else {
-            store.plates.forEach(p => {
-              const row = document.createElement('div');
-              row.style.cssText = 'padding: 6px 15px; font-size: 12px; color: #ccc; border-bottom: 1px solid #20203a;';
-              row.textContent = p;
-              cList.appendChild(row);
-            });
-          }
-
-          console.log('[MEBBIS_SIDEBAR] Rendered ' + store.students.length + ' students, ' + store.plates.length + ' plates');
+          console.log('[MEBBIS_SIDEBAR] Counts updated: ' + store.students.length + ' students, ' + store.plates.length + ' plates');
         };
 
         if (window.__mebbisStore) {
@@ -1241,8 +1351,10 @@ export class MebbisManager {
       })();
     `).catch(() => {});
 
-    // Store the TC and sinif so we can use it after navigation
-    this.pendingDownload = { tc, sinif: sinif || '0,B|16', account, parentWin };
+    // Store the TC and sinif so we can use it after navigation.
+    // Empty sinif → "Otomatik" mode: generatePdfFromTemplate falls back to
+    // the scraped lesson count from skt02009 (same as çoklu/batch flow).
+    this.pendingDownload = { tc, sinif: sinif || '', account, parentWin };
 
     const currentURL = parentWin.webContents.getURL().toLowerCase();
 
@@ -1810,7 +1922,7 @@ export class MebbisManager {
     // When using simulator-less template, remove simulator rows
     let filteredLessons = [...lessons];
 
-    const supportedCounts = [4, 6, 7, 10, 12, 14, 16, 20];
+    const supportedCounts = [4, 6, 7, 8, 9, 10, 12, 14, 16, 20, 22];
     let closestCount = 4;
     for (const count of supportedCounts) {
       if (lessonCount <= count) {
@@ -1818,7 +1930,7 @@ export class MebbisManager {
         break;
       }
     }
-    if (lessonCount > 20) closestCount = 20;
+    if (lessonCount > 22) closestCount = 22;
 
     // Determine template filename
     let templateName = `${closestCount}n.html`;
@@ -3222,27 +3334,34 @@ export class MebbisManager {
     const times = ['09:00 - 10:00', '10:00 - 11:00', '11:00 - 12:00', '14:00 - 15:00'];
     const instructor = 'TEST EĞİTMEN ALİ DEMİR';
 
+    // Strip optional `-nosim` suffix used to force non-simulator data
+    const noSimForce = sinif.endsWith('-nosim');
+    const sinifClean = noSimForce ? sinif.slice(0, -'-nosim'.length) : sinif;
+
     // Parse lesson count from sinif (e.g. "0,B|16" → 16)
     let lessonCount = 16;
-    const sinifParts = sinif.split('|');
+    const sinifParts = sinifClean.split('|');
     if (sinifParts.length === 2) {
       const n = parseInt(sinifParts[1], 10);
       if (!isNaN(n) && n > 0) lessonCount = n;
     }
 
-    // Detect if this is a simulator template (12/14/16 lessons)
-    const needsSimulator = [12, 14, 16].includes(lessonCount);
+    // Only sıfır applicants (Yeni B, Yeni A) have simulator hours.
+    // Transitions (B→C, C→CE, D→C, etc.) are pure akan trafik.
+    // Yeni values look like "0,B|16" or "0,A|14".
+    const isYeni = sinifClean.startsWith('0,');
+    const needsSimulator = !noSimForce && isYeni && (lessonCount === 14 || lessonCount === 16);
     let simulatorInserted = false;
 
     for (let i = 0; i < lessonCount; i++) {
-      // Insert one simulator row in the middle for templates that support it
+      // Insert one simulator row in the middle for Yeni B/A templates
       const isSimRow = needsSimulator && !simulatorInserted && i === Math.floor(lessonCount / 2);
       if (isSimRow) simulatorInserted = true;
 
       const row: string[] = new Array(10).fill('');
       row[0] = '2025/1. DÖNEM';
       row[4] = isSimRow ? '34 TEST SIM' : plates[i % plates.length];
-      row[5] = isSimRow ? 'Simulatör' : 'Direksiyon Eğitim Alanı';
+      row[5] = isSimRow ? 'Simulatör' : 'Trafik';
       row[6] = dates[i % dates.length];
       row[7] = times[i % times.length];
       row[8] = instructor;
@@ -3258,10 +3377,140 @@ export class MebbisManager {
     if (saveResult.canceled || !saveResult.filePath) return;
 
     console.log('[DEV TEST] Generating Direksiyon Takip PDF with fake data, sinif:', sinif);
-    const pdfBuffer = await this.generatePdfFromTemplate(fakeStudentInfo, fakeLessons, sinif);
+    const pdfBuffer = await this.generatePdfFromTemplate(fakeStudentInfo, fakeLessons, sinifClean);
     fs.writeFileSync(saveResult.filePath, pdfBuffer);
     console.log('[DEV TEST] Saved to:', saveResult.filePath);
     await shell.openPath(saveResult.filePath);
+  }
+
+  /**
+   * Generate a K-Sınıfı Sürücü Aday Belgesi PDF with random fake data.
+   * Reads template from local disk (NOT via the encrypted endpoint), so works
+   * without a desktop-service deploy. Background scan is stripped via
+   * @media print so the rendered PDF only contains filled values, ready to
+   * print onto the official pre-printed K-belgesi paper.
+   */
+  async generateTestKBelgesiPdf(mainWindow: BrowserWindow, withBackground = false): Promise<void> {
+    // Locate template by walking up from __dirname until we find the storage folder
+    function resolveTemplatePath(): string {
+      let dir = __dirname;
+      for (let i = 0; i < 10; i++) {
+        const c = path.join(dir, 'backend', 'storage', 'templates', 'k-belgesi', 'k-belgesi.html');
+        if (fs.existsSync(c)) return c;
+        const parent = path.dirname(dir);
+        if (parent === dir) break;
+        dir = parent;
+      }
+      throw new Error('k-belgesi.html template not found (looked up to filesystem root)');
+    }
+    const templatePath = resolveTemplatePath();
+    const html = fs.readFileSync(templatePath, 'utf8');
+
+    const pickAdiPool = ['AHMET', 'MEHMET', 'ALİ', 'AYŞE', 'FATMA', 'ZEYNEP', 'MUSTAFA', 'EMRE', 'ELİF', 'CAN'];
+    const pickSoyadPool = ['YILMAZ', 'KAYA', 'DEMİR', 'ÇELİK', 'ŞAHİN', 'ÖZTÜRK', 'AYDIN', 'ARSLAN', 'DOĞAN', 'KILIÇ'];
+    const pickIlPool = ['Ankara', 'İstanbul', 'İzmir', 'Bursa', 'Konya', 'Antalya', 'Eskişehir', 'Adana'];
+    const pickIlce: Record<string, string> = {
+      'Ankara': 'Çankaya', 'İstanbul': 'Kadıköy', 'İzmir': 'Bornova', 'Bursa': 'Nilüfer',
+      'Konya': 'Selçuklu', 'Antalya': 'Muratpaşa', 'Eskişehir': 'Tepebaşı', 'Adana': 'Seyhan',
+    };
+    const rand = <T>(a: T[]): T => a[Math.floor(Math.random() * a.length)];
+    const randomTc = () => '1' + Array.from({ length: 10 }, () => Math.floor(Math.random() * 10)).join('');
+    const today = new Date();
+    const fmtDate = (d: Date) => `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`;
+    // Variant for fields landing on a "... / ... / ......" pattern where the
+    // "/" separators are pre-printed on the paper — so we emit only digits
+    // separated by wide spacing.
+    const fmtDateSpaced = (d: Date) => `${String(d.getDate()).padStart(2, '0')}    ${String(d.getMonth() + 1).padStart(2, '0')}    ${d.getFullYear()}`;
+    const addMonths = (d: Date, n: number) => { const c = new Date(d); c.setMonth(c.getMonth() + n); return c; };
+    const adayIl = rand(pickIlPool);
+    const ustaIl = rand(pickIlPool);
+    const dogumYear = 1990 + Math.floor(Math.random() * 16);
+    const dogumDate = new Date(dogumYear, Math.floor(Math.random() * 12), 1 + Math.floor(Math.random() * 28));
+
+    const sample = {
+      // Box 1
+      aracCinsi: 'Otomobil',
+      gurzergah: 'Mahalle içi - Şehir merkezi',
+      gunSaat: 'Pzt-Cu 09:00-17:00',
+      // These two land on printed "... / ... / ......" dot groups in Box 1, so
+      // use the spaced format to spread digits across the dot positions.
+      duzenlenmeTarihi: fmtDateSpaced(today),
+      gecerlikBitisi: fmtDateSpaced(addMonths(today, 6)),
+      mudurAd: rand(pickAdiPool) + ' ' + rand(pickSoyadPool),
+      // Box 2 — iliIlcesi fills the blank line above "İli / İlçesi Özel";
+      // kursAdi only fills the dots between "Özel" and "Motorlu" (those
+      // words and the rest of the title are pre-printed on the form).
+      iliIlcesi: `${adayIl.toUpperCase()} / ${pickIlce[adayIl] || 'Merkez'}`,
+      kursAdi: 'TEST',
+      belgeNo: '2026-' + String(Math.floor(Math.random() * 999) + 1).padStart(3, '0'),
+      belgeTarihi: fmtDate(today),
+      kursAdresi: 'Test Mah. Test Sok. No:' + (Math.floor(Math.random() * 99) + 1) + ' ' + adayIl,
+      // Box 3 — sürücü adayı
+      adayTc: randomTc(),
+      adayAd: rand(pickAdiPool),
+      adaySoyad: rand(pickSoyadPool),
+      adayBabaAd: rand(pickAdiPool),
+      adayDogumYeri: adayIl,
+      adayDogumTarihi: fmtDate(dogumDate),
+      adayAdresi: `Aday Mah. No:${Math.floor(Math.random() * 99) + 1} ${pickIlce[adayIl] || 'Merkez'}/${adayIl}`,
+      // Box 4 — usta öğretici
+      ustaTc: randomTc(),
+      ustaAd: rand(pickAdiPool),
+      ustaSoyad: rand(pickSoyadPool),
+      ustaAdresi: `Eğitmen Mah. No:${Math.floor(Math.random() * 99) + 1} ${ustaIl}`,
+      ustaBelgeSinifi: rand(['B', 'C', 'D', 'CE']),
+      ustaBelgeNo: Array.from({ length: 8 }, () => Math.floor(Math.random() * 10)).join(''),
+      ustaBelgeYeri: ustaIl,
+    };
+
+    const saveResult = await dialog.showSaveDialog(mainWindow, {
+      title: 'Test K Belgesi PDF — Kaydet',
+      defaultPath: `test_k_belgesi_${sample.adayAd}_${sample.adaySoyad}.pdf`,
+      filters: [{ name: 'PDF Dosyası', extensions: ['pdf'] }],
+    });
+    if (saveResult.canceled || !saveResult.filePath) return;
+
+    console.log('[DEV TEST] Generating K Belgesi PDF with fake data, aday:', sample.adayAd, sample.adaySoyad);
+
+    const pdfWin = new BrowserWindow({
+      width: 794,
+      height: 1123,
+      show: false,
+      webPreferences: { sandbox: false, contextIsolation: false },
+    });
+
+    try {
+      await pdfWin.loadURL('data:text/html;charset=utf-8,' + encodeURIComponent(html));
+      await pdfWin.webContents.executeJavaScript(`
+        (function(){
+          const data = ${JSON.stringify(sample)};
+          Object.keys(data).forEach(k => {
+            const el = document.querySelector('.cvp.' + k);
+            if (el) el.textContent = data[k];
+          });
+          // Override the template's @media print rule when caller asked for
+          // a bg-included PDF (alignment-check mode). Default = bg stripped.
+          if (${JSON.stringify(withBackground)}) {
+            const s = document.createElement('style');
+            s.textContent = '@media print { .bg { display: block !important; } }';
+            document.head.appendChild(s);
+          }
+        })();
+      `);
+      await new Promise(r => setTimeout(r, 300));
+
+      const pdfBuffer = await pdfWin.webContents.printToPDF({
+        pageSize: 'A4',
+        printBackground: true,
+        preferCSSPageSize: true,
+        margins: { top: 0, bottom: 0, left: 0, right: 0 },
+      });
+      fs.writeFileSync(saveResult.filePath, pdfBuffer);
+      console.log('[DEV TEST] Saved to:', saveResult.filePath);
+      await shell.openPath(saveResult.filePath);
+    } finally {
+      pdfWin.close();
+    }
   }
 
   /**

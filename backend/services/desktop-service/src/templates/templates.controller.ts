@@ -40,7 +40,7 @@ const TEMPLATES_BASE_RESOLVED = path.resolve(TEMPLATES_BASE);
 //   simulator/anagrup/:scenario/:filename
 //   ek4/:filename
 const ALLOWED_PATH_PATTERN =
-  /^(direksiyon-takip|simulator\/sesim|simulator\/anagrup\/[^\/]+|ek4)\/[^\/]+\.html$/;
+  /^(direksiyon-takip|simulator\/sesim|simulator\/anagrup\/[^\/]+|ek4|k-belgesi)\/[^\/]+\.html$/;
 
 interface EncryptedTemplateRequest {
   path: string;

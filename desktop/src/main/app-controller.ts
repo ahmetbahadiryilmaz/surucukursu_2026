@@ -126,6 +126,7 @@ export async function start(ctx: BootstrapContext): Promise<AppControllerHandle>
         submenu: [
           { label: 'Direksiyon Takip PDF…', click: showDireksiyonPdfDialog },
           { label: 'Simülasyon Raporu PDF…', click: showSimulatorPdfDialog },
+          { label: 'K Belgesi PDF (rastgele)…', click: showKBelgesiPdfDialog },
           { type: 'separator' },
           { label: '👥 Öğrenciler (örnek)', click: () => showFakeListDialog('students') },
           { label: '🚗 Araçlar (örnek)', click: () => showFakeListDialog('cars') },
@@ -268,22 +269,26 @@ export async function start(ctx: BootstrapContext): Promise<AppControllerHandle>
         title: 'Geçiş Türü',
         message: 'Hangi geçiş türü için PDF oluşturulsun?',
         buttons: [
-          'B → C (20 ders)',
-          'B → A2 (12, simülatörlü)',
-          'B → A2 (12, sim. yok)',
-          'D → C (10 ders)',
-          'C → D1 (4 ders)',
+          'B(Sonrası)→C (22)',
+          'B(Öncesi)→C (16)',
+          'B(Sonrası)→D (16)',
+          'B(Öncesi)→D (9)',
+          'C → CE (8)',
+          'C → D (9)',
+          'D → C (12)',
           'İptal',
         ],
         defaultId: 0,
-        cancelId: 5,
+        cancelId: 7,
         noLink: true,
       });
-      if (r2.response === 0) sinif = 'B(2016 Sonrası),C|20';
-      else if (r2.response === 1) sinif = 'B,A2|12';
-      else if (r2.response === 2) sinif = 'B,A2|12-nosim';
-      else if (r2.response === 3) sinif = 'D,C|10';
-      else if (r2.response === 4) sinif = 'C,D1|4';
+      if (r2.response === 0) sinif = 'B(2016 Sonrası),C|22';
+      else if (r2.response === 1) sinif = 'B(2016 Öncesi),C|16';
+      else if (r2.response === 2) sinif = 'B(2016 Sonrası),D|16';
+      else if (r2.response === 3) sinif = 'B(2016 Öncesi),D|9';
+      else if (r2.response === 4) sinif = 'C,CE|8';
+      else if (r2.response === 5) sinif = 'C,D|9';
+      else if (r2.response === 6) sinif = 'D,C|12';
     }
     if (!sinif) return;
 
@@ -724,6 +729,29 @@ export async function start(ctx: BootstrapContext): Promise<AppControllerHandle>
       await mebbisManager.generateTestSimulatorPdf(simType, mainWindow);
     } catch (err: any) {
       dialog.showErrorBox('PDF Oluşturulamadı', err?.message || 'Bilinmeyen hata');
+    }
+  }
+
+  async function showKBelgesiPdfDialog() {
+    if (!mainWindow || mainWindow.isDestroyed()) return;
+    const r = await dialog.showMessageBox(mainWindow, {
+      type: 'question',
+      title: 'K Belgesi PDF',
+      message: 'PDF arka plan formu içersin mi?',
+      detail:
+        'Arka Planlı: forma doğru hizalandığını görmek için tam form görüntüsüyle birlikte üretir.\n' +
+        'Arka Plansız: sadece doldurulan değerler — resmi önceden basılmış K Belgesi kağıdına yazdırmak için.',
+      buttons: ['Arka Planlı', 'Arka Plansız', 'İptal'],
+      defaultId: 0,
+      cancelId: 2,
+      noLink: true,
+    });
+    if (r.response === 2) return;
+    const withBackground = r.response === 0;
+    try {
+      await mebbisManager.generateTestKBelgesiPdf(mainWindow, withBackground);
+    } catch (err: any) {
+      dialog.showErrorBox('K Belgesi Oluşturulamadı', err?.message || 'Bilinmeyen hata');
     }
   }
 
