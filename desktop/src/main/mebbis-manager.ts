@@ -2,7 +2,7 @@ import { app, BrowserWindow, session, dialog, shell } from 'electron';
 import { Account } from './account-store';
 import * as path from 'path';
 import * as fs from 'fs';
-import { getCodeLoader } from './remote-code-loader';
+import { getCodeLoader } from '../launcher/remote-code-loader';
 import { fetchEncryptedTemplate } from './template-fetcher';
 import { getRequestLogger } from './request-logger';
 import { getStudentDb } from './student-db';

@@ -9,12 +9,12 @@
  *   - ek4/<file>.html
  */
 
-import { ENCRYPTED_TEMPLATE_URL } from './config';
+import { ENCRYPTED_TEMPLATE_URL } from '../launcher/config';
 import {
   postSignedBinary,
   decryptPayload,
   signRequestBody,
-} from './desktop-crypto-client';
+} from '../launcher/desktop-crypto-client';
 
 export async function fetchEncryptedTemplate(relativePath: string): Promise<string> {
   const path = relativePath.replace(/\\/g, '/').replace(/^\/+/, '');

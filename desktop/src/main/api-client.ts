@@ -1,6 +1,6 @@
 import http from 'http';
 import https from 'https';
-import { API_BASE_URL } from './config';
+import { API_BASE_URL } from '../launcher/config';
 
 function request<T>(
   method: string,

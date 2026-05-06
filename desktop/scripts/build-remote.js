@@ -24,24 +24,19 @@ const REMOTE_CODE = path.join(ROOT, 'remote-code');
 const OUT_MAIN = path.join(REMOTE_CODE, 'main');
 const OUT_RENDERER = path.join(REMOTE_CODE, 'renderer');
 
-// Modules that MUST be resolved against the running bootstrap process at
-// runtime (singleton state, not safe to duplicate). The build emits
-// `require('bootstrap:<name>')` for these; module-host resolves the name
-// from the bootstrap's exports registry.
-const BOOTSTRAP_REROUTED = {
-  './remote-code-loader': 'bootstrap:remote-code-loader',
-};
-
+// All `../launcher/*` imports from the bundle resolve at runtime against the
+// bootstrap process via the module-host's custom require(). The bundle code
+// emits `require('bootstrap:<basename>')`; the launcher's loadBundle() call
+// in main.ts populates that registry with real module instances. This keeps
+// singletons (RemoteCodeLoader, config, crypto client) shared between
+// bootstrap and bundle.
 const bootstrapReroutePlugin = {
   name: 'bootstrap-reroute',
   setup(build) {
-    for (const [from, to] of Object.entries(BOOTSTRAP_REROUTED)) {
-      const escaped = from.replace(/[.+?^${}()|[\]\\]/g, '\\$&');
-      build.onResolve({ filter: new RegExp('^' + escaped + '$') }, () => ({
-        path: to,
-        external: true,
-      }));
-    }
+    build.onResolve({ filter: /^\.\.\/launcher\// }, (args) => {
+      const basename = path.basename(args.path, path.extname(args.path));
+      return { path: 'bootstrap:' + basename, external: true };
+    });
   },
 };
 

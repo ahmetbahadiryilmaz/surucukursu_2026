@@ -29,8 +29,8 @@ import { AuthStore } from './auth-store';
 import { configureStudentSync, pullAll as pullStudentSync } from './student-sync';
 import { MebbisManager } from './mebbis-manager';
 import { apiClient, MebbisAccount, ActivityLogBody } from './api-client';
-import { getCodeLoader } from './remote-code-loader';
-import type { VersionCheckResult } from './auto-updater';
+import { getCodeLoader } from '../launcher/remote-code-loader';
+import type { VersionCheckResult } from '../launcher/auto-updater';
 
 type RemoteCodeLoader = ReturnType<typeof getCodeLoader>;
 
@@ -158,7 +158,7 @@ export async function start(ctx: BootstrapContext): Promise<AppControllerHandle>
 
     const aboutWin = new BrowserWindow({
       width: 400,
-      height: 380,
+      height: 440,
       resizable: false,
       minimizable: false,
       maximizable: false,

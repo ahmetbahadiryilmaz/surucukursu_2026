@@ -37,10 +37,13 @@ import {
 } from './auto-updater';
 import { getCodeLoader } from './remote-code-loader';
 import * as remoteCodeLoaderModule from './remote-code-loader';
+import * as configModule from './config';
+import * as cryptoClientModule from './desktop-crypto-client';
+import * as autoUpdaterModule from './auto-updater';
 import { initDeviceId, getDeviceId } from './device-id';
 import { BootstrapSplash, fetchWithSplashRetry } from './bootstrap-splash';
 import { loadBundle } from './module-host';
-import type { BootstrapContext, AppControllerHandle } from './app-controller';
+import type { BootstrapContext, AppControllerHandle } from '../main/app-controller';
 
 // Crash-fix switches: must be set before app.whenReady().
 app.commandLine.appendSwitch(
@@ -77,7 +80,7 @@ app.whenReady().then(async () => {
     // Dev mode: import the controller directly — no bundle build needed.
     // Set DESKTOP_FORCE_REMOTE_CODE=1 in .env to test the prod bundle
     // pipeline locally end-to-end.
-    appControllerStart = (await import('./app-controller')).start;
+    appControllerStart = (await import('../main/app-controller')).start;
   } else {
     const remoteStart = await loadRemoteController(codeLoader);
     if (!remoteStart) return; // user chose Çıkış
@@ -133,8 +136,14 @@ async function loadRemoteController(
       throw new Error('Sunucudan ana modül alınamadı (main/app-bundle.js eksik).');
     }
     const code = bundleBuf.toString('utf-8');
+    // Every launcher module that the bundle imports via ../launcher/* must
+    // be exposed here so the module-host's custom require() can resolve the
+    // bootstrap:<name> alias the build-remote esbuild plugin emits.
     const loaded = loadBundle(code, 'app-bundle.js', {
       'bootstrap:remote-code-loader': remoteCodeLoaderModule,
+      'bootstrap:config': configModule,
+      'bootstrap:desktop-crypto-client': cryptoClientModule,
+      'bootstrap:auto-updater': autoUpdaterModule,
     });
     const fn = loaded.exports?.start;
     if (typeof fn !== 'function') {
