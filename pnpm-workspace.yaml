@@ -7,4 +7,8 @@ packages:
   - 'backend/services/mebbis-service'
   - 'backend/shared'
   - 'frontend'
-  - 'desktop'
+  # desktop is intentionally NOT in this workspace. electron-builder fails to
+  # bundle electron-updater's transitive deps (fs-extra, js-yaml, etc.) when
+  # pnpm uses its symlinked .pnpm layout — the resulting asar crashes at
+  # runtime with "Cannot find module 'fs-extra'". Install with `cd desktop &&
+  # npm install` (uses desktop/package-lock.json) instead.

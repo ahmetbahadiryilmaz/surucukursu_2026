@@ -3467,26 +3467,14 @@ export class MebbisManager {
 
   /**
    * Generate a K-Sınıfı Sürücü Aday Belgesi PDF with random fake data.
-   * Reads template from local disk (NOT via the encrypted endpoint), so works
-   * without a desktop-service deploy. Background scan is stripped via
-   * @media print so the rendered PDF only contains filled values, ready to
-   * print onto the official pre-printed K-belgesi paper.
+   * Fetches the template via the encrypted desktop-service endpoint (same
+   * channel as direksiyon-takip and ek4) so it works in packaged builds.
+   * Background scan is stripped via @media print so the rendered PDF only
+   * contains filled values, ready to print onto the official pre-printed
+   * K-belgesi paper.
    */
   async generateTestKBelgesiPdf(mainWindow: BrowserWindow, withBackground = false): Promise<void> {
-    // Locate template by walking up from __dirname until we find the storage folder
-    function resolveTemplatePath(): string {
-      let dir = __dirname;
-      for (let i = 0; i < 10; i++) {
-        const c = path.join(dir, 'backend', 'storage', 'templates', 'k-belgesi', 'k-belgesi.html');
-        if (fs.existsSync(c)) return c;
-        const parent = path.dirname(dir);
-        if (parent === dir) break;
-        dir = parent;
-      }
-      throw new Error('k-belgesi.html template not found (looked up to filesystem root)');
-    }
-    const templatePath = resolveTemplatePath();
-    const html = fs.readFileSync(templatePath, 'utf8');
+    const html = await fetchEncryptedTemplate('k-belgesi/k-belgesi.html');
 
     const pickAdiPool = ['AHMET', 'MEHMET', 'ALİ', 'AYŞE', 'FATMA', 'ZEYNEP', 'MUSTAFA', 'EMRE', 'ELİF', 'CAN'];
     const pickSoyadPool = ['YILMAZ', 'KAYA', 'DEMİR', 'ÇELİK', 'ŞAHİN', 'ÖZTÜRK', 'AYDIN', 'ARSLAN', 'DOĞAN', 'KILIÇ'];

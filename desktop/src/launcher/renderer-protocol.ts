@@ -70,14 +70,18 @@ export function registerRendererSchemeAsPrivileged(): void {
 /**
  * Attach the protocol handler. Call after app.whenReady().
  * Idempotent — safe to call once and only once per process.
+ *
+ * Uses the legacy registerBufferProtocol (Electron < 25). The modern
+ * protocol.handle / Response API was added in Electron 25.
  */
 export function installRendererProtocol(): void {
-  protocol.handle(RENDERER_SCHEME, async (request) => {
+  protocol.registerBufferProtocol(RENDERER_SCHEME, (request, callback) => {
     let url: URL;
     try {
       url = new URL(request.url);
     } catch {
-      return new Response('Bad URL', { status: 400 });
+      callback({ statusCode: 400, mimeType: 'text/plain', data: Buffer.from('Bad URL') });
+      return;
     }
 
     // Strip leading "/" — pathname is always absolute under a host.
@@ -86,20 +90,25 @@ export function installRendererProtocol(): void {
     // Reject path-traversal up front. The loader sanitizes too, but
     // returning 400 here avoids any chance of off-by-one.
     if (rel.includes('..')) {
-      return new Response('Forbidden', { status: 403 });
+      callback({ statusCode: 403, mimeType: 'text/plain', data: Buffer.from('Forbidden') });
+      return;
     }
 
     const buf = getCodeLoader().getFileBuffer(`renderer/${rel}`);
     if (!buf) {
-      return new Response(`Not in bundle: renderer/${rel}`, { status: 404 });
+      callback({
+        statusCode: 404,
+        mimeType: 'text/plain',
+        data: Buffer.from(`Not in bundle: renderer/${rel}`),
+      });
+      return;
     }
 
-    return new Response(buf, {
-      status: 200,
-      headers: {
-        'Content-Type': mimeFor(rel),
-        'Cache-Control': 'no-store',
-      },
+    callback({
+      statusCode: 200,
+      mimeType: mimeFor(rel),
+      headers: { 'Cache-Control': 'no-store' },
+      data: buf,
     });
   });
 }
