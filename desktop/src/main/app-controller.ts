@@ -87,6 +87,7 @@ export async function start(ctx: BootstrapContext): Promise<AppControllerHandle>
       createdAt: new Date().toISOString(),
       simulatorType: (m.simulatorType as SimulatorType) || undefined,
       subscriptionActive: m.subscriptionActive,
+      subscription: m.subscription,
     };
   }
 

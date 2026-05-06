@@ -28,12 +28,12 @@ export interface MebbisAccountDto {
 }
 
 /**
- * Subscription is active when type === 'paid' AND ends_at is null (never expires)
- * OR ends_at > now. Demo subscriptions are blocked for now.
+ * Subscription is active when type is paid/unlimited (no time limit unless ends_at is set)
+ * OR demo (gated client-side: tekli capped at 5, toplu blocked).
  */
 function isSubscriptionActive(sub: SubscriptionEntity | null | undefined): boolean {
   if (!sub) return false;
-  if (sub.type !== 'paid' && sub.type !== 'unlimited') return false;
+  if (sub.type !== 'paid' && sub.type !== 'unlimited' && sub.type !== 'demo') return false;
   if (sub.ends_at == null) return true;
   return sub.ends_at > Math.floor(Date.now() / 1000);
 }

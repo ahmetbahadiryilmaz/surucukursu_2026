@@ -82,6 +82,10 @@ export class MebbisManager {
   // Pending "open student" navigation triggered from sidebar Details button
   private pendingOpenStudent: Map<string, { tc: string; phase: 'skt-module' | 'skt02009' }> = new Map();
 
+  // Demo subscription gating: cap tekli at 5 (toplu blocked entirely)
+  private static readonly DEMO_PDF_LIMIT = 5;
+  private demoSessionUsage: Map<string, number> = new Map();
+
   setActivityLogger(fn: (accountId: string, pdfType: 'direksiyon_takip' | 'simulator_raporu', count: number) => void) {
     this.activityLogger = fn;
   }
@@ -90,6 +94,68 @@ export class MebbisManager {
     try {
       this.activityLogger?.(account.id, pdfType, count);
     } catch { /* fire-and-forget */ }
+    if (this.isDemoAccount(account)) {
+      const cur = this.demoSessionUsage.get(account.id) ?? 0;
+      this.demoSessionUsage.set(account.id, cur + count);
+    }
+  }
+
+  private isDemoAccount(account: Account): boolean {
+    return account.subscription?.type === 'demo';
+  }
+
+  private isDemoLimitReached(account: Account): boolean {
+    if (!this.isDemoAccount(account)) return false;
+    const baseline = account.subscription?.pdfPrintUsed ?? 0;
+    const session = this.demoSessionUsage.get(account.id) ?? 0;
+    return baseline + session >= MebbisManager.DEMO_PDF_LIMIT;
+  }
+
+  private async showDemoSingleBlocked(win: BrowserWindow) {
+    if (win.isDestroyed()) return;
+    const limit = MebbisManager.DEMO_PDF_LIMIT;
+    await win.webContents.executeJavaScript(`
+      (function() {
+        const overlay = document.getElementById('mebbis-modal-overlay');
+        if (!overlay) return;
+        const buttons = overlay.querySelectorAll('button');
+        const submit = buttons[buttons.length - 1];
+        if (submit) { submit.disabled = false; submit.textContent = 'İndir'; submit.style.opacity = '1'; }
+        let err = overlay.querySelector('.mebbis-demo-error');
+        if (!err) {
+          err = document.createElement('div');
+          err.className = 'mebbis-demo-error';
+          err.style.cssText = 'color: #ff6b6b; font-size: 13px; margin: 12px 0 0 0; text-align: center; padding: 10px; border: 1px solid #ff6b6b; border-radius: 4px; background: rgba(255,107,107,0.1);';
+          const modal = overlay.firstElementChild;
+          if (modal) modal.appendChild(err);
+        }
+        err.textContent = 'Demo limitiniz dolmuştur (${limit}/${limit}). Lütfen satın alın.';
+      })();
+    `).catch(() => {});
+  }
+
+  private async showDemoBatchBlocked(win: BrowserWindow) {
+    if (win.isDestroyed()) return;
+    await win.webContents.executeJavaScript(`
+      (function() {
+        const overlay = document.getElementById('mebbis-batch-overlay');
+        if (!overlay) return;
+        const startBtn = document.getElementById('batch-start-btn');
+        if (startBtn) { startBtn.disabled = false; startBtn.textContent = 'Başlat'; startBtn.style.opacity = '1'; }
+        overlay.querySelectorAll('button').forEach(b => { b.disabled = false; });
+        const progress = document.getElementById('batch-progress');
+        if (progress) progress.style.display = 'none';
+        let err = overlay.querySelector('.mebbis-demo-error');
+        if (!err) {
+          err = document.createElement('div');
+          err.className = 'mebbis-demo-error';
+          err.style.cssText = 'color: #ff6b6b; font-size: 13px; margin: 12px 0 0 0; text-align: center; padding: 10px; border: 1px solid #ff6b6b; border-radius: 4px; background: rgba(255,107,107,0.1);';
+          const modal = overlay.firstElementChild;
+          if (modal) modal.appendChild(err);
+        }
+        err.textContent = 'Bu özellik demoda aktif değil.';
+      })();
+    `).catch(() => {});
   }
 
   start(account: Account, parentWindow: BrowserWindow) {
@@ -199,12 +265,22 @@ export class MebbisManager {
       if (message.startsWith('MEBBIS_DOWNLOAD_TC:')) {
         const payload = message.replace('MEBBIS_DOWNLOAD_TC:', '').trim();
         const [tc, sinif] = payload.split('|||');
+        if (this.isDemoLimitReached(account)) {
+          console.log(`[${account.label}] Demo limit reached, blocking tekli direksiyon for TC: ${tc}`);
+          this.showDemoSingleBlocked(win);
+          return;
+        }
         console.log(`[${account.label}] Download triggered for TC: ${tc}, sinif: ${sinif}`);
         this.downloadDireksiyonTakip(tc, partition, account, win, sinif);
       }
       if (message.startsWith('MEBBIS_SIMULATION_REPORT:')) {
         const payload = message.replace('MEBBIS_SIMULATION_REPORT:', '').trim();
         const [tc, simType] = payload.split('|||');
+        if (this.isDemoLimitReached(account)) {
+          console.log(`[${account.label}] Demo limit reached, blocking tekli simulasyon for TC: ${tc}`);
+          this.showDemoSingleBlocked(win);
+          return;
+        }
         console.log(`[${account.label}] Simulation report triggered for TC: ${tc}, simType: ${simType || 'sesim'}`);
         this.handleSimulationReport(tc, simType || 'sesim', account, win);
       }
@@ -220,6 +296,11 @@ export class MebbisManager {
         const payload = message.replace('MEBBIS_BATCH_START:', '').trim();
         try {
           const options = JSON.parse(payload);
+          if (this.isDemoAccount(account)) {
+            console.log(`[${account.label}] Demo account: blocking toplu start`);
+            this.showDemoBatchBlocked(win);
+            return;
+          }
           console.log(`[${account.label}] Batch start with options:`, options);
           this.handleBatchStart(options, account, win);
         } catch (e) {
@@ -1284,6 +1365,7 @@ export class MebbisManager {
     this.running.delete(accountId);
     // Persisted student/plate data is intentionally kept on stop; clear via a separate action if ever needed.
     this.pendingOpenStudent.delete(accountId);
+    this.demoSessionUsage.delete(accountId);
   }
 
   focus(accountId: string) {

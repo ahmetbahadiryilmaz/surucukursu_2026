@@ -14,6 +14,12 @@ export interface Account {
   createdAt: string;
   simulatorType?: SimulatorType;
   subscriptionActive?: boolean;
+  subscription?: {
+    type: string | null;
+    endsAt: number | null;
+    pdfPrintUsed: number;
+    pdfPrintLimit: number | null;
+  } | null;
 }
 
 export class AccountStore {
