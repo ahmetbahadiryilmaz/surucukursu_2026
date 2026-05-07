@@ -86,10 +86,16 @@ export function postSignedBinary(
         });
       },
     );
-    req.on('error', reject);
+    req.on('error', (e) => {
+      const friendly = new Error('Sunucuya bağlanılamadı');
+      (friendly as any).detail = (e as any)?.message || String(e);
+      reject(friendly);
+    });
     req.on('timeout', () => {
       req.destroy();
-      reject(new Error(`Timeout fetching ${url}`));
+      const friendly = new Error('İstek zaman aşımına uğradı');
+      (friendly as any).detail = url;
+      reject(friendly);
     });
     req.write(body);
     req.end();

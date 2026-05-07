@@ -2552,9 +2552,13 @@ export class MebbisManager {
       this.pendingBatchDownload.errors.set(key, { message: errorMessage, samples: [studentTc] });
     }
 
-    // Track "not found" errors separately for final message
-    const isNotFound = errorMessage.includes('bulunamadı');
-    if (isNotFound) {
+    // Track "data not found" errors separately for final message.
+    // Only student data missing counts as bulunamadı — server-side issues
+    // like "Şablon bulunamadı" are real errors and stay in `hatalı`.
+    const isDataNotFound =
+      errorMessage.includes('Simülatör dersi bulunamadı') ||
+      errorMessage.includes('Ders programı bulunamadı');
+    if (isDataNotFound) {
       this.pendingBatchDownload.notFound++;
     }
   }
