@@ -1552,6 +1552,7 @@ export class MebbisManager {
     failed: number;
     statusMessage: string;
     errors: Map<string, { message: string; samples: string[] }>;
+    notFound: number;
   } | null = null;
 
   private async handleSkt02009Loaded(win: BrowserWindow, account: Account) {
@@ -2550,6 +2551,12 @@ export class MebbisManager {
     } else {
       this.pendingBatchDownload.errors.set(key, { message: errorMessage, samples: [studentTc] });
     }
+
+    // Track "not found" errors separately for final message
+    const isNotFound = errorMessage.includes('bulunamadı');
+    if (isNotFound) {
+      this.pendingBatchDownload.notFound++;
+    }
   }
 
   private formatBatchErrorSummary(): string {
@@ -2589,6 +2596,7 @@ export class MebbisManager {
       parentWin,
       completed: 0,
       failed: 0,
+      notFound: 0,
       statusMessage: 'Başlatılıyor...',
       errors: new Map(),
     };
@@ -2861,6 +2869,7 @@ export class MebbisManager {
     this.pendingBatchDownload.currentStudentIndex = 0;
     this.pendingBatchDownload.completed = 0;
     this.pendingBatchDownload.failed = 0;
+    this.pendingBatchDownload.notFound = 0;
     this.pendingBatchDownload.errors = new Map();
 
     console.log(`[${account.label}] Batch: output dir=${folderResult.filePaths[0]}, options=`, options);
@@ -3338,12 +3347,20 @@ export class MebbisManager {
 
     if (currentStudentIndex >= students.length) {
       // All students processed
-      const { completed, failed, outputDir, batchType } = this.pendingBatchDownload;
+      const { completed, failed, notFound, outputDir, batchType } = this.pendingBatchDownload;
+      const actualErrors = failed - notFound; // errors other than not found
       const titles: Record<string, string> = { direksiyon: 'Çoklu Direksiyon Takip', simulator: 'Çoklu Simülatör Raporu' };
-      console.log(`[${account.label}] Batch ${batchType}: completed! ${completed} success, ${failed} failed`);
-      this.showBatchProgress(win, `Tamamlandı! ${completed} PDF oluşturuldu${failed > 0 ? ', ' + failed + ' hatalı' : ''}`, '#00cc66');
+
+      // Build message: "XX PDF oluşturuldu, XX bulunamadı, XX hatalı"
+      let statusMsg = `Tamamlandı! ${completed} PDF oluşturuldu`;
+      if (notFound > 0) statusMsg += `, ${notFound} bulunamadı`;
+      if (actualErrors > 0) statusMsg += `, ${actualErrors} hatalı`;
+
+      console.log(`[${account.label}] Batch ${batchType}: completed! ${completed} success, ${notFound} not found, ${actualErrors} errors`);
+      this.showBatchProgress(win, statusMsg, '#00cc66');
 
       const errorSummary = this.formatBatchErrorSummary();
+      const dialogMsg = `${completed} PDF oluşturuldu${notFound > 0 ? ', ' + notFound + ' bulunamadı' : ''}${actualErrors > 0 ? ', ' + actualErrors + ' hatalı' : ''}.`;
       const detailText = errorSummary
         ? `Klasör: ${outputDir}\n\nHatalar:\n${errorSummary}`
         : `Klasör: ${outputDir}`;
@@ -3358,7 +3375,7 @@ export class MebbisManager {
       dialog.showMessageBox(win, {
         type: 'info',
         title: titles[batchType] || 'Çoklu İndirme',
-        message: `${completed} PDF oluşturuldu${failed > 0 ? ', ' + failed + ' hatalı' : ''}.`,
+        message: dialogMsg,
         detail: detailText,
         buttons: ['Tamam'],
       }).catch(() => {});
