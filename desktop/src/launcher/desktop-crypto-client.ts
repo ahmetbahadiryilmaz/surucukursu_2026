@@ -68,11 +68,18 @@ export function postSignedBinary(
         res.on('end', () => {
           const buf = Buffer.concat(chunks);
           if (res.statusCode !== 200) {
-            reject(
-              new Error(
-                `HTTP ${res.statusCode} from ${url}: ${buf.toString('utf-8').slice(0, 300)}`,
-              ),
-            );
+            const errorDetail = buf.toString('utf-8').slice(0, 300);
+            const friendlyMessage = res.statusCode === 429
+              ? 'Çok fazla istek yapıldı, lütfen daha sonra tekrar deneyiniz'
+              : res.statusCode === 404
+              ? 'Şablon bulunamadı'
+              : res.statusCode === 400
+              ? 'Geçersiz istek'
+              : `Sunucu hatası (${res.statusCode})`;
+            const err = new Error(friendlyMessage);
+            (err as any).statusCode = res.statusCode;
+            (err as any).detail = errorDetail;
+            reject(err);
             return;
           }
           resolve(buf);

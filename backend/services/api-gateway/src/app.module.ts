@@ -17,7 +17,7 @@ import { AuthGuard } from './auth/auth.guard';
     }),
     ThrottlerModule.forRoot([{
       ttl: 60000, // 1 minute
-      limit: 100, // 100 requests per minute
+      limit: 1000, // 1000 requests per minute (10x increase)
     }]),
     ProxyModule,
     HealthModule,

@@ -3167,9 +3167,11 @@ export class MebbisManager {
         await this.batchGenerateForStudent(lessonData, student, account);
       }
     } catch (e) {
-      const errorMsg = e instanceof Error ? e.message : String(e);
-      console.error(`[${account.label}] Batch: PDF error for ${student.tc}:`, e);
-      this.trackBatchError('PDF oluşturma hatası: ' + errorMsg, student.tc);
+      const err = e as any;
+      const errorMsg = err?.message || String(e);
+      const detail = err?.detail || '';
+      console.error(`[${account.label}] Batch: PDF error for ${student.tc}: ${errorMsg}${detail ? ' (' + detail + ')' : ''}`, e);
+      this.trackBatchError(errorMsg, student.tc);
       this.pendingBatchDownload.failed++;
     }
 
