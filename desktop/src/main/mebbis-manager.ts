@@ -1551,6 +1551,7 @@ export class MebbisManager {
     completed: number;
     failed: number;
     statusMessage: string;
+    errors: Map<string, { message: string; samples: string[] }>;
   } | null = null;
 
   private async handleSkt02009Loaded(win: BrowserWindow, account: Account) {
@@ -2538,6 +2539,32 @@ export class MebbisManager {
 
   // ==================== BATCH DİREKSİYON TAKİP / SİMÜLATÖR ====================
 
+  private trackBatchError(errorMessage: string, studentTc: string) {
+    if (!this.pendingBatchDownload) return;
+    const key = errorMessage;
+    const existing = this.pendingBatchDownload.errors.get(key);
+    if (existing) {
+      if (!existing.samples.includes(studentTc)) {
+        existing.samples.push(studentTc);
+      }
+    } else {
+      this.pendingBatchDownload.errors.set(key, { message: errorMessage, samples: [studentTc] });
+    }
+  }
+
+  private formatBatchErrorSummary(): string {
+    if (!this.pendingBatchDownload || this.pendingBatchDownload.errors.size === 0) return '';
+
+    const errorLines: string[] = [];
+    for (const [message, data] of this.pendingBatchDownload.errors) {
+      const sampleText = data.samples.length === 1
+        ? `(TC: ${data.samples[0]})`
+        : `(${data.samples.length} öğrenci, örnek: ${data.samples[0]})`;
+      errorLines.push(`• ${message} ${sampleText}`);
+    }
+    return errorLines.join('\n');
+  }
+
   private async handleBatchDireksiyon(account: Account, parentWin: BrowserWindow) {
     this.handleBatchGeneric('direksiyon', account, parentWin);
   }
@@ -2563,6 +2590,7 @@ export class MebbisManager {
       completed: 0,
       failed: 0,
       statusMessage: 'Başlatılıyor...',
+      errors: new Map(),
     };
 
     const currentURL = parentWin.webContents.getURL().toLowerCase();
@@ -2833,6 +2861,7 @@ export class MebbisManager {
     this.pendingBatchDownload.currentStudentIndex = 0;
     this.pendingBatchDownload.completed = 0;
     this.pendingBatchDownload.failed = 0;
+    this.pendingBatchDownload.errors = new Map();
 
     console.log(`[${account.label}] Batch: output dir=${folderResult.filePaths[0]}, options=`, options);
 
@@ -3062,7 +3091,9 @@ export class MebbisManager {
         })();
       `);
     } catch (e) {
+      const errorMsg = e instanceof Error ? e.message : String(e);
       console.error(`[${account.label}] Batch: TC fill error for ${student.tc}:`, e);
+      this.trackBatchError('TC giriş hatası', student.tc);
       this.pendingBatchDownload.failed++;
       this.batchProcessNextStudent(win, account);
     }
@@ -3130,12 +3161,15 @@ export class MebbisManager {
 
       if (lessonData.error) {
         console.log(`[${account.label}] Batch: ${student.tc} - ${lessonData.error}`);
+        this.trackBatchError(lessonData.error, student.tc);
         this.pendingBatchDownload.failed++;
       } else {
         await this.batchGenerateForStudent(lessonData, student, account);
       }
     } catch (e) {
+      const errorMsg = e instanceof Error ? e.message : String(e);
       console.error(`[${account.label}] Batch: PDF error for ${student.tc}:`, e);
+      this.trackBatchError('PDF oluşturma hatası: ' + errorMsg, student.tc);
       this.pendingBatchDownload.failed++;
     }
 
@@ -3173,6 +3207,7 @@ export class MebbisManager {
       let simulatorSessions = this.extractSimulatorSessions(lessonData.lessons);
       if (simulatorSessions.length === 0) {
         console.log(`[${account.label}] Batch: ${student.tc} - Simülatör dersi bulunamadı`);
+        this.trackBatchError('Simülatör dersi bulunamadı', student.tc);
         this.pendingBatchDownload.failed++;
         return;
       }
@@ -3305,6 +3340,12 @@ export class MebbisManager {
       const titles: Record<string, string> = { direksiyon: 'Çoklu Direksiyon Takip', simulator: 'Çoklu Simülatör Raporu' };
       console.log(`[${account.label}] Batch ${batchType}: completed! ${completed} success, ${failed} failed`);
       this.showBatchProgress(win, `Tamamlandı! ${completed} PDF oluşturuldu${failed > 0 ? ', ' + failed + ' hatalı' : ''}`, '#00cc66');
+
+      const errorSummary = this.formatBatchErrorSummary();
+      const detailText = errorSummary
+        ? `Klasör: ${outputDir}\n\nHatalar:\n${errorSummary}`
+        : `Klasör: ${outputDir}`;
+
       this.pendingBatchDownload = null;
       this.pendingDownloadPhase = null;
 
@@ -3316,7 +3357,7 @@ export class MebbisManager {
         type: 'info',
         title: titles[batchType] || 'Çoklu İndirme',
         message: `${completed} PDF oluşturuldu${failed > 0 ? ', ' + failed + ' hatalı' : ''}.`,
-        detail: `Klasör: ${outputDir}`,
+        detail: detailText,
         buttons: ['Tamam'],
       }).catch(() => {});
       return;
@@ -3466,12 +3507,17 @@ export class MebbisManager {
   }
 
   /**
-   * Generate a K-Sınıfı Sürücü Aday Belgesi PDF with random fake data.
-   * Fetches the template via the encrypted desktop-service endpoint (same
-   * channel as direksiyon-takip and ek4) so it works in packaged builds.
-   * Background scan is stripped via @media print so the rendered PDF only
-   * contains filled values, ready to print onto the official pre-printed
-   * K-belgesi paper.
+   * Open a K-Sınıfı Sürücü Aday Belgesi preview window with random fake data,
+   * then send it directly to the printer with locked settings (A4, marginType
+   * 'none', 100% scale, printBackground). Bypassing the "Save as PDF → reopen
+   * → print" round-trip removes the pixel drift caused by user-side print
+   * dialog overrides (Fit to page, custom margins, etc.).
+   *
+   * The toolbar is injected directly into the K-Belgesi document (no iframe
+   * wrapper). The template's own @page + html/body sizing (210×297mm,
+   * overflow:hidden) guarantees the print is exactly one A4 page — wrapping
+   * it in an iframe added a few pixels of body overflow that pushed Chromium
+   * onto a blank second page.
    */
   async generateTestKBelgesiPdf(mainWindow: BrowserWindow, withBackground = false): Promise<void> {
     const html = await fetchEncryptedTemplate('k-belgesi/k-belgesi.html');
@@ -3533,54 +3579,91 @@ export class MebbisManager {
       ustaBelgeYeri: ustaIl,
     };
 
-    const saveResult = await dialog.showSaveDialog(mainWindow, {
-      title: 'Test K Belgesi PDF — Kaydet',
-      defaultPath: `test_k_belgesi_${sample.adayAd}_${sample.adaySoyad}.pdf`,
-      filters: [{ name: 'PDF Dosyası', extensions: ['pdf'] }],
-    });
-    if (saveResult.canceled || !saveResult.filePath) return;
+    // Inject the floating toolbar + data-fill script directly into the
+    // K-Belgesi template before </body>. The toolbar is position:fixed so it
+    // overlays without disturbing the absolute mm coordinates of the cvp
+    // fields, and is hidden via @media print so only the K-Belgesi A4 page
+    // reaches the printer.
+    const previewChrome = `<style id="kb-preview-chrome">
+  @media screen {
+    body { background: #e5e7eb !important; }
+    #kb-toolbar { position: fixed; top: 12px; right: 12px; background: #1f2937; color: white; padding: 8px 12px; border-radius: 6px; display: flex; gap: 8px; align-items: center; box-shadow: 0 4px 12px rgba(0,0,0,0.3); z-index: 999999; font-family: system-ui, -apple-system, "Segoe UI", sans-serif; font-size: 13px; }
+    #kb-toolbar .label { margin-right: 6px; opacity: 0.85; }
+    #kb-toolbar button { padding: 6px 14px; border-radius: 4px; cursor: pointer; font-size: 13px; font-family: inherit; }
+    #kb-cancel { border: 1px solid #6b7280; background: transparent; color: white; }
+    #kb-cancel:hover { background: rgba(255,255,255,0.08); }
+    #kb-print { border: none; background: #3b82f6; color: white; font-weight: 600; }
+    #kb-print:hover { background: #2563eb; }
+  }
+  @media print { #kb-toolbar { display: none !important; } }
+</style>
+<div id="kb-toolbar">
+  <span class="label">A4 · 100% · kenarlıksız</span>
+  <button id="kb-cancel">İptal</button>
+  <button id="kb-print">Yazdır</button>
+</div>
+<script>(function(){
+  var data = ${JSON.stringify(sample)};
+  Object.keys(data).forEach(function(k){
+    var el = document.querySelector('.cvp.' + k);
+    if (el) el.textContent = data[k];
+  });
+  ${withBackground ? `
+  var s = document.createElement('style');
+  s.textContent = '@media print { .bg { display: block !important; } }';
+  document.head.appendChild(s);
+  ` : ''}
+  document.getElementById('kb-cancel').onclick = function(){ document.title = 'KB_CLOSE'; };
+  document.getElementById('kb-print').onclick = function(){ document.title = 'KB_PRINT'; };
+})();</script>`;
+    const mergedHtml = html.replace('</body>', previewChrome + '</body>');
 
-    console.log('[DEV TEST] Generating K Belgesi PDF with fake data, aday:', sample.adayAd, sample.adaySoyad);
+    console.log('[DEV TEST] Opening K Belgesi preview, aday:', sample.adayAd, sample.adaySoyad);
 
-    const pdfWin = new BrowserWindow({
-      width: 794,
-      height: 1123,
-      show: false,
+    const previewWin = new BrowserWindow({
+      parent: mainWindow,
+      width: 900,
+      height: 1180,
+      title: 'K Belgesi — Önizleme',
+      autoHideMenuBar: true,
       webPreferences: { sandbox: false, contextIsolation: false },
     });
 
-    try {
-      await pdfWin.loadURL('data:text/html;charset=utf-8,' + encodeURIComponent(html));
-      await pdfWin.webContents.executeJavaScript(`
-        (function(){
-          const data = ${JSON.stringify(sample)};
-          Object.keys(data).forEach(k => {
-            const el = document.querySelector('.cvp.' + k);
-            if (el) el.textContent = data[k];
-          });
-          // Override the template's @media print rule when caller asked for
-          // a bg-included PDF (alignment-check mode). Default = bg stripped.
-          if (${JSON.stringify(withBackground)}) {
-            const s = document.createElement('style');
-            s.textContent = '@media print { .bg { display: block !important; } }';
-            document.head.appendChild(s);
-          }
-        })();
-      `);
-      await new Promise(r => setTimeout(r, 300));
+    // K-Belgesi HTML is ~1.6MB (embedded background image) — well past
+    // Chromium's data: URL cap on some platforms. Boot the renderer on
+    // about:blank, then push the HTML in via document.write so it stays
+    // entirely in-memory and the embedded <script> still executes.
+    await previewWin.loadURL('about:blank');
+    await previewWin.webContents.executeJavaScript(
+      `document.open(); document.write(${JSON.stringify(mergedHtml)}); document.close();`,
+    );
 
-      const pdfBuffer = await pdfWin.webContents.printToPDF({
-        pageSize: 'A4',
-        printBackground: true,
-        preferCSSPageSize: true,
-        margins: { top: 0, bottom: 0, left: 0, right: 0 },
-      });
-      fs.writeFileSync(saveResult.filePath, pdfBuffer);
-      console.log('[DEV TEST] Saved to:', saveResult.filePath);
-      await shell.openPath(saveResult.filePath);
-    } finally {
-      pdfWin.close();
-    }
+    // Buttons signal back to main via document.title — avoids setting up
+    // dedicated IPC plumbing for a one-shot dev preview window.
+    let printing = false;
+    previewWin.webContents.on('page-title-updated', (_event, title) => {
+      if (previewWin.isDestroyed()) return;
+      if (title === 'KB_PRINT' && !printing) {
+        printing = true;
+        previewWin.webContents.print(
+          {
+            silent: false,
+            printBackground: true,
+            margins: { marginType: 'none' },
+            pageSize: 'A4',
+            scaleFactor: 100,
+          },
+          (success, failureReason) => {
+            if (!success) {
+              console.warn('[DEV TEST] K Belgesi print:', failureReason);
+            }
+            if (!previewWin.isDestroyed()) previewWin.close();
+          },
+        );
+      } else if (title === 'KB_CLOSE') {
+        previewWin.close();
+      }
+    });
   }
 
   /**
