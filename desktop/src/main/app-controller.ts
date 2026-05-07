@@ -120,7 +120,20 @@ export async function start(ctx: BootstrapContext): Promise<AppControllerHandle>
 
   function rebuildAppMenu() {
     const items: MenuItemConstructorOptions[] = [
-      { label: 'Hakkında', click: showAboutDialog },
+      {
+        label: 'Yardım',
+        submenu: [
+          { label: 'Hakkında', click: showAboutDialog },
+          {
+            label: 'Yeni özellikler',
+            click: () => {
+              if (mainWindow && !mainWindow.isDestroyed()) {
+                showBundleWhatsNew(mainWindow, true).catch(() => {});
+              }
+            },
+          },
+        ],
+      },
     ];
     if (isShiftHeld) {
       items.push({

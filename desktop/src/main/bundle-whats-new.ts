@@ -142,10 +142,17 @@ export function suppressLauncherWhatsNewIfPossible(currentVersion: string | null
 }
 
 /**
- * Show the bundle's what's-new dialog. Safe to call multiple times —
- * each call no-ops unless the user hasn't dismissed this version yet.
+ * Show the bundle's what's-new dialog.
+ *
+ * @param win   The window to attach the dialog to.
+ * @param force When true, show the dialog even if the user previously
+ *              checked "Bir daha gösterme" for this version. Used by the
+ *              "Yardım → Yeni özellikler" menu item.
  */
-export async function showBundleWhatsNew(win: BrowserWindow): Promise<void> {
+export async function showBundleWhatsNew(
+  win: BrowserWindow,
+  force = false,
+): Promise<void> {
   if (!win || win.isDestroyed()) return;
 
   let versionData: VersionResponse;
@@ -157,7 +164,7 @@ export async function showBundleWhatsNew(win: BrowserWindow): Promise<void> {
   }
 
   if (!versionData.whatsNew) return;
-  if (readBundleDismissed() === versionData.version) return;
+  if (!force && readBundleDismissed() === versionData.version) return;
   if (win.isDestroyed()) return;
 
   // Build entry list: current + up to 3 history items, max 4 total.
@@ -176,27 +183,28 @@ export async function showBundleWhatsNew(win: BrowserWindow): Promise<void> {
     .map((e) => `v${e.version}\n${e.whatsNew}`)
     .join('\n\n──────────\n\n');
 
-  let response: number;
+  let result: { response: number; checkboxChecked: boolean };
   try {
-    const result = await dialog.showMessageBox(win, {
+    result = await dialog.showMessageBox(win, {
       type: 'info',
       title: `Yenilikler — v${versionData.version}`,
       message: 'Uygulama güncellendi',
       detail,
-      buttons: ['Tamam', 'Bir daha gösterme'],
+      buttons: ['Tamam'],
       defaultId: 0,
       cancelId: 0,
       noLink: true,
+      checkboxLabel: 'Bir daha gösterme',
+      checkboxChecked: false,
     });
-    response = result.response;
   } catch (err: any) {
     console.warn(`[BundleWhatsNew] Dialog failed: ${err?.message ?? err}`);
     return;
   }
 
-  // "Tamam" (response 0) → leave unseen, dialog re-shows next launch.
-  // "Bir daha gösterme" (response 1) → mark dismissed for this version.
-  if (response === 1) {
+  // Checkbox ticked → mark dismissed for this version (won't show until new
+  // version arrives). Unticked → dialog re-shows next launch.
+  if (result.checkboxChecked) {
     writeBundleDismissed(versionData.version);
     console.log(
       `[BundleWhatsNew] User dismissed what's new for v${versionData.version}.`,
