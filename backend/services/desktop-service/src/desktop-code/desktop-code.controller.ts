@@ -63,7 +63,11 @@ export class DesktopCodeController {
   @ApiOperation({
     summary: 'Plaintext remote-code version + optional whatsNew. Cheap to poll — no auth, no encryption.',
   })
-  @ApiResponse({ status: 200, description: 'JSON {version: string, whatsNew?: string}' })
+  @ApiResponse({
+    status: 200,
+    description:
+      'JSON {version: string, whatsNew?: string, history?: [{version, whatsNew}]}',
+  })
   @ApiResponse({ status: 404, description: 'version.json missing on server' })
   getVersion(@Res() res: FastifyReply) {
     const versionFilePath = path.join(CODE_BASE_RESOLVED, 'version.json');
@@ -72,11 +76,20 @@ export class DesktopCodeController {
     }
     let version: string | undefined;
     let whatsNew: string | undefined;
+    let history: { version: string; whatsNew: string }[] | undefined;
     try {
       const data = JSON.parse(fs.readFileSync(versionFilePath, 'utf-8'));
       if (typeof data.version === 'string') version = data.version;
       if (typeof data.whatsNew === 'string' && data.whatsNew.trim()) {
         whatsNew = data.whatsNew;
+      }
+      if (Array.isArray(data.history)) {
+        history = data.history
+          .filter(
+            (h: any) =>
+              h && typeof h.version === 'string' && typeof h.whatsNew === 'string',
+          )
+          .map((h: any) => ({ version: h.version, whatsNew: h.whatsNew }));
       }
     } catch {
       throw new HttpException('version.json malformed', HttpStatus.INTERNAL_SERVER_ERROR);
@@ -84,10 +97,13 @@ export class DesktopCodeController {
     if (!version) {
       throw new HttpException('version field missing', HttpStatus.INTERNAL_SERVER_ERROR);
     }
+    const payload: Record<string, unknown> = { version };
+    if (whatsNew) payload.whatsNew = whatsNew;
+    if (history && history.length) payload.history = history;
     res
       .header('Content-Type', 'application/json')
       .header('Cache-Control', 'no-store')
-      .send(whatsNew ? { version, whatsNew } : { version });
+      .send(payload);
   }
 
   @Public()

@@ -31,6 +31,7 @@ import { MebbisManager } from './mebbis-manager';
 import { apiClient, MebbisAccount, ActivityLogBody } from './api-client';
 import { getCodeLoader } from '../launcher/remote-code-loader';
 import type { VersionCheckResult } from '../launcher/auto-updater';
+import { showBundleWhatsNew, suppressLauncherWhatsNewIfPossible } from './bundle-whats-new';
 
 type RemoteCodeLoader = ReturnType<typeof getCodeLoader>;
 
@@ -991,9 +992,19 @@ export async function start(ctx: BootstrapContext): Promise<AppControllerHandle>
 
   mainWindow = createMainWindow();
 
+  // The launcher (.exe) ships with an older what's-new dialog whose "Tamam"
+  // wrongly dismisses forever. We can't change the launcher without an exe
+  // rebuild, so we suppress its dialog and run the bundle's own version.
+  // This write must land synchronously before the launcher's call below.
+  suppressLauncherWhatsNewIfPossible(ctx.codeLoader.getVersion());
+
   ctx.setupAutoUpdater(mainWindow);
 
   rebuildAppMenu();
+
+  // Show the bundle's what's-new dialog (latest 4 versions, "Tamam" doesn't
+  // dismiss). Fire-and-forget: any error is logged inside.
+  showBundleWhatsNew(mainWindow).catch(() => {});
 
   // Track Shift to toggle the hidden Test menu. Released-on-blur guards
   // against the user alt-tabbing while Shift is held.
