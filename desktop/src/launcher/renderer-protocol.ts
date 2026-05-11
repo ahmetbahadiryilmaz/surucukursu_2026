@@ -106,8 +106,10 @@ export function installRendererProtocol(): void {
 
     callback({
       statusCode: 200,
-      mimeType: mimeFor(rel),
-      headers: { 'Cache-Control': 'no-store' },
+      headers: {
+        'Content-Type': mimeFor(rel),
+        'Cache-Control': 'no-store',
+      },
       data: buf,
     });
   });

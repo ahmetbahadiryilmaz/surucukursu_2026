@@ -63,6 +63,22 @@ export async function start(ctx: BootstrapContext): Promise<AppControllerHandle>
   const authStore = new AuthStore();
   const mebbisManager = new MebbisManager();
 
+  // Pause the auto-update restart prompt while a çoklu (batch) flow runs.
+  // The launcher polls /version every N seconds and forces a restart on a
+  // version change, which would interrupt a long batch and lose progress.
+  // We stop the polling when a batch starts and resume it when it ends.
+  mebbisManager.setBatchStateListener((inProgress) => {
+    if (inProgress) {
+      ctx.codeLoader.stopVersionPolling();
+      console.log('[BatchPause] Version polling paused while batch is running.');
+    } else {
+      const findWindow = () =>
+        mainWindow && !mainWindow.isDestroyed() ? mainWindow : null;
+      ctx.codeLoader.startVersionPolling(findWindow);
+      console.log('[BatchPause] Batch ended — version polling resumed.');
+    }
+  });
+
   // Wire the student-sync HTTP client. Account-id resolver returns null;
   // sync calls receive the explicit account.id from MebbisManager scrape paths.
   configureStudentSync(() => authStore.getToken(), () => null);

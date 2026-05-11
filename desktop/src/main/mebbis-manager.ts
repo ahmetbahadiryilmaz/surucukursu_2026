@@ -78,6 +78,7 @@ export class MebbisManager {
   private loginAttempts: Map<string, number> = new Map();
   private autoRefreshIntervals: Map<string, ReturnType<typeof setInterval>> = new Map();
   private activityLogger: ((accountId: string, pdfType: 'direksiyon_takip' | 'simulator_raporu', count: number) => void) | null = null;
+  private batchStateListener: ((inProgress: boolean) => void) | null = null;
 
   // Pending "open student" navigation triggered from sidebar Details button
   private pendingOpenStudent: Map<string, { tc: string; phase: 'skt-module' | 'skt02009' }> = new Map();
@@ -88,6 +89,26 @@ export class MebbisManager {
 
   setActivityLogger(fn: (accountId: string, pdfType: 'direksiyon_takip' | 'simulator_raporu', count: number) => void) {
     this.activityLogger = fn;
+  }
+
+  /**
+   * Subscribe to batch start/end transitions. Called with `true` exactly
+   * when a çoklu (batch) flow begins, and `false` when it ends (success,
+   * cancellation, or error). Used by the bundle to pause the auto-update
+   * restart prompt while a long-running batch is in progress.
+   */
+  setBatchStateListener(fn: (inProgress: boolean) => void) {
+    this.batchStateListener = fn;
+  }
+
+  isBatchInProgress(): boolean {
+    return this.pendingBatchDownload !== null;
+  }
+
+  private clearPendingBatchDownload(): void {
+    if (this.pendingBatchDownload === null) return;
+    this.pendingBatchDownload = null;
+    try { this.batchStateListener?.(false); } catch { /* ignore */ }
   }
 
   private logPdf(account: Account, pdfType: 'direksiyon_takip' | 'simulator_raporu', count = 1) {
@@ -314,7 +335,7 @@ export class MebbisManager {
       }
       if (message === 'MEBBIS_BATCH_CANCEL') {
         console.log(`[${account.label}] Batch cancelled by user`);
-        this.pendingBatchDownload = null;
+        this.clearPendingBatchDownload();
         this.pendingDownloadPhase = null;
       }
       if (message === 'MEBBIS_DEV_AUTO_REFRESH') {
@@ -384,7 +405,7 @@ export class MebbisManager {
             this.pendingDownloadPhase = null;
           }
           if (this.pendingBatchDownload) {
-            this.pendingBatchDownload = null;
+            this.clearPendingBatchDownload();
             this.pendingDownloadPhase = null;
           }
         } else {
@@ -2604,6 +2625,7 @@ export class MebbisManager {
       statusMessage: 'Başlatılıyor...',
       errors: new Map(),
     };
+    try { this.batchStateListener?.(true); } catch { /* ignore */ }
 
     const currentURL = parentWin.webContents.getURL().toLowerCase();
 
@@ -2642,7 +2664,7 @@ export class MebbisManager {
 
       if (!clicked) {
         console.log(`[${account.label}] Batch: SKT module not found`);
-        this.pendingBatchDownload = null;
+        this.clearPendingBatchDownload();
         this.pendingDownloadPhase = null;
       }
     }
@@ -2832,7 +2854,7 @@ export class MebbisManager {
       `);
     } catch (e) {
       console.error(`[${account.label}] Batch: options scrape error:`, e);
-      this.pendingBatchDownload = null;
+      this.clearPendingBatchDownload();
       this.pendingDownloadPhase = null;
     }
   }
@@ -2907,7 +2929,7 @@ export class MebbisManager {
       this.pendingBatchDownload.currentDonemIndex = 0;
       if (realPeriods.length === 0) {
         this.showBatchProgress(win, 'Hata: Dönem listesi boş!', '#ff4444');
-        this.pendingBatchDownload = null;
+        this.clearPendingBatchDownload();
         this.pendingDownloadPhase = null;
         return;
       }
@@ -2963,7 +2985,7 @@ export class MebbisManager {
       `);
     } catch (e) {
       console.error(`[${this.pendingBatchDownload?.account.label}] Batch: form submit error:`, e);
-      this.pendingBatchDownload = null;
+      this.clearPendingBatchDownload();
       this.pendingDownloadPhase = null;
     }
   }
@@ -3053,7 +3075,7 @@ export class MebbisManager {
       const totalStudents = this.pendingBatchDownload.students.length;
       if (totalStudents === 0) {
         this.showBatchProgress(win, 'Öğrenci bulunamadı!', '#ff4444');
-        this.pendingBatchDownload = null;
+        this.clearPendingBatchDownload();
         this.pendingDownloadPhase = null;
         return;
       }
@@ -3068,7 +3090,7 @@ export class MebbisManager {
     } catch (e) {
       console.error(`[${account.label}] Batch: results scrape error:`, e);
       this.showBatchProgress(win, 'Hata: Öğrenci listesi okunamadı', '#ff4444');
-      this.pendingBatchDownload = null;
+      this.clearPendingBatchDownload();
       this.pendingDownloadPhase = null;
     }
   }
@@ -3369,7 +3391,7 @@ export class MebbisManager {
         ? `Klasör: ${outputDir}\n\nHatalar:\n${errorSummary}`
         : `Klasör: ${outputDir}`;
 
-      this.pendingBatchDownload = null;
+      this.clearPendingBatchDownload();
       this.pendingDownloadPhase = null;
 
       // Auto-hide the top bar after 8 seconds

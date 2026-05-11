@@ -219,7 +219,7 @@ const AdminTable = () => {
 
   // Detay sayfasına gitme
   const handleViewDetails = (id: number) => {
-    navigate(`/admin/kullanicilar/adminler/${id}`);
+    navigate(`/admin/kullanicilar/adminler/detay/${id}`);
   };
 
   // Düzenleme modalını açma

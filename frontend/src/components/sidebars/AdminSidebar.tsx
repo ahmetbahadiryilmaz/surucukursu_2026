@@ -119,14 +119,7 @@ const Sidebar = ({ setActivePage }: SidebarProps) => {
         >
           <Server className="w-5 h-5 mr-3" /> Sistem Bilgileri
         </button>
-        
-        <button
-          onClick={() => handleUserItemClick("raporlar")}
-          className={getButtonClass("raporlar")}
-        >
-          <BarChart2 className="w-5 h-5 mr-3" /> Raporlar
-        </button>
-        
+
         <button
           onClick={() => handleUserItemClick("hesabim")}
           className={getButtonClass("hesabim")}

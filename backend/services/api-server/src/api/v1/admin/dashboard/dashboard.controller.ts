@@ -3,7 +3,7 @@ import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagg
 import { AdminGuard } from '../../../../common/guards/admin.guard';
 import { DashboardResponseDto } from './dto';
 import { DashboardService } from './dashboard.service';
-import { DashboardResponse } from './dashboard.types';
+import { DashboardResponse, SystemInfoResponse } from './dashboard.types';
 
 
 
@@ -50,6 +50,32 @@ export class DashboardController {
           ...(process.env.NODE_ENV === 'development' && { details: errorStack })
         },
         HttpStatus.INTERNAL_SERVER_ERROR
+      );
+    }
+  }
+
+  @Get('system-info')
+  @ApiOperation({ summary: 'Get system resource usage and service status' })
+  @ApiResponse({ status: 200, description: 'System info retrieved successfully' })
+  @ApiResponse({ status: 500, description: 'Internal server error' })
+  async getSystemInfo(): Promise<SystemInfoResponse> {
+    try {
+      const data = await this.dashboardService.getSystemInfo();
+      return {
+        success: true,
+        data,
+        timestamp: new Date().toISOString(),
+      };
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      console.error('Error getting system info:', error);
+      throw new HttpException(
+        {
+          success: false,
+          error: `Failed to retrieve system info: ${errorMessage}`,
+          timestamp: new Date().toISOString(),
+        },
+        HttpStatus.INTERNAL_SERVER_ERROR,
       );
     }
   }

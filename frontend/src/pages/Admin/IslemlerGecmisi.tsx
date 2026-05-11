@@ -93,10 +93,8 @@ const IslemlerGecmisi = () => {
       if (userType !== undefined) params.userType = userType;
 
       // Make API call
-      const response = await apiService.admin.getSystemLogs(params);
-      
-      const logsData: LogsResponse = response.data;
-      
+      const logsData: LogsResponse = await apiService.admin.getSystemLogs(params);
+
       // Process logs to add user names and readable types
       const processedLogs = logsData.data.map(log => ({
         ...log,

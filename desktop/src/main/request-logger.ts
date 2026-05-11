@@ -137,6 +137,8 @@ export class RequestLogger {
     };
 
     try {
+      fs.mkdirSync(this.requestsDir, { recursive: true });
+      fs.mkdirSync(this.responsesDir, { recursive: true });
       fs.writeFileSync(reqPath, JSON.stringify(reqInfo, null, 2), 'utf-8');
       fs.writeFileSync(resPath, html, 'utf-8');
       const journalEntry = JSON.stringify({
