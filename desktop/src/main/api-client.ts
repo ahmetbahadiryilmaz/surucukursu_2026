@@ -2,6 +2,23 @@ import http from 'http';
 import https from 'https';
 import { API_BASE_URL } from '../launcher/config';
 
+/**
+ * Redacts the API host from a message so users never see `api.mtsk.app`.
+ * Keeps the path segment of any URL so error context ("which endpoint")
+ * remains debuggable.
+ *
+ *   "HTTP 400 from https://api.mtsk.app/desktop/x: ..." → "HTTP 400 from /desktop/x: ..."
+ *   "fetch failed for api.mtsk.app/desktop/y"           → "fetch failed for /desktop/y"
+ */
+export function sanitizeErrorMessage(msg: string): string {
+  if (!msg) return msg;
+  return msg
+    // Full URL → keep just the pathname (+ query).
+    .replace(/https?:\/\/[^\s"')]*?(?=\/|\s|$|["'),])([^\s"')]*)/g, (_m, rest) => rest || '')
+    // Bare hostname (no scheme) → strip the host token.
+    .replace(/(?:^|[\s"'(])([a-z0-9.-]+\.mtsk\.app)(?=[\s/"'),:])/gi, (m, host) => m.replace(host, ''));
+}
+
 function request<T>(
   method: string,
   urlPath: string,
@@ -28,9 +45,12 @@ function request<T>(
       },
     };
 
-    // Strip any URLs from an error message before it reaches the renderer.
-    const sanitize = (msg: string): string =>
-      msg.replace(/https?:\/\/[^\s"')]+/g, '[server]').replace(/[^\s"')]+\.mtsk\.app[^\s"')]*/g, '[server]');
+    // Strip the API host (and any URL) from error messages before they reach
+    // the renderer — users shouldn't see api.mtsk.app. Path segments are kept
+    // (helps debugging "which endpoint failed").
+    //   https://api.mtsk.app/desktop/x → /desktop/x
+    //   api.mtsk.app/desktop/x         → /desktop/x
+    const sanitize = sanitizeErrorMessage;
 
     const req = transport.request(options, (res) => {
       let data = '';
@@ -201,10 +221,16 @@ export interface DetailIngestPayload {
 }
 
 export interface ActivityLogBody {
-  event: 'school_login' | 'pdf_download';
+  event: 'school_login' | 'pdf_download' | 'desktop_error';
   school_id: number;
   pdf_type?: 'direksiyon_takip' | 'simulator_raporu';
   count?: number;
+  // desktop_error fields — included in the same payload so the existing
+  // activity-log endpoint can absorb them once the backend opts in.
+  error_source?: string;     // e.g. 'template_fetch'
+  error_path?: string;       // e.g. 'direksiyon-takip/foo.html' — never the full URL
+  error_status?: number;     // HTTP status code
+  error_message?: string;    // already sanitized (no host)
 }
 
 export const apiClient = {

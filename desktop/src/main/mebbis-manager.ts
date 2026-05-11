@@ -7,6 +7,7 @@ import { fetchEncryptedTemplate } from './template-fetcher';
 import { getRequestLogger } from './request-logger';
 import { getStudentDb } from './student-db';
 import { pushList, pushDetail } from './student-sync';
+import { getPersonnelDb } from './personnel-db';
 
 
 interface RunningAccount {
@@ -462,6 +463,18 @@ export class MebbisManager {
         this.hideStatus(win);
         this.injectLeftMenu(win, account);
         this.parseAndIngestStudentList(win, account);
+      } else if (currentURL.toLowerCase().includes('skt04002')) {
+        // skt04002 hosts a ddlPersonel dropdown — passive personnel scrape.
+        this.hideStatus(win);
+        this.injectLeftMenu(win, account);
+        this.parseAndIngestPersonnelList(win, account);
+      } else if (currentURL.toLowerCase().includes('ook15003')) {
+        // ook15003 is the canonical personnel list (Özel Öğretim Kurumları
+        // Modülü). Richer than skt04002 — has Kayıt No, ad/soyad split,
+        // çalışma izni dates, onay durumu. Scraped on every visit.
+        this.hideStatus(win);
+        this.injectLeftMenu(win, account);
+        this.parseAndIngestPersonnelListOok(win, account);
       } else if (currentURL.toLowerCase().includes('skt02009')) {
         // Handle skt02009 page loads for direksiyon takip download
         if (this.pendingDownload && this.pendingDownloadPhase === 'navigate') {
@@ -739,17 +752,16 @@ export class MebbisManager {
         for (const tr of rows) {
           if (tr.classList.contains('frmListBaslik')) continue;
           const cells = Array.from(tr.querySelectorAll('td')).map(txt);
-          if (cells.length < 3) continue;
-          // Existing batch scraper assumes col 1 = name, col 2 = TC. Keep that mapping.
-          const adSoyad = cells[1] || '';
+          if (cells.length < 4) continue;
+          // skt02006 column layout:
+          //   0:S.No | 1:Sil(button) | 2:TC | 3:Adı Soyadı | 4:Dönemi
+          //   5:Mevcut Belge | 6:İstenen Sertifika | ... | last:Onayla
           const tc = cells[2] || '';
+          const adSoyad = cells[3] || '';
           if (!/^[0-9]{11}$/.test(tc)) continue;
           out.push({
             tc, adSoyad,
-            // Best-effort mapping of remaining columns; keep raw for later analysis.
-            donemi: cells[3] || '',
-            grubu: cells[4] || '',
-            subesi: cells[5] || '',
+            donemi: cells[4] || '',
             durumu: cells[cells.length - 1] || '',
             listRowRaw: cells,
           });
@@ -785,14 +797,126 @@ export class MebbisManager {
     });
   }
 
+  /** skt04002 ddlPersonel scrape — extracts personnel/staff into the local DB. */
+  private parseAndIngestPersonnelList(win: BrowserWindow, account: Account): void {
+    if (win.isDestroyed()) return;
+    console.log(`[PersonnelParser][${account.label}] Scanning ddlPersonel on skt04002`);
+    win.webContents.executeJavaScript(`
+      (function() {
+        const sel = document.getElementById('ddlPersonel');
+        if (!sel) return { rows: [], reason: 'no ddlPersonel select' };
+        const rows = [];
+        const opts = sel.querySelectorAll('option');
+        // Each option looks like:
+        //   <option value="52897079232">İzin No:6635604  AHMET ERKAN(Aktif)</option>
+        // Placeholder option has value "-1" and label "Personel Seçiniz".
+        const re = /^\\s*İzin\\s*No\\s*:\\s*(\\S+)\\s+(.+?)\\s*\\(([^)]+)\\)\\s*$/i;
+        for (const opt of opts) {
+          const tc = (opt.getAttribute('value') || '').trim();
+          if (!/^[0-9]{11}$/.test(tc)) continue;
+          const label = (opt.textContent || '').replace(/\\s+/g, ' ').trim();
+          const m = label.match(re);
+          if (m) {
+            rows.push({ tc, izinNo: m[1], adSoyad: m[2].trim(), durum: m[3].trim() });
+          } else {
+            // Fallback: keep raw label as the name so we still capture something.
+            rows.push({ tc, adSoyad: label });
+          }
+        }
+        return { rows };
+      })();
+    `).then((result: any) => {
+      if (!result || !Array.isArray(result.rows)) {
+        console.log(`[PersonnelParser][${account.label}] No rows; reason=${result?.reason || 'unknown'}`);
+        return;
+      }
+      const rows = result.rows as any[];
+      if (!rows.length) {
+        console.log(`[PersonnelParser][${account.label}] Empty personnel list`);
+        return;
+      }
+      const db = getPersonnelDb();
+      const r = db.ingestList(account.id, rows);
+      console.log(`[PersonnelParser][${account.label}] Ingested ${rows.length} personnel: created=${r.created}, updated=${r.updated}. Total=${db.countPersonnel(account.id)}`);
+      this.pushStoreToSidebar(win, account);
+    }).catch((e: any) => {
+      console.error(`[PersonnelParser][${account.label}] Scrape failed:`, e);
+    });
+  }
+
+  /** ook15003 list scrape — the canonical personnel inventory (OOK module). */
+  private parseAndIngestPersonnelListOok(win: BrowserWindow, account: Account): void {
+    if (win.isDestroyed()) return;
+    console.log(`[PersonnelParserOok][${account.label}] Scanning ook15003 personnel list`);
+    win.webContents.executeJavaScript(`
+      (function() {
+        function txt(el) { return (el && el.textContent || '').trim().replace(/\\s+/g, ' '); }
+        // Find a frmList table whose header row contains "TC Kimlik No".
+        // Skipping the page-frame frmList tables that wrap the layout.
+        const tables = document.querySelectorAll('table.frmList');
+        let target = null;
+        for (const t of tables) {
+          const head = t.querySelector('tr.frmListBaslik');
+          if (head && /TC\\s*Kimlik\\s*No/i.test(head.textContent || '')) {
+            target = t;
+            break;
+          }
+        }
+        if (!target) return { rows: [], reason: 'no personnel frmList found' };
+        const out = [];
+        const trs = target.querySelectorAll('tr');
+        for (const tr of trs) {
+          if (tr.classList.contains('frmListBaslik')) continue;
+          const cells = Array.from(tr.querySelectorAll('td')).map(txt);
+          // OOK15003 columns:
+          //   0:Aç | 1:Kayıt No | 2:TC | 3:Adı | 4:Soyadı |
+          //   5:Çalışma İzni Baş.Tar. | 6:Çalışma İzni Bit.Tar. |
+          //   7:Kurum Onay Durumu | 8:İl/İlçe Onay Durumu
+          if (cells.length < 9) continue;
+          const tc = cells[2] || '';
+          if (!/^[0-9]{11}$/.test(tc)) continue;
+          out.push({
+            tc,
+            kayitNo: cells[1] || '',
+            ad: cells[3] || '',
+            soyad: cells[4] || '',
+            calismaIzniBas: cells[5] || '',
+            calismaIzniBit: cells[6] || '',
+            kurumOnay: cells[7] || '',
+            ilOnay: cells[8] || '',
+          });
+        }
+        return { rows: out };
+      })();
+    `).then((result: any) => {
+      if (!result || !Array.isArray(result.rows)) {
+        console.log(`[PersonnelParserOok][${account.label}] No rows; reason=${result?.reason || 'unknown'}`);
+        return;
+      }
+      const rows = result.rows as any[];
+      if (!rows.length) {
+        console.log(`[PersonnelParserOok][${account.label}] Empty personnel list`);
+        return;
+      }
+      const db = getPersonnelDb();
+      const r = db.ingestList(account.id, rows);
+      console.log(`[PersonnelParserOok][${account.label}] Ingested ${rows.length} OOK personnel: created=${r.created}, updated=${r.updated}. Total=${db.countPersonnel(account.id)}`);
+      this.pushStoreToSidebar(win, account);
+    }).catch((e: any) => {
+      console.error(`[PersonnelParserOok][${account.label}] Scrape failed:`, e);
+    });
+  }
+
   private serializeStore(account: Account) {
-    return getStudentDb().serialize(account.id);
+    const students = getStudentDb().serialize(account.id);
+    const personnel = getPersonnelDb().serialize(account.id);
+    return { ...students, personnel: personnel.personnel };
   }
 
   private pushStoreToSidebar(win: BrowserWindow, account: Account): void {
     if (win.isDestroyed()) return;
     const payload = this.serializeStore(account);
-    console.log(`[Sidebar][${account.label}] Pushing store: ${payload.students.length} students, ${payload.plates.length} plates`);
+    console.log(`[Sidebar][${account.label}] Pushing store: ${payload.students.length} students, ${payload.plates.length} plates, ${payload.personnel.length} personnel`);
     const json = JSON.stringify(payload).replace(/<\/script/gi, '<\\/script');
     win.webContents.executeJavaScript(`
       (function() {
@@ -800,7 +924,7 @@ export class MebbisManager {
           window.__mebbisStore = ${json};
           if (typeof window.__mebbisRenderStore === 'function') {
             window.__mebbisRenderStore();
-            console.log('[MEBBIS_SIDEBAR] Store re-rendered: ' + window.__mebbisStore.students.length + ' students, ' + window.__mebbisStore.plates.length + ' plates');
+            console.log('[MEBBIS_SIDEBAR] Store re-rendered: ' + window.__mebbisStore.students.length + ' students, ' + window.__mebbisStore.plates.length + ' plates, ' + (window.__mebbisStore.personnel || []).length + ' personnel');
           } else {
             console.log('[MEBBIS_SIDEBAR] Store stashed but no renderer yet');
           }
@@ -1146,6 +1270,7 @@ export class MebbisManager {
         ${!app.isPackaged ? `
         // Developer menu section
         const devTitle = document.createElement('div');
+        devTitle.id = 'mebbis-dev-section-title';
         devTitle.style.cssText = 'padding: 10px 15px; border-top: 2px solid #ff6b35; border-bottom: 1px solid #2a2a4a; font-weight: bold; color: #ff6b35; font-size: 12px; margin-top: auto;';
         devTitle.textContent = '⚙ Developer';
         sidebar.appendChild(devTitle);
@@ -1224,9 +1349,18 @@ export class MebbisManager {
 
         const studentsBtn = makeSectionBtn('mebbis-students-btn', 'Öğrenciler');
         const carsBtn = makeSectionBtn('mebbis-cars-btn', 'Araçlar');
+        const personnelBtn = makeSectionBtn('mebbis-personnel-btn', 'Personeller');
         container.appendChild(studentsBtn);
         container.appendChild(carsBtn);
-        sidebar.appendChild(container);
+        container.appendChild(personnelBtn);
+        // Insert above the dev section if present (dev section is anchored to the bottom
+        // via margin-top:auto); otherwise append at the end of the sidebar.
+        const devAnchor = document.getElementById('mebbis-dev-section-title');
+        if (devAnchor) {
+          sidebar.insertBefore(container, devAnchor);
+        } else {
+          sidebar.appendChild(container);
+        }
         console.log('[MEBBIS_SIDEBAR] Store section buttons injected');
 
         let activeModalKeyHandler = null;
@@ -1250,16 +1384,28 @@ export class MebbisManager {
           modal.style.cssText = 'flex: 1; display: flex; flex-direction: column; padding: 20px; min-height: 0;';
 
           const header = document.createElement('div');
-          header.style.cssText = 'display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; padding-bottom: 10px; border-bottom: 1px solid #2a2a4a; flex-shrink: 0;';
+          header.style.cssText = 'display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; padding-bottom: 10px; border-bottom: 1px solid #2a2a4a; flex-shrink: 0; gap: 12px;';
           const titleEl = document.createElement('h3');
-          titleEl.style.cssText = 'margin: 0; color: #4361ee; font-size: 18px;';
+          titleEl.style.cssText = 'margin: 0; color: #4361ee; font-size: 18px; flex: 1; min-width: 0;';
           titleEl.textContent = opts.title;
+          const rightSide = document.createElement('div');
+          rightSide.style.cssText = 'display: flex; align-items: center; gap: 8px;';
+          if (Array.isArray(opts.headerActions)) {
+            opts.headerActions.forEach(action => {
+              const ab = document.createElement('button');
+              ab.style.cssText = 'background: #4361ee; border: none; color: white; cursor: pointer; padding: 6px 14px; font-size: 13px; border-radius: 4px; font-weight: 500;';
+              ab.textContent = action.label;
+              ab.onclick = () => action.onClick(ab);
+              rightSide.appendChild(ab);
+            });
+          }
           const closeBtn = document.createElement('button');
           closeBtn.textContent = '✕';
           closeBtn.style.cssText = 'background: none; border: none; color: #ccc; cursor: pointer; font-size: 18px; padding: 0 8px; line-height: 1;';
           closeBtn.onclick = closeStoreModal;
+          rightSide.appendChild(closeBtn);
           header.appendChild(titleEl);
-          header.appendChild(closeBtn);
+          header.appendChild(rightSide);
           modal.appendChild(header);
 
           const tableWrap = document.createElement('div');
@@ -1338,7 +1484,7 @@ export class MebbisManager {
         };
 
         carsBtn.onclick = () => {
-          const store = window.__mebbisStore || { students: [], plates: [] };
+          const store = window.__mebbisStore || { students: [], plates: [], personnel: [] };
           openTableModal({
             kind: 'cars',
             title: 'Araçlar (' + store.plates.length + ')',
@@ -1347,20 +1493,87 @@ export class MebbisManager {
           });
         };
 
+        function showInfoOverlay(message) {
+          const ov = document.createElement('div');
+          ov.style.cssText = 'position: fixed; inset: 0; z-index: 10002; background: rgba(0,0,0,0.6); display: flex; align-items: center; justify-content: center; font-family: Arial, sans-serif;';
+          const box = document.createElement('div');
+          box.style.cssText = 'background: #1a1a2e; border: 1px solid #4361ee; border-radius: 8px; padding: 24px; max-width: 480px; color: white;';
+          const t = document.createElement('div');
+          t.style.cssText = 'color: #4361ee; font-size: 16px; font-weight: bold; margin-bottom: 12px;';
+          t.textContent = 'Bilgi';
+          const m = document.createElement('div');
+          m.style.cssText = 'font-size: 14px; line-height: 1.5; color: #ddd; white-space: pre-line;';
+          m.textContent = message;
+          const ok = document.createElement('button');
+          ok.style.cssText = 'margin-top: 16px; background: #4361ee; border: none; color: white; padding: 8px 18px; border-radius: 4px; cursor: pointer; font-size: 14px; float: right;';
+          ok.textContent = 'Tamam';
+          ok.onclick = () => ov.remove();
+          box.appendChild(t);
+          box.appendChild(m);
+          box.appendChild(ok);
+          ov.appendChild(box);
+          ov.onclick = (e) => { if (e.target === ov) ov.remove(); };
+          document.body.appendChild(ov);
+        }
+
+        function personnelGuncelle(btn) {
+          // OOK15003 is the comprehensive personnel list. It only loads when
+          // the user is logged into "Özel Öğretim Kurumları Modülü". A user
+          // currently inside MTSK modülü has no OOK session and must log out
+          // + log back into the OOK module before this can run.
+          const url = location.href || '';
+          const isInMtskModule = /\\/skt\\//i.test(url) || /\\/SKT\\//.test(url);
+          if (isInMtskModule) {
+            showInfoOverlay(
+              'Personel listesini güncellemek için "Özel Öğretim Kurumları Modülü"ne giriş yapmanız gerekiyor.\\n\\n' +
+              'Şu anda "Özel MTSK Modülü"ndesiniz. MEBBİS\\'ten çıkış yapıp modül seçiminde "Özel Öğretim Kurumları"nı seçerek tekrar giriş yapın.'
+            );
+            return;
+          }
+          if (btn) { btn.disabled = true; btn.textContent = 'Yükleniyor...'; btn.style.opacity = '0.6'; }
+          // Navigate to ook15003 — the URL-detection hook in the main process
+          // will fire parseAndIngestPersonnelListOok once the page loads.
+          location.href = 'https://mebbis.meb.gov.tr/Ookgm/ook15003.aspx';
+        }
+
+        personnelBtn.onclick = () => {
+          const store = window.__mebbisStore || { students: [], plates: [], personnel: [] };
+          const rows = (store.personnel || []);
+          openTableModal({
+            kind: 'personnel',
+            title: 'Personeller (' + rows.length + ')',
+            columns: [
+              { key: 'adSoyad', label: 'Ad Soyad' },
+              { key: 'tc', label: 'TC Kimlik' },
+              { key: 'kayitNo', label: 'Kayıt No' },
+              { key: 'izinNo', label: 'İzin No' },
+              { key: 'calismaIzniBit', label: 'İzin Bitiş' },
+              { key: 'durum', label: 'Durum' },
+            ],
+            rows: rows,
+            headerActions: [
+              { label: 'Güncelle', onClick: personnelGuncelle },
+            ],
+          });
+        };
+
         window.__mebbisRenderStore = function() {
-          const store = window.__mebbisStore || { students: [], plates: [] };
+          const store = window.__mebbisStore || { students: [], plates: [], personnel: [] };
           const sBtn = document.getElementById('mebbis-students-btn');
           const cBtn = document.getElementById('mebbis-cars-btn');
+          const pBtn = document.getElementById('mebbis-personnel-btn');
           if (sBtn) sBtn.textContent = 'Öğrenciler (' + store.students.length + ')';
           if (cBtn) cBtn.textContent = 'Araçlar (' + store.plates.length + ')';
+          if (pBtn) pBtn.textContent = 'Personeller (' + (store.personnel || []).length + ')';
           // Refresh open modal in place to show new rows without flicker
           const open = document.getElementById('mebbis-store-modal');
           if (open) {
             const kind = open.dataset.kind;
             if (kind === 'students' && sBtn) sBtn.click();
             else if (kind === 'cars' && cBtn) cBtn.click();
+            else if (kind === 'personnel' && pBtn) pBtn.click();
           }
-          console.log('[MEBBIS_SIDEBAR] Counts updated: ' + store.students.length + ' students, ' + store.plates.length + ' plates');
+          console.log('[MEBBIS_SIDEBAR] Counts updated: ' + store.students.length + ' students, ' + store.plates.length + ' plates, ' + (store.personnel || []).length + ' personnel');
         };
 
         if (window.__mebbisStore) {
@@ -3004,11 +3217,11 @@ export class MebbisManager {
           for (const row of rows) {
             if (row.classList.contains('frmListBaslik')) continue;
             const cells = row.querySelectorAll('td');
-            if (cells.length < 3) continue;
+            if (cells.length < 4) continue;
             const cellTexts = Array.from(cells).map(c => c.textContent.trim());
-            // TC is at column index 2, name at index 1 (based on PHP: $record[2] for TC)
+            // skt02006 columns: 0:S.No | 1:Sil | 2:TC | 3:Adı Soyadı
             const tc = cellTexts[2] || '';
-            const name = cellTexts[1] || '';
+            const name = cellTexts[3] || '';
             if (tc && /^[0-9]{11}$/.test(tc)) {
               students.push({ tc, name });
             }

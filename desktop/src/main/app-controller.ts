@@ -29,6 +29,7 @@ import { AuthStore } from './auth-store';
 import { configureStudentSync, pullAll as pullStudentSync } from './student-sync';
 import { MebbisManager } from './mebbis-manager';
 import { apiClient, MebbisAccount, ActivityLogBody } from './api-client';
+import { configureTemplateErrorReporter } from './template-fetcher';
 import { getCodeLoader } from '../launcher/remote-code-loader';
 import type { VersionCheckResult } from '../launcher/auto-updater';
 import { showBundleWhatsNew, suppressLauncherWhatsNewIfPossible } from './bundle-whats-new';
@@ -911,6 +912,15 @@ export async function start(ctx: BootstrapContext): Promise<AppControllerHandle>
       if (!Number.isFinite(schoolId)) return;
       logActivity({ event: 'pdf_download', school_id: schoolId, pdf_type: pdfType, count });
     });
+
+    // Wire template-fetch failures into the existing activity-log channel.
+    // school_id is best-effort — we use the first available MEBBIS account's
+    // id (numeric) if known, otherwise 0. The backend can resolve the real
+    // school from the bearer token if it cares.
+    configureTemplateErrorReporter(
+      () => authStore.getToken(),
+      () => 0,
+    );
 
     ipcMain.handle('accounts:list', async () => {
       const token = authStore.getToken();

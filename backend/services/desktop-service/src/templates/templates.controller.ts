@@ -34,13 +34,14 @@ const TEMPLATES_BASE = resolveTemplatesBase();
 const TEMPLATES_BASE_RESOLVED = path.resolve(TEMPLATES_BASE);
 
 // Whitelist of allowed template path roots. Everything else is rejected.
-// Keeps parity with the previous GET endpoints:
 //   direksiyon-takip/:filename
 //   simulator/sesim/:filename
-//   simulator/anagrup/:scenario/:filename
+//   simulator/anagrup/:filename                ← base template (current desktop)
+//   simulator/anagrup/:scenario/:filename      ← legacy per-scenario layout
 //   ek4/:filename
+//   k-belgesi/:filename
 const ALLOWED_PATH_PATTERN =
-  /^(direksiyon-takip|simulator\/sesim|simulator\/anagrup\/[^\/]+|ek4|k-belgesi)\/[^\/]+\.html$/;
+  /^(direksiyon-takip|simulator\/sesim|simulator\/anagrup(?:\/[^\/]+)?|ek4|k-belgesi)\/[^\/]+\.html$/;
 
 interface EncryptedTemplateRequest {
   path: string;
