@@ -107,7 +107,7 @@ const DrivingSchoolDashboard: React.FC = () => {
     return (
       <div className="space-y-6">
         <div className="flex justify-between items-center">
-          <h2 className="text-3xl font-bold">Dashboard</h2>
+          <h2 className="text-xl md:text-3xl font-bold">Dashboard</h2>
         </div>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {[...Array(6)].map((_, i) => (
@@ -130,7 +130,7 @@ const DrivingSchoolDashboard: React.FC = () => {
     return (
       <div className="space-y-6">
         <div className="flex justify-between items-center">
-          <h2 className="text-3xl font-bold">Dashboard</h2>
+          <h2 className="text-xl md:text-3xl font-bold">Dashboard</h2>
         </div>
         <Card>
           <CardContent className="p-6">
@@ -148,7 +148,7 @@ const DrivingSchoolDashboard: React.FC = () => {
     <div className="space-y-6">
       <div className="flex justify-between items-center">
         <div>
-          <h2 className="text-3xl font-bold">Dashboard</h2>
+          <h2 className="text-xl md:text-3xl font-bold">Dashboard</h2>
           {activeDrivingSchool && (
             <p className="text-sm text-muted-foreground mt-1">
               {activeDrivingSchool.name} - Gerçek Zamanlı Veriler

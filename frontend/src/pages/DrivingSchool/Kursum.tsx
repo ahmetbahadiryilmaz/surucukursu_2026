@@ -191,8 +191,8 @@ const KursumTable = () => {
   // Context henüz yükleniyorsa loading göster
   if (contextLoading) {
     return (
-      <div className="p-6 rounded-lg shadow-lg bg-white dark:bg-gray-900">
-        <h2 className="text-2xl font-bold mb-6 text-gray-900 dark:text-gray-100">
+      <div className="p-3 md:p-6 rounded-lg shadow-lg bg-white dark:bg-gray-900">
+        <h2 className="text-xl md:text-2xl font-bold mb-6 text-gray-900 dark:text-gray-100">
           MEBBIS Bilgileri
         </h2>
         <p>Kullanıcı bilgileri yükleniyor...</p>
@@ -202,8 +202,8 @@ const KursumTable = () => {
 
   if (loading) {
     return (
-      <div className="p-6 rounded-lg shadow-lg bg-white dark:bg-gray-900">
-        <h2 className="text-2xl font-bold mb-6 text-gray-900 dark:text-gray-100">
+      <div className="p-3 md:p-6 rounded-lg shadow-lg bg-white dark:bg-gray-900">
+        <h2 className="text-xl md:text-2xl font-bold mb-6 text-gray-900 dark:text-gray-100">
           MEBBIS Bilgileri
         </h2>
         <p>MEBBIS bilgileri yükleniyor...</p>
@@ -212,8 +212,8 @@ const KursumTable = () => {
   }
 
   return (
-    <div className="p-6 rounded-lg shadow-lg bg-white dark:bg-gray-900">
-      <h2 className="text-2xl font-bold mb-6 text-gray-900 dark:text-gray-100">
+    <div className="p-3 md:p-6 rounded-lg shadow-lg bg-white dark:bg-gray-900">
+      <h2 className="text-xl md:text-2xl font-bold mb-6 text-gray-900 dark:text-gray-100">
         MEBBIS Bilgileri
       </h2>
 

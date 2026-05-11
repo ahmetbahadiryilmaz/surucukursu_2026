@@ -1,8 +1,8 @@
 import { useState, useEffect } from "react";
-import { useNavigate, Routes, Route } from "react-router-dom"; 
-import { apiService } from "@/services/api-service"; 
+import { useNavigate, useLocation, Routes, Route } from "react-router-dom";
+import { apiService } from "@/services/api-service";
 import { Button } from "@/components/ui/button";
-import { User, ChevronDown, Download, Car, Menu } from "lucide-react";
+import { User, ChevronDown, Download, Car, Menu, Home, Users, FolderOpen, Settings } from "lucide-react";
 import Sidebar from "@/components/sidebars/DrivingSchoolOwnerSidebar";
 import DownloadsSidebar from "@/components/sidebars/DownloadsSidebar";
 import { Sheet, SheetTrigger, SheetContent } from "@/components/ui/sheet";
@@ -47,6 +47,9 @@ export default function DrivingSchoolLayout() {
   const navigate = useNavigate(); 
 
   const { refreshUserFromStorage, user, activeDrivingSchool, setActiveDrivingSchool } = drivingSchoolOwnerContext();
+  const location = useLocation();
+
+  const getActivePage = () => location.pathname.split('/')[2] || '';
 
   // Move refreshUserFromStorage to useEffect
  
@@ -269,31 +272,37 @@ console.log("User data cleared, theme preference preserved");
       {/* Main Content */}
       <div className="flex-1 flex flex-col">
         {/* Header */}
-        <div className="p-4 bg-card text-card-foreground flex justify-between items-center border-b border-border">
+        <div className="p-2 md:p-4 bg-card text-card-foreground flex justify-between items-center border-b border-border sticky top-0 z-50">
           {/* Sidebar Trigger (hamburger — closed by default at all breakpoints) */}
           <Sheet>
             <SheetTrigger asChild>
-              <Button variant="ghost">
-                <Menu className="w-6 h-6" />
+              <Button variant="ghost" size="icon">
+                <Menu className="w-5 h-5" />
               </Button>
             </SheetTrigger>
-            <SheetContent side="left" className="w-64 bg-card text-card-foreground p-4">
-              <Sidebar
-                setActivePage={(page) => navigate(`/driving-school/${page}`)}
-                disabled
-              />
+            <SheetContent side="left" className="w-[80%] sm:w-64 p-0 border-r border-border">
+              <div className="h-full flex flex-col">
+                <div className="p-4 border-b border-border">
+                  <h2 className="font-bold text-lg">MTSK Yönetim</h2>
+                </div>
+                <div className="flex-1 overflow-auto p-4">
+                  <Sidebar
+                    setActivePage={(page) => navigate(`/driving-school/${page}`)}
+                  />
+                </div>
+              </div>
             </SheetContent>
           </Sheet>
 
           {/* Page Title */}
-          <h1 className="text-2xl font-bold">Sürücü Kursu Paneli</h1>
+          <h1 className="text-base md:text-2xl font-bold truncate mx-2">Sürücü Kursu Paneli</h1>
 
           {/* User Menu ve Download Menu */}
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-1 md:gap-4">
             {/* Download Button */}
-            <Button 
-              variant="ghost" 
-              size="icon" 
+            <Button
+              variant="ghost"
+              size="icon"
               onClick={toggleDownloadMenu}
               className="relative"
             >
@@ -309,26 +318,26 @@ console.log("User data cleared, theme preference preserved");
             {user?.drivingSchools && user.drivingSchools.length > 0 && (
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <Button variant="outline" className="text-foreground border-border bg-card flex items-center gap-2">
-                    <Car className="w-4 h-4 mr-1" />
-                    <span className="max-w-[120px] truncate">
+                  <Button variant="outline" className="text-foreground border-border bg-card flex items-center gap-1 px-2 md:px-3">
+                    <Car className="w-4 h-4 shrink-0" />
+                    <span className="hidden sm:inline max-w-[120px] truncate">
                       {activeDrivingSchool?.name || user.drivingSchools[0]?.name || "Sürücü Kursu Seçin"}
                     </span>
-                    <ChevronDown className="w-4 h-4 ml-1" />
+                    <ChevronDown className="hidden sm:block w-4 h-4 shrink-0" />
                   </Button>
                 </DropdownMenuTrigger>
 
-                <DropdownMenuContent className="w-56 bg-card text-card-foreground p-2 border border-border rounded-md shadow-lg">
+                <DropdownMenuContent className="w-56 bg-card text-card-foreground p-2 border border-border rounded-md shadow-lg z-[9999]">
                   <div className="p-2">
                     <p className="text-xs text-muted-foreground mb-2">Sürücü Kurslarım</p>
                     <div className="space-y-1">
                       {user.drivingSchools.map((school, index) => (
-                        <DropdownMenuItem 
+                        <DropdownMenuItem
                           key={school.id}
                           className="flex items-center gap-2 cursor-pointer rounded-md"
                           onClick={() => handleSchoolChange(school.id)}
                         >
-                          <div className={`w-2 h-2 rounded-full ${getSchoolColor(index)}`} />
+                          <div className={`w-2 h-2 rounded-full shrink-0 ${getSchoolColor(index)}`} />
                           <span className="flex-1 truncate">{school.name}</span>
                           {activeDrivingSchool?.id === school.id && (
                             <span className="ml-auto text-xs text-primary">✓</span>
@@ -344,12 +353,13 @@ console.log("User data cleared, theme preference preserved");
             {/* User Dropdown */}
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button variant="outline" className="text-foreground border-border bg-card flex items-center gap-2">
-                  <User className="w-4 h-4 mr-2" /> {user?.email || userEmail}
-                  <ChevronDown className="w-4 h-4 ml-2" />
+                <Button variant="outline" className="text-foreground border-border bg-card flex items-center gap-1 px-2 md:px-3">
+                  <User className="w-4 h-4 shrink-0" />
+                  <span className="hidden sm:inline max-w-[120px] truncate">{user?.email || userEmail}</span>
+                  <ChevronDown className="hidden sm:block w-4 h-4 shrink-0" />
                 </Button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent className="w-48 bg-card text-card-foreground p-2 border border-border rounded-md shadow-lg">
+              <DropdownMenuContent className="w-48 bg-card text-card-foreground p-2 border border-border rounded-md shadow-lg z-[9999]">
                 <DropdownMenuItem onClick={() => navigate('/driving-school/hesabim')}>Hesabım</DropdownMenuItem>
                 <DropdownMenuItem onClick={handleLogout}>Çıkış Yap</DropdownMenuItem>
               </DropdownMenuContent>
@@ -358,11 +368,60 @@ console.log("User data cleared, theme preference preserved");
         </div>
 
         {/* Main Content Area */}
-        <main className="flex-1 p-6 relative">
+        <main className="flex-1 p-3 md:p-6 overflow-auto relative">
           <Routes>
             <Route path="*" element={<DownloadDesktopPage />} />
           </Routes>
         </main>
+
+        {/* Mobile Bottom Navigation */}
+        <div className="md:hidden border-t border-border p-2 flex justify-around bg-card shrink-0">
+          <Button
+            variant={getActivePage() === '' ? "default" : "ghost"}
+            size="sm"
+            className="text-xs flex flex-col items-center p-2 h-auto"
+            onClick={() => navigate("/driving-school/")}
+          >
+            <Home size={16} className="mb-1" />
+            <span>Ana Sayfa</span>
+          </Button>
+          <Button
+            variant={getActivePage() === 'students' ? "default" : "ghost"}
+            size="sm"
+            className="text-xs flex flex-col items-center p-2 h-auto"
+            onClick={() => navigate("/driving-school/students")}
+          >
+            <Users size={16} className="mb-1" />
+            <span>Öğrenciler</span>
+          </Button>
+          <Button
+            variant={getActivePage() === 'cars' ? "default" : "ghost"}
+            size="sm"
+            className="text-xs flex flex-col items-center p-2 h-auto"
+            onClick={() => navigate("/driving-school/cars")}
+          >
+            <Car size={16} className="mb-1" />
+            <span>Araçlar</span>
+          </Button>
+          <Button
+            variant={getActivePage() === 'dosyalarim' ? "default" : "ghost"}
+            size="sm"
+            className="text-xs flex flex-col items-center p-2 h-auto"
+            onClick={() => navigate("/driving-school/dosyalarim")}
+          >
+            <FolderOpen size={16} className="mb-1" />
+            <span>Dosyalarım</span>
+          </Button>
+          <Button
+            variant={getActivePage() === 'kursum' ? "default" : "ghost"}
+            size="sm"
+            className="text-xs flex flex-col items-center p-2 h-auto"
+            onClick={() => navigate("/driving-school/kursum")}
+          >
+            <Settings size={16} className="mb-1" />
+            <span>Ayarlar</span>
+          </Button>
+        </div>
       </div>
 
       {/* Downloads Sidebar Component */}

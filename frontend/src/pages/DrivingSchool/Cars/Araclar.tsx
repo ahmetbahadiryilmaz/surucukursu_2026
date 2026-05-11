@@ -262,13 +262,13 @@ const AraclarTable = (): JSX.Element => {
   }
   
   return (
-    <div className="p-6 rounded-lg shadow-lg bg-white dark:bg-black">
-      <div className="flex justify-between items-center mb-4">
-        <h2 className="text-2xl font-bold text-gray-900 dark:text-gray-100">Araçlar</h2>
-        <Button 
+    <div className="p-3 md:p-6 rounded-lg shadow-lg bg-white dark:bg-black">
+      <div className="flex justify-between items-center mb-4 gap-2">
+        <h2 className="text-xl md:text-2xl font-bold text-gray-900 dark:text-gray-100">Araçlar</h2>
+        <Button
           onClick={handleSync}
           disabled={syncing}
-          className="bg-blue-600 hover:bg-blue-700 text-white"
+          className="bg-blue-600 hover:bg-blue-700 text-white shrink-0"
         >
           {syncing ? "Senkronize ediliyor..." : "Senkronize Et"}
         </Button>
@@ -289,53 +289,63 @@ const AraclarTable = (): JSX.Element => {
         <p><strong>Error:</strong> {error || 'None'}</p>
       </div>
       
-      <Table className="mt-4">
-        <TableHeader>
-          <TableRow>
-            <TableHead>Marka</TableHead>
-            <TableHead>Model</TableHead>
-            <TableHead>Plaka</TableHead>
-            <TableHead>Yıl</TableHead>
-            <TableHead>Hizmette</TableHead>
-            <TableHead className="text-right">Detay</TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {araclar?.length > 0 ? (
-            araclar.map((arac) => (
-              <TableRow key={arac.id}>
-                <TableCell>{arac.brand}</TableCell>
-                <TableCell>{arac.model}</TableCell>
-                <TableCell>{arac.plate_number}</TableCell>
-                <TableCell>{arac.year}</TableCell>
-                <TableCell>
-                  {arac.status && arac.status.toLowerCase().includes('hizmette') ? (
-                    <span className="text-green-600 font-medium">Hizmette</span>
-                  ) : (
-                    <span className="text-red-500 font-medium">Hizmette Değil</span>
-                  )}
-                </TableCell>
-                <TableCell className="text-right">
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => setSelectedArac(arac)}
-                    title="Detay Gör"
-                  >
-                    <Eye className="h-4 w-4" />
-                  </Button>
+      <div className="overflow-x-auto mt-4">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Marka / Model</TableHead>
+              <TableHead>Plaka</TableHead>
+              <TableHead className="hidden sm:table-cell">Yıl</TableHead>
+              <TableHead className="hidden sm:table-cell">Hizmette</TableHead>
+              <TableHead className="text-right">Detay</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {araclar?.length > 0 ? (
+              araclar.map((arac) => (
+                <TableRow key={arac.id}>
+                  <TableCell>
+                    <div className="font-medium">{arac.brand}</div>
+                    <div className="text-xs text-muted-foreground">{arac.model}</div>
+                    <div className="sm:hidden text-xs mt-1">
+                      {arac.status && arac.status.toLowerCase().includes('hizmette') ? (
+                        <span className="text-green-600 font-medium">Hizmette</span>
+                      ) : (
+                        <span className="text-red-500 font-medium">Hizmette Değil</span>
+                      )}
+                    </div>
+                  </TableCell>
+                  <TableCell>{arac.plate_number}</TableCell>
+                  <TableCell className="hidden sm:table-cell">{arac.year}</TableCell>
+                  <TableCell className="hidden sm:table-cell">
+                    {arac.status && arac.status.toLowerCase().includes('hizmette') ? (
+                      <span className="text-green-600 font-medium">Hizmette</span>
+                    ) : (
+                      <span className="text-red-500 font-medium">Hizmette Değil</span>
+                    )}
+                  </TableCell>
+                  <TableCell className="text-right">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setSelectedArac(arac)}
+                      title="Detay Gör"
+                    >
+                      <Eye className="h-4 w-4" />
+                    </Button>
+                  </TableCell>
+                </TableRow>
+              ))
+            ) : (
+              <TableRow>
+                <TableCell colSpan={5} className="text-center">
+                  Veri bulunamadı.
                 </TableCell>
               </TableRow>
-            ))
-          ) : (
-            <TableRow>
-              <TableCell colSpan={6} className="text-center">
-                Veri bulunamadı.
-              </TableCell>
-            </TableRow>
-          )}
-        </TableBody>
-      </Table>
+            )}
+          </TableBody>
+        </Table>
+      </div>
 
       {/* MEBBIS Credentials Modal */}
       <MebbisCredentialsModal

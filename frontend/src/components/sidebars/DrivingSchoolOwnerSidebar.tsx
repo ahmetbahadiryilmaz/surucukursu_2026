@@ -63,7 +63,7 @@ const Sidebar = ({ setActivePage, disabled = false }: SidebarProps) => {
   ];
 
   return (
-    <div className="w-64 h-full border-r border-border bg-card text-card-foreground hidden md:block">
+    <div className="w-full h-full bg-card text-card-foreground">
       <div className="p-6">
         <h2 className="text-xl font-bold mb-6">MTSK Yönetim</h2>
 

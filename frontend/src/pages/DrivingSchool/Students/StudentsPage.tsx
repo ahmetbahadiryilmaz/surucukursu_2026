@@ -353,13 +353,13 @@ const StudentsTable: React.FC<StudentsProps> = ({ onDownload, onJobStart }) => {
   }
 
   return (
-    <div className="p-6 rounded-lg shadow-lg bg-white dark:bg-black relative">
-      <div className="flex justify-between items-center mb-4">
-        <h2 className="text-2xl font-bold text-gray-900 dark:text-gray-100">Öğrenci Raporları</h2>
-        <Button 
+    <div className="p-3 md:p-6 rounded-lg shadow-lg bg-white dark:bg-black relative">
+      <div className="flex justify-between items-center mb-4 gap-2">
+        <h2 className="text-xl md:text-2xl font-bold text-gray-900 dark:text-gray-100">Öğrenci Raporları</h2>
+        <Button
           onClick={handleSync}
           disabled={syncing}
-          className="bg-blue-600 hover:bg-blue-700 text-white"
+          className="bg-blue-600 hover:bg-blue-700 text-white shrink-0"
         >
           {syncing ? "Senkronize ediliyor..." : "Senkronize Et"}
         </Button>
@@ -372,55 +372,60 @@ const StudentsTable: React.FC<StudentsProps> = ({ onDownload, onJobStart }) => {
         </div>
       )}
 
-      <Table className="mt-4">
-        <TableHeader>
-          <TableRow>
-            <TableHead>Ad Soyad</TableHead>
-            <TableHead>Email</TableHead>
-            <TableHead>Telefon</TableHead>
-            <TableHead>Raporlar</TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {students.length > 0 ? (
-            students.map((student) => (
-              <TableRow key={student.id}>
-                <TableCell>{student.name}</TableCell>
-                <TableCell>{student.email}</TableCell>
-                <TableCell>{student.phone}</TableCell>
-                <TableCell>
-                  <div className="flex space-x-2">
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      className="text-xs px-2 py-1 flex items-center gap-1"
-                      onClick={() => handleRaporIndir(student, "simulasyon")}
-                    >
-                      <Download size={14} />
-                      Simulasyon
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      className="text-xs px-2 py-1 flex items-center gap-1"
-                      onClick={() => handleRaporIndir(student, "direksiyon")}
-                    >
-                      <Download size={14} />
-                      Direksiyon Takip
-                    </Button>
-                  </div>
+      <div className="overflow-x-auto mt-4">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Ad Soyad</TableHead>
+              <TableHead className="hidden sm:table-cell">Email</TableHead>
+              <TableHead className="hidden sm:table-cell">Telefon</TableHead>
+              <TableHead>Raporlar</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {students.length > 0 ? (
+              students.map((student) => (
+                <TableRow key={student.id}>
+                  <TableCell>
+                    <div>{student.name}</div>
+                    <div className="text-xs text-muted-foreground sm:hidden">{student.phone}</div>
+                  </TableCell>
+                  <TableCell className="hidden sm:table-cell">{student.email}</TableCell>
+                  <TableCell className="hidden sm:table-cell">{student.phone}</TableCell>
+                  <TableCell>
+                    <div className="flex flex-col sm:flex-row gap-1">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="text-xs px-2 py-1 flex items-center gap-1"
+                        onClick={() => handleRaporIndir(student, "simulasyon")}
+                      >
+                        <Download size={14} />
+                        Simulasyon
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="text-xs px-2 py-1 flex items-center gap-1"
+                        onClick={() => handleRaporIndir(student, "direksiyon")}
+                      >
+                        <Download size={14} />
+                        Direksiyon
+                      </Button>
+                    </div>
+                  </TableCell>
+                </TableRow>
+              ))
+            ) : (
+              <TableRow>
+                <TableCell colSpan={4} className="text-center">
+                  Veri bulunamadı.
                 </TableCell>
               </TableRow>
-            ))
-          ) : (
-            <TableRow>
-              <TableCell colSpan={4} className="text-center">
-                Veri bulunamadı.
-              </TableCell>
-            </TableRow>
-          )}
-        </TableBody>
-      </Table>
+            )}
+          </TableBody>
+        </Table>
+      </div>
 
       {/* Empty state dialog */}
       <AlertDialog open={showEmptyDialog} onOpenChange={setShowEmptyDialog}>
