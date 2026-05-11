@@ -8,12 +8,15 @@
  *      → tc, izinNo, adSoyad, durum (Aktif/Pasif)
  *      Passive scrape: limited to teachers who can deliver SKT lessons.
  *
- *   2. OOK module — ook15003 personnel list table (frmList):
- *        Aç | Kayıt No | TC | Adı | Soyadı | Çalışma İzni Baş.Tar. | …Bit.Tar. |
- *        Kurum Onay Durumu | İl/İlçe Onay Durumu
- *      → tc, kayitNo, ad, soyad, calismaIzniBas, calismaIzniBit,
- *        kurumOnay, ilOnay
- *      Triggered by the "Güncelle" button — covers ALL personnel.
+ *   2. OOK module — ook12001 Personel Arama list (#dgPersonelArama, 20 cols):
+ *        Aç | İzin No | TC | Adı | Soyadı | Statüsü | Görevi | Branşı |
+ *        İl | İlçe | Kurum Kodu | Kurum Adı | Görev Başlama Kurum Adı |
+ *        İzin Baş | İzin Bit | Görevden Ayrılma | Maaş KDS | Ücret KDS |
+ *        Durumu | Fotoğraf
+ *      → tc, izinNo, ad, soyad, statusu, gorevi, bransi, il, ilce,
+ *        kurumKodu, kurumAdi, kurumAdiBaslangic, calismaIzniBas,
+ *        calismaIzniBit, ayrilmaTarihi, maasKds, ucretKds, durumu
+ *      Triggered by the "Güncelle" button — empty Ara = all personnel.
  *
  * Mirror of student-db.ts. Will be migrated to a remote MySQL store later;
  * for now everything is bucketed per desktop accountId (mebbis account).
@@ -31,14 +34,44 @@ export interface PersonnelRecord {
   // SKT module (skt04002)
   izinNo?: string;
   durum?: string;
-  // OOK module (ook15003)
-  kayitNo?: string;
+  // OOK list (ook12001 / dgPersonelArama)
   ad?: string;
   soyad?: string;
+  statusu?: string;
+  gorevi?: string;
+  bransi?: string;
+  il?: string;
+  ilce?: string;
+  kurumKodu?: string;
+  kurumAdi?: string;
+  kurumAdiBaslangic?: string;
   calismaIzniBas?: string;
   calismaIzniBit?: string;
-  kurumOnay?: string;
-  ilOnay?: string;
+  ayrilmaTarihi?: string;
+  maasKds?: string;
+  ucretKds?: string;
+  durumu?: string;
+  // ook12002 detail fields (scraped via sequential Aç-button batch)
+  dogumTarihi?: string;
+  ogrenimBilgisi?: string;
+  mezuniyetBelgeCinsi?: string;
+  mezuniyetTarihi?: string;
+  mezuniyetBelgeTarihi?: string;
+  mezuniyetBelgeSayisi?: string;
+  mezuniyetAciklama?: string;
+  brans1?: string;
+  brans2?: string;
+  brans3?: string;
+  brans4?: string;
+  dersUcret?: string;
+  netBrutUcret?: string;
+  ePosta?: string;
+  tel?: string;
+  maasKarsiligiDersSayisi?: string;
+  dersUcretiKarsiligiDersSayisi?: string;
+  ayrilmaAciklama?: string;
+  derseProgramlar?: Array<{ program: string; tip: string }>;
+  detailScrapedAt?: number;
   lastSeenAt: number;
 }
 
@@ -60,14 +93,50 @@ export interface PersonnelIngestData {
   // SKT (skt04002)
   izinNo?: string;
   durum?: string;
-  // OOK (ook15003)
-  kayitNo?: string;
+  // OOK (ook12001)
   ad?: string;
   soyad?: string;
+  statusu?: string;
+  gorevi?: string;
+  bransi?: string;
+  il?: string;
+  ilce?: string;
+  kurumKodu?: string;
+  kurumAdi?: string;
+  kurumAdiBaslangic?: string;
   calismaIzniBas?: string;
   calismaIzniBit?: string;
-  kurumOnay?: string;
-  ilOnay?: string;
+  ayrilmaTarihi?: string;
+  maasKds?: string;
+  ucretKds?: string;
+  durumu?: string;
+}
+
+export interface PersonnelDetailData {
+  dogumTarihi?: string;
+  ogrenimBilgisi?: string;
+  mezuniyetBelgeCinsi?: string;
+  mezuniyetTarihi?: string;
+  mezuniyetBelgeTarihi?: string;
+  mezuniyetBelgeSayisi?: string;
+  mezuniyetAciklama?: string;
+  gorevi?: string;
+  statusu?: string;
+  bransi?: string;
+  brans2?: string;
+  brans3?: string;
+  brans4?: string;
+  dersUcret?: string;
+  netBrutUcret?: string;
+  calismaIzniBas?: string;
+  calismaIzniBit?: string;
+  maasKarsiligiDersSayisi?: string;
+  dersUcretiKarsiligiDersSayisi?: string;
+  durumu?: string;
+  ayrilmaAciklama?: string;
+  ePosta?: string;
+  tel?: string;
+  derseProgramlar?: Array<{ program: string; tip: string }>;
 }
 
 export class PersonnelDb {
@@ -138,39 +207,67 @@ export class PersonnelDb {
         row.adSoyad ||
         ([row.ad, row.soyad].filter(Boolean).join(' ').trim() || undefined);
       const existing = bucket.personnel[row.tc];
+      const listFields: (keyof PersonnelIngestData)[] = [
+        'izinNo', 'durum', 'ad', 'soyad',
+        'statusu', 'gorevi', 'bransi', 'il', 'ilce',
+        'kurumKodu', 'kurumAdi', 'kurumAdiBaslangic',
+        'calismaIzniBas', 'calismaIzniBit', 'ayrilmaTarihi',
+        'maasKds', 'ucretKds', 'durumu',
+      ];
       if (existing) {
         if (combinedName) existing.adSoyad = combinedName;
-        if (row.izinNo) existing.izinNo = row.izinNo;
-        if (row.durum) existing.durum = row.durum;
-        if (row.kayitNo) existing.kayitNo = row.kayitNo;
-        if (row.ad) existing.ad = row.ad;
-        if (row.soyad) existing.soyad = row.soyad;
-        if (row.calismaIzniBas) existing.calismaIzniBas = row.calismaIzniBas;
-        if (row.calismaIzniBit) existing.calismaIzniBit = row.calismaIzniBit;
-        if (row.kurumOnay) existing.kurumOnay = row.kurumOnay;
-        if (row.ilOnay) existing.ilOnay = row.ilOnay;
+        for (const k of listFields) {
+          const v = row[k];
+          if (v !== undefined && v !== '') (existing as any)[k] = v;
+        }
         existing.lastSeenAt = now;
         updated++;
       } else {
-        bucket.personnel[row.tc] = {
+        const rec: PersonnelRecord = {
           tc: row.tc,
           adSoyad: combinedName || '',
-          izinNo: row.izinNo,
-          durum: row.durum,
-          kayitNo: row.kayitNo,
-          ad: row.ad,
-          soyad: row.soyad,
-          calismaIzniBas: row.calismaIzniBas,
-          calismaIzniBit: row.calismaIzniBit,
-          kurumOnay: row.kurumOnay,
-          ilOnay: row.ilOnay,
           lastSeenAt: now,
         };
+        for (const k of listFields) {
+          const v = row[k];
+          if (v !== undefined) (rec as any)[k] = v;
+        }
+        bucket.personnel[row.tc] = rec;
         created++;
       }
     }
     if (created || updated) this.markDirty();
     return { created, updated };
+  }
+
+  /**
+   * Merge ook12002 detail data into an existing personnel record identified by TC.
+   * Returns false if the TC is not found (list must be ingested first).
+   */
+  ingestDetail(accountId: string, tc: string, detail: PersonnelDetailData): boolean {
+    if (!tc || !/^\d{11}$/.test(tc)) return false;
+    const bucket = this.getBucket(accountId);
+    const rec = bucket.personnel[tc];
+    if (!rec) return false;
+    const detailFields: (keyof PersonnelDetailData)[] = [
+      'dogumTarihi', 'ogrenimBilgisi',
+      'mezuniyetBelgeCinsi', 'mezuniyetTarihi', 'mezuniyetBelgeTarihi',
+      'mezuniyetBelgeSayisi', 'mezuniyetAciklama',
+      'gorevi', 'statusu', 'bransi', 'brans2', 'brans3', 'brans4',
+      'dersUcret', 'netBrutUcret',
+      'calismaIzniBas', 'calismaIzniBit',
+      'maasKarsiligiDersSayisi', 'dersUcretiKarsiligiDersSayisi',
+      'durumu', 'ayrilmaAciklama',
+      'ePosta', 'tel',
+    ];
+    for (const k of detailFields) {
+      const v = detail[k];
+      if (v !== undefined) (rec as any)[k] = v;
+    }
+    if (detail.derseProgramlar !== undefined) rec.derseProgramlar = detail.derseProgramlar;
+    rec.detailScrapedAt = Date.now();
+    this.markDirty();
+    return true;
   }
 
   serialize(accountId: string): { personnel: PersonnelRecord[] } {

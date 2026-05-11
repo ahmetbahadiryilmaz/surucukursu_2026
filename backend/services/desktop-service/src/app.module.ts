@@ -9,6 +9,7 @@ import { ActivityLogModule } from './activity-log/activity-log.module';
 import { TemplatesModule } from './templates/templates.module';
 import { DesktopCodeModule } from './desktop-code/desktop-code.module';
 import { StudentStoreModule } from './student-store/student-store.module';
+import { PersonnelStoreModule } from './personnel-store/personnel-store.module';
 import { validate, getApiServerDatabaseConfig } from '@surucukursu/shared';
 import {
   AdminEntity,
@@ -22,6 +23,9 @@ import {
   DrivingSchoolStudentMebbisEntity,
   DrivingSchoolStudentMebbisExamEntity,
   DrivingSchoolStudentMebbisLessonEntity,
+  DrivingSchoolPersonnelEntity,
+  DrivingSchoolPersonnelLinkEntity,
+  DrivingSchoolPersonnelProgramEntity,
   DrivingSchoolCarEntity,
   MebbisCookie,
   SystemLogsEntity,
@@ -52,6 +56,9 @@ import {
       DrivingSchoolStudentMebbisEntity,
       DrivingSchoolStudentMebbisExamEntity,
       DrivingSchoolStudentMebbisLessonEntity,
+      DrivingSchoolPersonnelEntity,
+      DrivingSchoolPersonnelLinkEntity,
+      DrivingSchoolPersonnelProgramEntity,
       DrivingSchoolCarEntity,
       MebbisCookie,
       SystemLogsEntity,
@@ -67,6 +74,7 @@ import {
     TemplatesModule,
     DesktopCodeModule,
     StudentStoreModule,
+    PersonnelStoreModule,
     HealthModule,
   ],
 })

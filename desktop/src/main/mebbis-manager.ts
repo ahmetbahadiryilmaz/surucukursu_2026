@@ -7,6 +7,7 @@ import { fetchEncryptedTemplate } from './template-fetcher';
 import { getRequestLogger } from './request-logger';
 import { getStudentDb } from './student-db';
 import { pushList, pushDetail } from './student-sync';
+import { pushPersonnelList, pushPersonnelDetail } from './personnel-sync';
 import { getPersonnelDb } from './personnel-db';
 
 
@@ -86,10 +87,27 @@ export class MebbisManager {
 
   // Personnel-update navigation: when the user clicks "Güncelle" we set this
   // flag, navigate to OOK's home (ook00001) to establish the OOK module
-  // session, then auto-navigate to ook15003 on home-page load. A direct hop
-  // to ook15003 from elsewhere in MEBBIS bounces back to ook00001, so the
+  // session, then auto-navigate to ook12001 on home-page load. A direct hop
+  // to ook12001 from elsewhere in MEBBIS bounces back to ook00001, so the
   // two-step is mandatory.
   private pendingPersonnelUpdate: Set<string> = new Set();
+
+  // Tracks accounts where the auto-Ara click has already been fired on
+  // ook12001 this update cycle, preventing infinite reload loops.
+  private personnelAutoSearched: Set<string> = new Set();
+
+  // Sequential batch detail scraping state: after list is scraped from ook12001,
+  // we click each "Aç" button one by one to visit ook12002 and extract full data.
+  private pendingPersonnelBatchDetail: {
+    accountId: string;
+    totalRows: number;
+    currentIndex: number;
+    formState: Record<string, string>; // VIEWSTATE captured from ook12001 results
+  } | null = null;
+
+  // Tracks accounts that have completed a full detail batch in this session.
+  // Cleared when Güncelle is triggered so a fresh update re-scrapes everything.
+  private personnelBatchDetailDone: Set<string> = new Set();
 
   // Demo subscription gating: cap tekli at 5 (toplu blocked entirely)
   private static readonly DEMO_PDF_LIMIT = 5;
@@ -342,12 +360,59 @@ export class MebbisManager {
         this.openStudent(win, account, tc);
       }
       if (message === 'MEBBIS_REQUEST_PERSONNEL_UPDATE') {
-        console.log(`[PersonnelUpdate][${account.label}] Güncelle requested — routing via OOK home`);
+        console.log(`[PersonnelUpdate][${account.label}] Güncelle requested`);
         this.pendingPersonnelUpdate.add(account.id);
-        win.loadURL('https://mebbis.meb.gov.tr/Ookgm/ook00001.aspx').catch((e) => {
-          console.error(`[PersonnelUpdate][${account.label}] loadURL ook00001 failed:`, e);
-          this.pendingPersonnelUpdate.delete(account.id);
-        });
+        this.personnelAutoSearched.delete(account.id); // reset so auto-Ara fires on next ook12001 load
+        this.personnelBatchDetailDone.delete(account.id); // allow re-scraping detail on next update
+        this.pendingPersonnelBatchDetail = null; // abort any in-progress batch
+        const currentURL = win.webContents.getURL();
+        if (currentURL.toLowerCase().includes('/skt/')) {
+          // In MTSK module — click Modül Çıkış to exit the module first
+          console.log(`[PersonnelUpdate][${account.label}] In MTSK module — clicking Modül Çıkış`);
+          win.webContents.executeJavaScript(`
+            (function() {
+              const all = Array.from(document.querySelectorAll('a, td, button, input[type="button"]'));
+              for (const el of all) {
+                const txt = (el.textContent || el.value || '').trim();
+                if (txt === 'Modül Çıkış' || txt === 'Modul Cikis') { el.click(); return true; }
+              }
+              for (const el of all) {
+                const href = el.getAttribute('href') || '';
+                const onclick = el.getAttribute('onclick') || '';
+                if (href.toLowerCase().includes('main.aspx') || onclick.toLowerCase().includes('main.aspx')) {
+                  el.click(); return true;
+                }
+              }
+              console.log('[MEBBIS] Modül Çıkış not found, falling back to direct OOK navigation');
+              return false;
+            })();
+          `).then((clicked: unknown) => {
+            if (!clicked) {
+              win.loadURL('https://mebbis.meb.gov.tr/Ookgm/ook00001.aspx').catch((e) => {
+                console.error(`[PersonnelUpdate][${account.label}] ook00001 fallback failed:`, e);
+                this.pendingPersonnelUpdate.delete(account.id);
+              });
+            }
+            // else: Modül Çıkış click will trigger navigation → did-finish-load handles the rest
+          }).catch(() => {
+            win.loadURL('https://mebbis.meb.gov.tr/Ookgm/ook00001.aspx').catch(() => {});
+          });
+        } else {
+          win.loadURL('https://mebbis.meb.gov.tr/Ookgm/ook00001.aspx').catch((e) => {
+            console.error(`[PersonnelUpdate][${account.label}] loadURL ook00001 failed:`, e);
+            this.pendingPersonnelUpdate.delete(account.id);
+          });
+        }
+      }
+      if (message.startsWith('MEBBIS_K_BELGESI:')) {
+        const payload = message.replace('MEBBIS_K_BELGESI:', '').trim();
+        try {
+          const data = JSON.parse(payload);
+          console.log(`[${account.label}] K Belgesi requested for aday: ${data.adayAd} ${data.adaySoyad}`);
+          this.generateKBelgesiPdf(data, win);
+        } catch (e) {
+          console.error(`[${account.label}] K Belgesi parse error:`, e);
+        }
       }
       if (message === 'MEBBIS_BATCH_CANCEL') {
         console.log(`[${account.label}] Batch cancelled by user`);
@@ -483,23 +548,43 @@ export class MebbisManager {
         this.hideStatus(win);
         this.injectLeftMenu(win, account);
         this.parseAndIngestPersonnelList(win, account);
-      } else if (currentURL.toLowerCase().includes('ook00001') && this.pendingPersonnelUpdate.has(account.id)) {
-        // Güncelle landed us on OOK home — session is now established.
-        // Chain-navigate to ook15003 to trigger the personnel scrape.
-        console.log(`[PersonnelUpdate][${account.label}] OOK home loaded, navigating to ook15003`);
+      } else if (currentURL.toLowerCase().includes('main.aspx') && this.pendingPersonnelUpdate.has(account.id)) {
+        // After Modül Çıkış from MTSK — portal loaded, now navigate to OOK module home
+        console.log(`[PersonnelUpdate][${account.label}] Main portal loaded after Modül Çıkış, navigating to OOK`);
         this.injectLeftMenu(win, account);
-        win.loadURL('https://mebbis.meb.gov.tr/Ookgm/ook15003.aspx').catch((e) => {
-          console.error(`[PersonnelUpdate][${account.label}] loadURL ook15003 failed:`, e);
+        win.loadURL('https://mebbis.meb.gov.tr/Ookgm/ook00001.aspx').catch((e) => {
+          console.error(`[PersonnelUpdate][${account.label}] ook00001 from main failed:`, e);
           this.pendingPersonnelUpdate.delete(account.id);
         });
-      } else if (currentURL.toLowerCase().includes('ook15003')) {
-        // ook15003 is the canonical personnel list (Özel Öğretim Kurumları
-        // Modülü). Richer than skt04002 — has Kayıt No, ad/soyad split,
-        // çalışma izni dates, onay durumu. Scraped on every visit.
+      } else if (currentURL.toLowerCase().includes('ook00001') && this.pendingPersonnelUpdate.has(account.id)) {
+        // Güncelle landed us on OOK home — session is now established.
+        // Chain-navigate to ook12001 (Personel Arama) to trigger the scrape.
+        console.log(`[PersonnelUpdate][${account.label}] OOK home loaded, navigating to ook12001`);
+        this.injectLeftMenu(win, account);
+        win.loadURL('https://mebbis.meb.gov.tr/Ookgm/ook12001.aspx').catch((e) => {
+          console.error(`[PersonnelUpdate][${account.label}] loadURL ook12001 failed:`, e);
+          this.pendingPersonnelUpdate.delete(account.id);
+        });
+      } else if (currentURL.toLowerCase().includes('ook12001')) {
+        // ook12001 is the Personel Arama page. Empty Ara click lists all
+        // personnel of the kurum in #dgPersonelArama (20-column grid).
         this.pendingPersonnelUpdate.delete(account.id);
         this.hideStatus(win);
         this.injectLeftMenu(win, account);
-        this.parseAndIngestPersonnelListOok(win, account);
+        if (this.pendingPersonnelBatchDetail?.accountId === account.id) {
+          // Batch in progress — page was re-visited for a specific index.
+          // Trigger the next postback immediately.
+          this.triggerPersonnelAcPostback(win, account, this.pendingPersonnelBatchDetail.currentIndex);
+        } else {
+          this.parseAndIngestPersonnelListOok(win, account);
+        }
+      } else if (currentURL.toLowerCase().includes('ook12002')) {
+        // ook12002 is the personnel detail page, loaded after clicking "Aç" on ook12001.
+        this.hideStatus(win);
+        this.injectLeftMenu(win, account);
+        if (this.pendingPersonnelBatchDetail?.accountId === account.id) {
+          this.scrapePersonnelDetail(win, account);
+        }
       } else if (currentURL.toLowerCase().includes('skt02009')) {
         // Handle skt02009 page loads for direksiyon takip download
         if (this.pendingDownload && this.pendingDownloadPhase === 'navigate') {
@@ -864,61 +949,92 @@ export class MebbisManager {
       const r = db.ingestList(account.id, rows);
       console.log(`[PersonnelParser][${account.label}] Ingested ${rows.length} personnel: created=${r.created}, updated=${r.updated}. Total=${db.countPersonnel(account.id)}`);
       this.pushStoreToSidebar(win, account);
+      pushPersonnelList(account.id, rows);
     }).catch((e: any) => {
       console.error(`[PersonnelParser][${account.label}] Scrape failed:`, e);
     });
   }
 
-  /** ook15003 list scrape — the canonical personnel inventory (OOK module). */
+  /** ook12001 (Personel Arama) list scrape — canonical personnel inventory. */
   private parseAndIngestPersonnelListOok(win: BrowserWindow, account: Account): void {
     if (win.isDestroyed()) return;
-    console.log(`[PersonnelParserOok][${account.label}] Scanning ook15003 personnel list`);
+    // Guard: only auto-click Ara once per update cycle to prevent infinite reloads.
+    const alreadySearched = this.personnelAutoSearched.has(account.id);
+    console.log(`[PersonnelParserOok][${account.label}] Scanning ook12001 personnel list (alreadySearched=${alreadySearched})`);
     win.webContents.executeJavaScript(`
       (function() {
         function txt(el) { return (el && el.textContent || '').trim().replace(/\\s+/g, ' '); }
-        // Find a frmList table whose header row contains "TC Kimlik No".
-        // Skipping the page-frame frmList tables that wrap the layout.
-        const tables = document.querySelectorAll('table.frmList');
-        let target = null;
-        for (const t of tables) {
-          const head = t.querySelector('tr.frmListBaslik');
-          if (head && /TC\\s*Kimlik\\s*No/i.test(head.textContent || '')) {
-            target = t;
-            break;
+        const grid = document.getElementById('dgPersonelArama');
+        if (!grid) {
+          // Grid not rendered yet — pre-select "Görevde" (cmbPersonelDurum=1)
+          // so MEBBIS returns one row per ACTIVE teacher (it lists one row per
+          // çalışma izni record, so without this filter the same TC appears
+          // multiple times for past terminated contracts), then click Ara.
+          if (!${alreadySearched}) {
+            const durumSel = document.getElementById('cmbPersonelDurum');
+            if (durumSel) {
+              durumSel.value = '1';
+              durumSel.dispatchEvent(new Event('change', { bubbles: true }));
+            }
+            const araBtn = document.getElementById('btnAra');
+            if (araBtn) {
+              araBtn.click();
+              return { rows: [], autoSearchTriggered: true };
+            }
           }
+          return { rows: [], reason: 'dgPersonelArama not found' };
         }
-        if (!target) return { rows: [], reason: 'no personnel frmList found' };
         const out = [];
-        const trs = target.querySelectorAll('tr');
+        const trs = grid.querySelectorAll('tr');
         for (const tr of trs) {
           if (tr.classList.contains('frmListBaslik')) continue;
-          const cells = Array.from(tr.querySelectorAll('td')).map(txt);
-          // OOK15003 columns:
-          //   0:Aç | 1:Kayıt No | 2:TC | 3:Adı | 4:Soyadı |
-          //   5:Çalışma İzni Baş.Tar. | 6:Çalışma İzni Bit.Tar. |
-          //   7:Kurum Onay Durumu | 8:İl/İlçe Onay Durumu
-          if (cells.length < 9) continue;
+          const tds = Array.from(tr.querySelectorAll('td'));
+          if (tds.length < 19) continue;
+          const cells = tds.map(txt);
+          // OOK12001 columns:
+          //   0:Aç | 1:İzin No | 2:TC | 3:Adı | 4:Soyadı | 5:Statüsü |
+          //   6:Görevi | 7:Branşı | 8:İl | 9:İlçe | 10:Kurum Kodu |
+          //   11:Kurum Adı | 12:Görev Başlama Kurum Adı |
+          //   13:İzin Baş | 14:İzin Bit | 15:Görevden Ayrılma |
+          //   16:Maaş KDS | 17:Ücret KDS | 18:Durumu | 19:Fotoğraf
           const tc = cells[2] || '';
           if (!/^[0-9]{11}$/.test(tc)) continue;
           out.push({
             tc,
-            kayitNo: cells[1] || '',
-            ad: cells[3] || '',
-            soyad: cells[4] || '',
-            calismaIzniBas: cells[5] || '',
-            calismaIzniBit: cells[6] || '',
-            kurumOnay: cells[7] || '',
-            ilOnay: cells[8] || '',
+            izinNo:            cells[1] || '',
+            ad:                cells[3] || '',
+            soyad:             cells[4] || '',
+            statusu:           cells[5] || '',
+            gorevi:            cells[6] || '',
+            bransi:            cells[7] || '',
+            il:                cells[8] || '',
+            ilce:              cells[9] || '',
+            kurumKodu:         cells[10] || '',
+            kurumAdi:          cells[11] || '',
+            kurumAdiBaslangic: cells[12] || '',
+            calismaIzniBas:    cells[13] || '',
+            calismaIzniBit:    cells[14] || '',
+            ayrilmaTarihi:     cells[15] || '',
+            maasKds:           cells[16] || '',
+            ucretKds:          cells[17] || '',
+            durumu:            cells[18] || '',
           });
         }
         return { rows: out };
       })();
     `).then((result: any) => {
+      if (result?.autoSearchTriggered) {
+        console.log(`[PersonnelParserOok][${account.label}] Auto-clicked btnAra — waiting for results page`);
+        this.personnelAutoSearched.add(account.id);
+        return;
+      }
       if (!result || !Array.isArray(result.rows)) {
         console.log(`[PersonnelParserOok][${account.label}] No rows; reason=${result?.reason || 'unknown'}`);
         return;
       }
       const rows = result.rows as any[];
+      // Clear auto-search flag now that we have results (or exhausted retries).
+      this.personnelAutoSearched.delete(account.id);
       if (!rows.length) {
         console.log(`[PersonnelParserOok][${account.label}] Empty personnel list`);
         return;
@@ -927,8 +1043,209 @@ export class MebbisManager {
       const r = db.ingestList(account.id, rows);
       console.log(`[PersonnelParserOok][${account.label}] Ingested ${rows.length} OOK personnel: created=${r.created}, updated=${r.updated}. Total=${db.countPersonnel(account.id)}`);
       this.pushStoreToSidebar(win, account);
+      pushPersonnelList(account.id, rows);
+      // Start sequential detail batch if not already done / running for this cycle.
+      if (!this.personnelBatchDetailDone.has(account.id) && !this.pendingPersonnelBatchDetail) {
+        win.webContents.executeJavaScript(`
+          (function() {
+            // ook12001 form id is "ook12001".
+            var f = document.getElementById('ook12001') || document.forms['ook12001'];
+            if (!f) return null;
+            var fields = {};
+            for (var i = 0; i < f.elements.length; i++) {
+              var el = f.elements[i];
+              if (el.type === 'hidden') fields[el.name] = el.value;
+            }
+            return fields;
+          })()
+        `).then((formState: any) => {
+          if (!formState || typeof formState !== 'object') {
+            console.log(`[PersonnelBatch][${account.label}] Could not capture form state — skipping detail batch`);
+            return;
+          }
+          const totalRows = rows.length;
+          console.log(`[PersonnelBatch][${account.label}] Starting detail scrape batch for ${totalRows} records`);
+          this.pendingPersonnelBatchDetail = {
+            accountId: account.id,
+            totalRows,
+            currentIndex: 0,
+            formState: formState as Record<string, string>,
+          };
+          this.triggerPersonnelAcPostback(win, account, 0);
+        }).catch((e: any) => {
+          console.error(`[PersonnelBatch][${account.label}] Form state capture failed:`, e);
+        });
+      }
     }).catch((e: any) => {
       console.error(`[PersonnelParserOok][${account.label}] Scrape failed:`, e);
+    });
+  }
+
+  /**
+   * Trigger the ASP.NET postback for the Nth row of the dgPersonelArama grid.
+   * For row 0 we are still on the ook12001 results page, so we call __doPostBack
+   * directly.  For rows > 0 we are on ook12002, so we inject a synthetic form
+   * that re-POSTs to ook12001 using the VIEWSTATE captured from the results page.
+   */
+  private triggerPersonnelAcPostback(win: BrowserWindow, account: Account, index: number): void {
+    if (win.isDestroyed()) return;
+    const batch = this.pendingPersonnelBatchDetail;
+    if (!batch || batch.accountId !== account.id) return;
+
+    console.log(`[PersonnelBatch][${account.label}] Triggering Aç postback row ${index + 1}/${batch.totalRows}`);
+
+    if (index === 0) {
+      // Still on ook12001 results page — call __doPostBack directly.
+      win.webContents.executeJavaScript(`
+        (function() {
+          try {
+            if (typeof __doPostBack === 'function') {
+              __doPostBack('dgPersonelArama', 'Select$0');
+              return true;
+            }
+            var f = document.getElementById('ook12001') || document.forms['ook12001'];
+            if (f && f.elements['__EVENTTARGET'] && f.elements['__EVENTARGUMENT']) {
+              f.elements['__EVENTTARGET'].value = 'dgPersonelArama';
+              f.elements['__EVENTARGUMENT'].value = 'Select$0';
+              f.submit();
+              return true;
+            }
+            return false;
+          } catch(e) {
+            console.log('[MEBBIS] PersonnelBatch postback 0 error: ' + e);
+            return false;
+          }
+        })()
+      `).then((ok: any) => {
+        if (!ok) {
+          console.log(`[PersonnelBatch][${account.label}] Postback row 0 failed — aborting batch`);
+          this.pendingPersonnelBatchDetail = null;
+        }
+      }).catch((e: any) => {
+        console.error(`[PersonnelBatch][${account.label}] Postback row 0 JS error:`, e);
+        this.pendingPersonnelBatchDetail = null;
+      });
+    } else {
+      // On ook12002 — inject a synthetic form using the VIEWSTATE stored from ook12001.
+      const formStateJson = JSON.stringify(batch.formState).replace(/<\/script/gi, '<\\/script');
+      win.webContents.executeJavaScript(`
+        (function() {
+          try {
+            var fields = ${formStateJson};
+            fields['__EVENTTARGET'] = 'dgPersonelArama';
+            fields['__EVENTARGUMENT'] = 'Select$${index}';
+            var f = document.createElement('form');
+            f.method = 'post';
+            f.action = 'https://mebbis.meb.gov.tr/Ookgm/ook12001.aspx';
+            for (var k in fields) {
+              if (!Object.prototype.hasOwnProperty.call(fields, k)) continue;
+              var inp = document.createElement('input');
+              inp.type = 'hidden';
+              inp.name = k;
+              inp.value = fields[k];
+              f.appendChild(inp);
+            }
+            document.body.appendChild(f);
+            f.submit();
+            return true;
+          } catch(e) {
+            console.log('[MEBBIS] PersonnelBatch postback error: ' + e);
+            return false;
+          }
+        })()
+      `).then((ok: any) => {
+        if (!ok) {
+          console.log(`[PersonnelBatch][${account.label}] Postback row ${index} failed — aborting batch`);
+          this.pendingPersonnelBatchDetail = null;
+        }
+      }).catch((e: any) => {
+        console.error(`[PersonnelBatch][${account.label}] Postback row ${index} JS error:`, e);
+        this.pendingPersonnelBatchDetail = null;
+      });
+    }
+  }
+
+  /**
+   * Scrape all detail fields from a loaded ook12002 page and store them via
+   * PersonnelDb.ingestDetail.  After scraping, advance the batch index and
+   * trigger the next postback (or finalise the batch if all rows are done).
+   */
+  private scrapePersonnelDetail(win: BrowserWindow, account: Account): void {
+    if (win.isDestroyed()) return;
+    const batch = this.pendingPersonnelBatchDetail;
+    if (!batch || batch.accountId !== account.id) return;
+
+    win.webContents.executeJavaScript(`
+      (function() {
+        function txt(id) {
+          var el = document.getElementById(id);
+          return el ? (el.innerText || el.textContent || '').trim() : '';
+        }
+        function val(id) {
+          var el = document.getElementById(id);
+          return el ? (el.value || '').trim() : '';
+        }
+        var progs = [];
+        var pRows = document.querySelectorAll('#dgDerseGirecegiProgram tr');
+        for (var i = 0; i < pRows.length; i++) {
+          if (pRows[i].classList.contains('frmListBaslik')) continue;
+          var cells = pRows[i].querySelectorAll('td');
+          if (cells.length >= 2) {
+            progs.push({
+              program: (cells[0].innerText || cells[0].textContent || '').trim(),
+              tip: (cells[1].innerText || cells[1].textContent || '').trim()
+            });
+          }
+        }
+        return {
+          tc:                              txt('lblTcKimlikNo'),
+          ad:                              txt('lblAd'),
+          soyad:                           txt('lblSoyad'),
+          dogumTarihi:                     txt('lblDogumTarihi'),
+          ogrenimBilgisi:                  txt('lblOgrenimBilgisi'),
+          mezuniyetBelgeCinsi:             txt('lblMezuniyetBelgeCinsi'),
+          mezuniyetTarihi:                 txt('lblMezuniyetTarihi'),
+          mezuniyetBelgeTarihi:            txt('lblMezuniyetBelgeTarihi'),
+          mezuniyetBelgeSayisi:            txt('lblMezuniyetBelgeSayisi'),
+          mezuniyetAciklama:               txt('lblMezuniyetAciklama'),
+          gorevi:                          txt('lblGorevi'),
+          statusu:                         txt('lblStatusu'),
+          bransi:                          txt('lblBransi'),
+          dersUcret:                       txt('lblDersUcret'),
+          netBrutUcret:                    txt('lblNetUcretBrutUcret'),
+          calismaIzniBas:                  txt('lblCalismaIzniBaslamaTarihi'),
+          calismaIzniBit:                  txt('lblCalismaIzniBitisTarihi'),
+          maasKarsiligiDersSayisi:         txt('lblMaasKarsiligiDersSayisi'),
+          dersUcretiKarsiligiDersSayisi:   txt('lblDersUcretiKarsiligiDersSayisi'),
+          durumu:                          txt('lblDurumu'),
+          ayrilmaAciklama:                 txt('lblAyrilmaAciklama'),
+          ePosta:                          val('txtePosta'),
+          tel:                             val('txtTel'),
+          derseProgramlar:                 progs
+        };
+      })()
+    `).then((detail: any) => {
+      if (detail && detail.tc) {
+        const db = getPersonnelDb();
+        db.ingestDetail(account.id, detail.tc, detail);
+        console.log(`[PersonnelBatch][${account.label}] Detail scraped: TC=${detail.tc} (${batch.currentIndex + 1}/${batch.totalRows})`);
+        pushPersonnelDetail(account.id, { tc: detail.tc, ...detail });
+      } else {
+        console.log(`[PersonnelBatch][${account.label}] ook12002 at index ${batch.currentIndex}: no TC found, skipping`);
+      }
+      // Advance to next row.
+      batch.currentIndex++;
+      if (batch.currentIndex < batch.totalRows) {
+        this.triggerPersonnelAcPostback(win, account, batch.currentIndex);
+      } else {
+        console.log(`[PersonnelBatch][${account.label}] Personnel detail batch complete — ${batch.totalRows} records scraped`);
+        this.personnelBatchDetailDone.add(account.id);
+        this.pendingPersonnelBatchDetail = null;
+        this.pushStoreToSidebar(win, account);
+      }
+    }).catch((e: any) => {
+      console.error(`[PersonnelBatch][${account.label}] scrapePersonnelDetail failed at index ${batch.currentIndex}:`, e);
+      this.pendingPersonnelBatchDetail = null;
     });
   }
 
@@ -1433,6 +1750,21 @@ export class MebbisManager {
           header.appendChild(rightSide);
           modal.appendChild(header);
 
+          // Optional live search bar. Opt-in via opts.searchKeys = ['tc','adSoyad',...]
+          let searchInput = null;
+          if (Array.isArray(opts.searchKeys) && opts.searchKeys.length) {
+            const searchWrap = document.createElement('div');
+            searchWrap.style.cssText = 'margin-bottom: 10px; flex-shrink: 0;';
+            searchInput = document.createElement('input');
+            searchInput.type = 'text';
+            searchInput.placeholder = opts.searchPlaceholder || 'Ara...';
+            searchInput.style.cssText = 'width: 100%; padding: 9px 12px; border: 1px solid #2a2a4a; border-radius: 4px; background: #1a1a2e; color: white; font-size: 14px; box-sizing: border-box; outline: none;';
+            searchInput.onfocus = () => { searchInput.style.borderColor = '#4361ee'; };
+            searchInput.onblur = () => { searchInput.style.borderColor = '#2a2a4a'; };
+            searchWrap.appendChild(searchInput);
+            modal.appendChild(searchWrap);
+          }
+
           const tableWrap = document.createElement('div');
           tableWrap.style.cssText = 'overflow: auto; flex: 1;';
           const table = document.createElement('table');
@@ -1448,16 +1780,20 @@ export class MebbisManager {
           thead.appendChild(trh);
           table.appendChild(thead);
           const tbody = document.createElement('tbody');
-          if (!opts.rows.length) {
-            const tr = document.createElement('tr');
-            const td = document.createElement('td');
-            td.colSpan = opts.columns.length;
-            td.style.cssText = 'padding: 20px; text-align: center; color: #888; font-style: italic;';
-            td.textContent = '— henüz yok —';
-            tr.appendChild(td);
-            tbody.appendChild(tr);
-          } else {
-            opts.rows.forEach(row => {
+
+          function renderRows(rows) {
+            tbody.innerHTML = '';
+            if (!rows.length) {
+              const tr = document.createElement('tr');
+              const td = document.createElement('td');
+              td.colSpan = opts.columns.length;
+              td.style.cssText = 'padding: 20px; text-align: center; color: #888; font-style: italic;';
+              td.textContent = '— eşleşme yok —';
+              tr.appendChild(td);
+              tbody.appendChild(tr);
+              return;
+            }
+            rows.forEach(row => {
               const tr = document.createElement('tr');
               tr.style.cssText = 'border-bottom: 1px solid #20203a;';
               opts.columns.forEach(col => {
@@ -1477,6 +1813,34 @@ export class MebbisManager {
               tbody.appendChild(tr);
             });
           }
+
+          if (!opts.rows.length) {
+            const tr = document.createElement('tr');
+            const td = document.createElement('td');
+            td.colSpan = opts.columns.length;
+            td.style.cssText = 'padding: 20px; text-align: center; color: #888; font-style: italic;';
+            td.textContent = '— henüz yok —';
+            tr.appendChild(td);
+            tbody.appendChild(tr);
+          } else {
+            renderRows(opts.rows);
+          }
+
+          if (searchInput) {
+            searchInput.oninput = () => {
+              const q = searchInput.value.toLocaleLowerCase('tr-TR').trim();
+              if (!q) { renderRows(opts.rows); return; }
+              const filtered = opts.rows.filter(row => {
+                for (let i = 0; i < opts.searchKeys.length; i++) {
+                  const v = row[opts.searchKeys[i]];
+                  if (v != null && String(v).toLocaleLowerCase('tr-TR').indexOf(q) !== -1) return true;
+                }
+                return false;
+              });
+              renderRows(filtered);
+            };
+          }
+
           table.appendChild(tbody);
           tableWrap.appendChild(table);
           modal.appendChild(tableWrap);
@@ -1500,10 +1864,10 @@ export class MebbisManager {
               { key: 'detay', label: '', action: 'Detay' },
             ],
             rows: store.students,
+            searchKeys: ['tc', 'adSoyad'],
+            searchPlaceholder: 'TC veya Ad Soyad ile ara...',
             onRowAction: (row) => {
-              console.log('[MEBBIS_SIDEBAR] Detay clicked for tc=' + row.tc);
-              console.log('MEBBIS_OPEN_STUDENT:' + row.tc);
-              closeStoreModal();
+              showStudentDetail(row);
             },
           });
         };
@@ -1542,24 +1906,471 @@ export class MebbisManager {
         }
 
         function personnelGuncelle(btn) {
-          // OOK15003 is the comprehensive personnel list and only loads when
-          // the user is logged into "Özel Öğretim Kurumları Modülü". A user
-          // inside MTSK modülü has no OOK session and must log out + log
-          // back in via the OOK module before this can run.
-          const url = location.href || '';
-          const isInMtskModule = /\\/skt\\//i.test(url);
-          if (isInMtskModule) {
-            showInfoOverlay(
-              'Personel listesini güncellemek için "Özel Öğretim Kurumları Modülü"ne giriş yapmanız gerekiyor.\\n\\n' +
-              'Şu anda "Özel MTSK Modülü"ndesiniz. MEBBİS\\'ten çıkış yapıp modül seçiminde "Özel Öğretim Kurumları"nı seçerek tekrar giriş yapın.'
-            );
-            return;
-          }
           if (btn) { btn.disabled = true; btn.textContent = 'Yükleniyor...'; btn.style.opacity = '0.6'; }
-          // Hand off to the main process — direct hops to ook15003 bounce
-          // back to ook00001 if the OOK session isn't established yet.
-          // Main: navigates to ook00001 → on load, chain to ook15003.
           console.log('MEBBIS_REQUEST_PERSONNEL_UPDATE');
+        }
+
+        function showPersonnelDetail(row) {
+          // Section-by-section detail overlay. Sections collapse/expand on header click;
+          // the first section is open by default. Empty sections (all fields '-') hide
+          // entirely so the user only sees data MEBBIS actually returned.
+          var ov = document.createElement('div');
+          ov.style.cssText = 'position: fixed; inset: 0; z-index: 10002; background: rgba(0,0,0,0.65); display: flex; align-items: center; justify-content: center; font-family: Arial, sans-serif;';
+          var box = document.createElement('div');
+          box.style.cssText = 'background: #1a1a2e; border: 1px solid #4361ee; border-radius: 8px; width: 560px; max-width: 90vw; max-height: 85vh; display: flex; flex-direction: column; color: white;';
+          var head = document.createElement('div');
+          head.style.cssText = 'padding: 16px 20px; border-bottom: 1px solid #2a2a4a; display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-shrink: 0;';
+          var titleWrap = document.createElement('div');
+          titleWrap.style.cssText = 'flex: 1; min-width: 0;';
+          var t = document.createElement('div');
+          t.style.cssText = 'color: #4361ee; font-size: 16px; font-weight: bold;';
+          t.textContent = row.adSoyad || ((row.ad || '') + ' ' + (row.soyad || '')).trim() || 'Personel';
+          var sub = document.createElement('div');
+          sub.style.cssText = 'color: #888; font-size: 12px; margin-top: 2px;';
+          sub.textContent = 'TC ' + (row.tc || '-') + (row.durumu ? ' • ' + row.durumu : '');
+          titleWrap.appendChild(t);
+          titleWrap.appendChild(sub);
+          var closeBtn = document.createElement('button');
+          closeBtn.textContent = '✕';
+          closeBtn.style.cssText = 'background: none; border: none; color: #ccc; cursor: pointer; font-size: 18px; padding: 0 6px; line-height: 1;';
+          closeBtn.onclick = function() { ov.remove(); };
+          head.appendChild(titleWrap);
+          head.appendChild(closeBtn);
+          box.appendChild(head);
+
+          var body = document.createElement('div');
+          body.style.cssText = 'padding: 8px 20px 20px; overflow-y: auto; flex: 1;';
+
+          function joinNonEmpty(parts, sep) {
+            var out = [];
+            for (var i = 0; i < parts.length; i++) {
+              if (parts[i] !== null && parts[i] !== undefined && String(parts[i]).trim() !== '' && String(parts[i]).trim() !== '-') {
+                out.push(parts[i]);
+              }
+            }
+            return out.join(sep);
+          }
+
+          var sections = [
+            {
+              title: 'Kimlik',
+              fields: [
+                ['TC Kimlik No', row.tc],
+                ['Ad', row.ad],
+                ['Soyad', row.soyad],
+                ['Doğum Tarihi', row.dogumTarihi],
+              ],
+            },
+            {
+              title: 'Görev',
+              fields: [
+                ['Görevi', row.gorevi],
+                ['Statüsü', row.statusu],
+                ['Branşı', row.bransi],
+                ['Ek Branş 1', row.brans2],
+                ['Ek Branş 2', row.brans3],
+                ['Ek Branş 3', row.brans4],
+              ],
+            },
+            {
+              title: 'Çalışma İzni',
+              fields: [
+                ['İzin No', row.izinNo],
+                ['Başlama Tarihi', row.calismaIzniBas],
+                ['Bitiş Tarihi', row.calismaIzniBit],
+                ['Durumu', row.durumu],
+                ['Ayrılma Tarihi', row.ayrilmaTarihi],
+                ['Ayrılma Açıklama', row.ayrilmaAciklama],
+              ],
+            },
+            {
+              title: 'Ücret',
+              fields: [
+                ['Ders Ücreti', row.dersUcret],
+                ['Net / Brüt Ücret', row.netBrutUcret],
+                ['Maaş KDS', row.maasKds],
+                ['Ücret KDS', row.ucretKds],
+                ['Maaş Karşılığı Ders Sayısı', row.maasKarsiligiDersSayisi],
+                ['Ders Ücreti Karşılığı Ders Sayısı', row.dersUcretiKarsiligiDersSayisi],
+              ],
+            },
+            {
+              title: 'Öğrenim',
+              fields: [
+                ['Öğrenim Bilgisi', row.ogrenimBilgisi],
+                ['Mezuniyet Belge Cinsi', row.mezuniyetBelgeCinsi],
+                ['Mezuniyet Tarihi', row.mezuniyetTarihi],
+                ['Mezuniyet Belge Tarihi', row.mezuniyetBelgeTarihi],
+                ['Mezuniyet Belge Sayısı', row.mezuniyetBelgeSayisi],
+                ['Mezuniyet Açıklama', row.mezuniyetAciklama],
+              ],
+            },
+            {
+              title: 'Kurum',
+              fields: [
+                ['Kurum Kodu', row.kurumKodu],
+                ['Kurum Adı', row.kurumAdi],
+                ['Görev Başlama Kurum Adı', row.kurumAdiBaslangic],
+                ['İl', row.il],
+                ['İlçe', row.ilce],
+              ],
+            },
+            {
+              title: 'İletişim',
+              fields: [
+                ['e-Posta', row.ePosta],
+                ['Telefon', row.tel],
+              ],
+            },
+          ];
+
+          var sectionRendered = 0;
+          sections.forEach(function(sec) {
+            var visibleFields = sec.fields.filter(function(f) {
+              return f[1] !== null && f[1] !== undefined && String(f[1]).trim() !== '' && String(f[1]).trim() !== '-' && String(f[1]).trim() !== '&nbsp;';
+            });
+            if (!visibleFields.length) return;
+            var openByDefault = (sectionRendered === 0);
+            sectionRendered++;
+            var secEl = document.createElement('div');
+            secEl.style.cssText = 'margin-top: 12px; border: 1px solid #2a2a4a; border-radius: 6px; overflow: hidden;';
+            var hdr = document.createElement('button');
+            hdr.type = 'button';
+            hdr.style.cssText = 'width: 100%; text-align: left; background: #20203a; border: none; color: #4361ee; cursor: pointer; padding: 10px 14px; font-size: 13px; font-weight: 600; display: flex; justify-content: space-between; align-items: center;';
+            var caret = document.createElement('span');
+            caret.style.cssText = 'color: #888; font-size: 12px; transition: transform 0.15s;';
+            caret.textContent = '▾';
+            var hLbl = document.createElement('span');
+            hLbl.textContent = sec.title + '  (' + visibleFields.length + ')';
+            hdr.appendChild(hLbl);
+            hdr.appendChild(caret);
+            var content = document.createElement('div');
+            content.style.cssText = 'padding: 10px 14px; background: #16162a; display: ' + (openByDefault ? 'block' : 'none') + ';';
+            caret.style.transform = openByDefault ? 'rotate(0deg)' : 'rotate(-90deg)';
+            visibleFields.forEach(function(f) {
+              var row = document.createElement('div');
+              row.style.cssText = 'display: flex; padding: 4px 0; font-size: 13px; line-height: 1.4; gap: 8px;';
+              var k = document.createElement('div');
+              k.style.cssText = 'color: #888; flex: 0 0 180px;';
+              k.textContent = f[0];
+              var v = document.createElement('div');
+              v.style.cssText = 'color: #ddd; flex: 1; word-break: break-word;';
+              v.textContent = String(f[1]).replace(/\\u00a0/g, ' ').trim();
+              row.appendChild(k);
+              row.appendChild(v);
+              content.appendChild(row);
+            });
+            hdr.onclick = function() {
+              var open = content.style.display !== 'none';
+              content.style.display = open ? 'none' : 'block';
+              caret.style.transform = open ? 'rotate(-90deg)' : 'rotate(0deg)';
+            };
+            secEl.appendChild(hdr);
+            secEl.appendChild(content);
+            body.appendChild(secEl);
+          });
+
+          // Programs section (table-shaped, separate from key/value sections)
+          if (row.derseProgramlar && row.derseProgramlar.length) {
+            var secEl = document.createElement('div');
+            secEl.style.cssText = 'margin-top: 12px; border: 1px solid #2a2a4a; border-radius: 6px; overflow: hidden;';
+            var hdr = document.createElement('button');
+            hdr.type = 'button';
+            hdr.style.cssText = 'width: 100%; text-align: left; background: #20203a; border: none; color: #4361ee; cursor: pointer; padding: 10px 14px; font-size: 13px; font-weight: 600; display: flex; justify-content: space-between; align-items: center;';
+            var caret = document.createElement('span');
+            caret.style.cssText = 'color: #888; font-size: 12px;';
+            caret.textContent = '▾';
+            var hLbl = document.createElement('span');
+            hLbl.textContent = 'Derse Gireceği Programlar  (' + row.derseProgramlar.length + ')';
+            hdr.appendChild(hLbl);
+            hdr.appendChild(caret);
+            var content = document.createElement('div');
+            content.style.cssText = 'padding: 10px 14px; background: #16162a;';
+            row.derseProgramlar.forEach(function(p) {
+              var r = document.createElement('div');
+              r.style.cssText = 'display: flex; padding: 4px 0; font-size: 13px; gap: 8px;';
+              var n = document.createElement('div');
+              n.style.cssText = 'color: #ddd; flex: 1;';
+              n.textContent = p.program;
+              var ty = document.createElement('div');
+              ty.style.cssText = 'color: #888; flex: 0 0 100px; text-align: right;';
+              ty.textContent = p.tip || '';
+              r.appendChild(n);
+              r.appendChild(ty);
+              content.appendChild(r);
+            });
+            hdr.onclick = function() {
+              var open = content.style.display !== 'none';
+              content.style.display = open ? 'none' : 'block';
+              caret.style.transform = open ? 'rotate(-90deg)' : 'rotate(0deg)';
+            };
+            secEl.appendChild(hdr);
+            secEl.appendChild(content);
+            body.appendChild(secEl);
+          }
+
+          if (!sectionRendered && !(row.derseProgramlar && row.derseProgramlar.length)) {
+            var empty = document.createElement('div');
+            empty.style.cssText = 'padding: 24px; color: #888; font-style: italic; text-align: center;';
+            empty.textContent = 'Detay henüz çekilmedi — Güncelle butonu ile yeniden deneyin.';
+            body.appendChild(empty);
+          }
+
+          box.appendChild(body);
+          ov.appendChild(box);
+          ov.onclick = function(e) { if (e.target === ov) ov.remove(); };
+          document.body.appendChild(ov);
+          var keyH = function(e) {
+            if (e.key === 'Escape') { ov.remove(); document.removeEventListener('keydown', keyH); }
+          };
+          document.addEventListener('keydown', keyH);
+        }
+
+        function fmtTimestamp(ms) {
+          if (!ms || typeof ms !== 'number') return '';
+          var d = new Date(ms);
+          var pad = function(n) { return n < 10 ? '0' + n : '' + n; };
+          return pad(d.getDate()) + '.' + pad(d.getMonth() + 1) + '.' + d.getFullYear() +
+            ' ' + pad(d.getHours()) + ':' + pad(d.getMinutes());
+        }
+
+        function showStudentDetail(row) {
+          // Cached student detail overlay with Güncelle button + last-update timestamp.
+          // When hasDetail is false (or detail missing), shows an empty state pointing
+          // to Güncelle, which navigates the MEBBIS browser to skt02009 and scrapes.
+          var ov = document.createElement('div');
+          ov.style.cssText = 'position: fixed; inset: 0; z-index: 10002; background: rgba(0,0,0,0.65); display: flex; align-items: center; justify-content: center; font-family: Arial, sans-serif;';
+          var box = document.createElement('div');
+          box.style.cssText = 'background: #1a1a2e; border: 1px solid #4361ee; border-radius: 8px; width: 640px; max-width: 92vw; max-height: 88vh; display: flex; flex-direction: column; color: white;';
+          var head = document.createElement('div');
+          head.style.cssText = 'padding: 14px 18px; border-bottom: 1px solid #2a2a4a; display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-shrink: 0;';
+          var titleWrap = document.createElement('div');
+          titleWrap.style.cssText = 'flex: 1; min-width: 0;';
+          var t = document.createElement('div');
+          t.style.cssText = 'color: #4361ee; font-size: 16px; font-weight: bold;';
+          t.textContent = row.adSoyad || 'Öğrenci';
+          var sub = document.createElement('div');
+          sub.style.cssText = 'color: #888; font-size: 12px; margin-top: 2px;';
+          var subParts = ['TC ' + (row.tc || '-')];
+          if (row.donemi) subParts.push(row.donemi);
+          if (row.grubu) subParts.push(row.grubu);
+          if (row.durumu) subParts.push(row.durumu);
+          sub.textContent = subParts.join(' • ');
+          titleWrap.appendChild(t);
+          titleWrap.appendChild(sub);
+
+          var rightWrap = document.createElement('div');
+          rightWrap.style.cssText = 'display: flex; align-items: center; gap: 10px; flex-shrink: 0;';
+
+          var updateBtn = document.createElement('button');
+          updateBtn.type = 'button';
+          updateBtn.textContent = row.hasDetail ? 'Güncelle' : 'Detay Çek';
+          updateBtn.style.cssText = 'background: #4361ee; border: none; color: white; cursor: pointer; padding: 7px 14px; font-size: 13px; border-radius: 4px; font-weight: 500;';
+          updateBtn.onclick = function() {
+            updateBtn.disabled = true;
+            updateBtn.textContent = 'Yükleniyor...';
+            updateBtn.style.opacity = '0.6';
+            console.log('[MEBBIS_SIDEBAR] Detay update for tc=' + row.tc);
+            console.log('MEBBIS_OPEN_STUDENT:' + row.tc);
+            // Close the overlay AND the table modal so the user can see the MEBBIS browser doing its job.
+            // The pushStoreToSidebar call after ingestDetail will refresh window.__mebbisStore for next view.
+            ov.remove();
+            closeStoreModal();
+          };
+          rightWrap.appendChild(updateBtn);
+
+          var closeBtn = document.createElement('button');
+          closeBtn.textContent = '✕';
+          closeBtn.style.cssText = 'background: none; border: none; color: #ccc; cursor: pointer; font-size: 18px; padding: 0 6px; line-height: 1;';
+          closeBtn.onclick = function() { ov.remove(); };
+          rightWrap.appendChild(closeBtn);
+
+          head.appendChild(titleWrap);
+          head.appendChild(rightWrap);
+          box.appendChild(head);
+
+          // Meta strip: last update timestamp
+          var meta = document.createElement('div');
+          meta.style.cssText = 'padding: 8px 18px; background: #16162a; border-bottom: 1px solid #20203a; font-size: 12px; color: #888; flex-shrink: 0;';
+          var stamp = fmtTimestamp(row.lastDetailSeenAt);
+          meta.textContent = row.hasDetail
+            ? ('Son detay güncellemesi: ' + (stamp || '-'))
+            : 'Detay henüz çekilmedi — yukarıdaki "Detay Çek" ile başlatın.';
+          box.appendChild(meta);
+
+          var body = document.createElement('div');
+          body.style.cssText = 'padding: 8px 18px 18px; overflow-y: auto; flex: 1;';
+
+          function makeSection(titleText, openByDefault, badge) {
+            var secEl = document.createElement('div');
+            secEl.style.cssText = 'margin-top: 12px; border: 1px solid #2a2a4a; border-radius: 6px; overflow: hidden;';
+            var hdr = document.createElement('button');
+            hdr.type = 'button';
+            hdr.style.cssText = 'width: 100%; text-align: left; background: #20203a; border: none; color: #4361ee; cursor: pointer; padding: 10px 14px; font-size: 13px; font-weight: 600; display: flex; justify-content: space-between; align-items: center;';
+            var caret = document.createElement('span');
+            caret.style.cssText = 'color: #888; font-size: 12px; transition: transform 0.15s;';
+            caret.textContent = '▾';
+            var hLbl = document.createElement('span');
+            hLbl.textContent = titleText + (badge != null ? '  (' + badge + ')' : '');
+            hdr.appendChild(hLbl);
+            hdr.appendChild(caret);
+            var content = document.createElement('div');
+            content.style.cssText = 'padding: 10px 14px; background: #16162a; display: ' + (openByDefault ? 'block' : 'none') + ';';
+            caret.style.transform = openByDefault ? 'rotate(0deg)' : 'rotate(-90deg)';
+            hdr.onclick = function() {
+              var open = content.style.display !== 'none';
+              content.style.display = open ? 'none' : 'block';
+              caret.style.transform = open ? 'rotate(-90deg)' : 'rotate(0deg)';
+            };
+            secEl.appendChild(hdr);
+            secEl.appendChild(content);
+            return { el: secEl, body: content };
+          }
+
+          function addKV(parent, key, val) {
+            var r = document.createElement('div');
+            r.style.cssText = 'display: flex; padding: 4px 0; font-size: 13px; line-height: 1.4; gap: 8px;';
+            var k = document.createElement('div');
+            k.style.cssText = 'color: #888; flex: 0 0 200px;';
+            k.textContent = key;
+            var v = document.createElement('div');
+            v.style.cssText = 'color: #ddd; flex: 1; word-break: break-word;';
+            v.textContent = val == null || val === '' ? '-' : String(val);
+            r.appendChild(k);
+            r.appendChild(v);
+            parent.appendChild(r);
+          }
+
+          var anyRendered = false;
+
+          // Section: Kayıt
+          var kayitFields = [
+            ['Kurum', row.kurum],
+            ['Dönemi', row.donemi],
+            ['Grubu', row.grubu],
+            ['Şubesi', row.subesi],
+            ['Mevcut Sürücü Belgesi', row.mevcutBelge],
+            ['İstenen Sertifika', row.istenenSertifika],
+            ['Kurum Onayı', row.kurumOnay],
+            ['İlçe Onayı', row.ilceOnay],
+            ['Uygulama', row.uygulama],
+            ['Durumu', row.durumu],
+            ['Teorik Hak', row.teorikHak],
+            ['Uygulama Hak', row.uygulamaHak],
+            ['E-Sınav Hak', row.eSinavHak],
+            ['Kayıt Ücreti', row.kayitUcreti],
+          ].filter(function(f) {
+            return f[1] !== null && f[1] !== undefined && String(f[1]).trim() !== '' && String(f[1]).trim() !== '-';
+          });
+          if (kayitFields.length) {
+            var kayit = makeSection('Kayıt Bilgileri', true, kayitFields.length);
+            kayitFields.forEach(function(f) { addKV(kayit.body, f[0], f[1]); });
+            body.appendChild(kayit.el);
+            anyRendered = true;
+          }
+
+          // Section: Sınavlar
+          var exams = Array.isArray(row.exams) ? row.exams : [];
+          if (exams.length) {
+            var sinav = makeSection('Sınavlar', false, exams.length);
+            var tbl = document.createElement('table');
+            tbl.style.cssText = 'width: 100%; border-collapse: collapse; font-size: 12px;';
+            var thead = document.createElement('thead');
+            var trh = document.createElement('tr');
+            ['Dönem', 'Kod', 'Tarih', 'Plaka', 'Usta Öğretici', 'Onay', 'Durum', 'Sonuç'].forEach(function(h) {
+              var th = document.createElement('th');
+              th.style.cssText = 'text-align: left; padding: 6px 8px; border-bottom: 1px solid #2a2a4a; color: #4361ee; font-weight: 600;';
+              th.textContent = h;
+              trh.appendChild(th);
+            });
+            thead.appendChild(trh);
+            tbl.appendChild(thead);
+            var tb = document.createElement('tbody');
+            exams.forEach(function(e) {
+              var tr = document.createElement('tr');
+              tr.style.cssText = 'border-bottom: 1px solid #20203a;';
+              [e.donemi, e.sinavKodu, e.sinavTarihi, e.plaka, e.ustaOgretici, e.onayDurumu, e.sinavDurumu, e.sonuc].forEach(function(c) {
+                var td = document.createElement('td');
+                td.style.cssText = 'padding: 6px 8px; color: #ddd;';
+                td.textContent = c == null ? '' : String(c);
+                tr.appendChild(td);
+              });
+              tb.appendChild(tr);
+            });
+            tbl.appendChild(tb);
+            sinav.body.appendChild(tbl);
+            body.appendChild(sinav.el);
+            anyRendered = true;
+          }
+
+          // Section: Dersler
+          var lessons = Array.isArray(row.lessons) ? row.lessons : [];
+          if (lessons.length) {
+            var ders = makeSection('Dersler', false, lessons.length);
+            var tbl2 = document.createElement('table');
+            tbl2.style.cssText = 'width: 100%; border-collapse: collapse; font-size: 12px;';
+            var thead2 = document.createElement('thead');
+            var trh2 = document.createElement('tr');
+            ['Dönem', 'Grup', 'Şube', 'Plaka', 'Yer', 'Tarih', 'Saat', 'Personel', 'Tür'].forEach(function(h) {
+              var th = document.createElement('th');
+              th.style.cssText = 'text-align: left; padding: 6px 8px; border-bottom: 1px solid #2a2a4a; color: #4361ee; font-weight: 600;';
+              th.textContent = h;
+              trh2.appendChild(th);
+            });
+            thead2.appendChild(trh2);
+            tbl2.appendChild(thead2);
+            var tb2 = document.createElement('tbody');
+            lessons.forEach(function(l) {
+              var tr = document.createElement('tr');
+              tr.style.cssText = 'border-bottom: 1px solid #20203a;';
+              [l.donemi, l.grupAdi, l.subesi, l.plaka, l.dersYeri, l.dersTarihi, l.dersSaati, l.personel, l.egitimTuru].forEach(function(c) {
+                var td = document.createElement('td');
+                td.style.cssText = 'padding: 6px 8px; color: #ddd;';
+                td.textContent = c == null ? '' : String(c);
+                tr.appendChild(td);
+              });
+              tb2.appendChild(tr);
+            });
+            tbl2.appendChild(tb2);
+            ders.body.appendChild(tbl2);
+            body.appendChild(ders.el);
+            anyRendered = true;
+          }
+
+          // Section: Plakalar
+          var plates = Array.isArray(row.plates) ? row.plates : [];
+          if (plates.length) {
+            var plkSec = makeSection('Plakalar', false, plates.length);
+            var chips = document.createElement('div');
+            chips.style.cssText = 'display: flex; flex-wrap: wrap; gap: 6px;';
+            plates.forEach(function(p) {
+              var chip = document.createElement('span');
+              chip.style.cssText = 'background: #20203a; color: #ddd; padding: 4px 10px; border-radius: 4px; font-size: 12px; font-family: monospace;';
+              chip.textContent = p;
+              chips.appendChild(chip);
+            });
+            plkSec.body.appendChild(chips);
+            body.appendChild(plkSec.el);
+            anyRendered = true;
+          }
+
+          if (!anyRendered) {
+            var empty = document.createElement('div');
+            empty.style.cssText = 'padding: 24px; color: #888; font-style: italic; text-align: center;';
+            empty.textContent = row.hasDetail
+              ? 'Detay var ama doldurulacak alan bulunamadı.'
+              : 'Detay henüz çekilmedi. "Detay Çek" ile başlatın.';
+            body.appendChild(empty);
+          }
+
+          box.appendChild(body);
+          ov.appendChild(box);
+          ov.onclick = function(e) { if (e.target === ov) ov.remove(); };
+          document.body.appendChild(ov);
+          var keyH = function(e) {
+            if (e.key === 'Escape') { ov.remove(); document.removeEventListener('keydown', keyH); }
+          };
+          document.addEventListener('keydown', keyH);
         }
 
         personnelBtn.onclick = () => {
@@ -1570,13 +2381,17 @@ export class MebbisManager {
             title: 'Personeller (' + rows.length + ')',
             columns: [
               { key: 'adSoyad', label: 'Ad Soyad' },
-              { key: 'tc', label: 'TC Kimlik' },
-              { key: 'kayitNo', label: 'Kayıt No' },
-              { key: 'izinNo', label: 'İzin No' },
+              { key: 'tc', label: 'TC' },
+              { key: 'gorevi', label: 'Görevi' },
+              { key: 'statusu', label: 'Statüsü' },
+              { key: 'bransi', label: 'Branş' },
               { key: 'calismaIzniBit', label: 'İzin Bitiş' },
-              { key: 'durum', label: 'Durum' },
+              { key: 'detay', label: '', action: 'Detay' },
             ],
             rows: rows,
+            searchKeys: ['adSoyad', 'tc', 'gorevi', 'bransi'],
+            searchPlaceholder: 'Ad Soyad, TC, görev veya branş ile ara...',
+            onRowAction: showPersonnelDetail,
             headerActions: [
               { label: 'Güncelle', onClick: personnelGuncelle },
             ],
@@ -1623,6 +2438,8 @@ export class MebbisManager {
       entry.window.close();
     }
     this.running.delete(accountId);
+    // Reset login attempt counter so a restart after wrong-password doesn't stay locked.
+    this.loginAttempts.delete(accountId);
     // Persisted student/plate data is intentionally kept on stop; clear via a separate action if ever needed.
     this.pendingOpenStudent.delete(accountId);
     this.demoSessionUsage.delete(accountId);
@@ -3788,6 +4605,87 @@ export class MebbisManager {
     fs.writeFileSync(saveResult.filePath, pdfBuffer);
     console.log('[DEV TEST] Saved to:', saveResult.filePath);
     await shell.openPath(saveResult.filePath);
+  }
+
+  /**
+   * Generate a K-Belgesi preview window from user-supplied form data,
+   * then allow the user to print or cancel.
+   */
+  private async generateKBelgesiPdf(data: Record<string, string>, parentWin: BrowserWindow): Promise<void> {
+    let html: string;
+    try {
+      html = await fetchEncryptedTemplate('k-belgesi/k-belgesi.html');
+    } catch (e: any) {
+      console.error('[K-Belgesi] Failed to fetch template:', e?.message ?? e);
+      return;
+    }
+
+    const previewChrome = `<style id="kb-preview-chrome">
+  @media screen {
+    body { background: #e5e7eb !important; }
+    #kb-toolbar { position: fixed; top: 12px; right: 12px; background: #1f2937; color: white; padding: 8px 12px; border-radius: 6px; display: flex; gap: 8px; align-items: center; box-shadow: 0 4px 12px rgba(0,0,0,0.3); z-index: 999999; font-family: system-ui, -apple-system, "Segoe UI", sans-serif; font-size: 13px; }
+    #kb-toolbar .label { margin-right: 6px; opacity: 0.85; }
+    #kb-toolbar button { padding: 6px 14px; border-radius: 4px; cursor: pointer; font-size: 13px; font-family: inherit; }
+    #kb-cancel { border: 1px solid #6b7280; background: transparent; color: white; }
+    #kb-cancel:hover { background: rgba(255,255,255,0.08); }
+    #kb-print { border: none; background: #3b82f6; color: white; font-weight: 600; }
+    #kb-print:hover { background: #2563eb; }
+  }
+  @media print { #kb-toolbar { display: none !important; } }
+</style>
+<div id="kb-toolbar">
+  <span class="label">A4 · 100% · kenarlıksız</span>
+  <button id="kb-cancel">İptal</button>
+  <button id="kb-print">Yazdır</button>
+</div>
+<script>(function(){
+  var data = ${JSON.stringify(data)};
+  Object.keys(data).forEach(function(k){
+    var el = document.querySelector('.cvp.' + k);
+    if (el) el.textContent = data[k];
+  });
+  document.getElementById('kb-cancel').onclick = function(){ document.title = 'KB_CLOSE'; };
+  document.getElementById('kb-print').onclick = function(){ document.title = 'KB_PRINT'; };
+})();</script>`;
+
+    const mergedHtml = html.replace('</body>', previewChrome + '</body>');
+
+    const previewWin = new BrowserWindow({
+      parent: parentWin,
+      width: 900,
+      height: 1180,
+      title: 'K Belgesi — Önizleme',
+      autoHideMenuBar: true,
+      webPreferences: { sandbox: false, contextIsolation: false },
+    });
+
+    await previewWin.loadURL('about:blank');
+    await previewWin.webContents.executeJavaScript(
+      `document.open(); document.write(${JSON.stringify(mergedHtml)}); document.close();`,
+    );
+
+    let printing = false;
+    previewWin.webContents.on('page-title-updated', (_event, title) => {
+      if (previewWin.isDestroyed()) return;
+      if (title === 'KB_PRINT' && !printing) {
+        printing = true;
+        previewWin.webContents.print(
+          {
+            silent: false,
+            printBackground: true,
+            margins: { marginType: 'none' },
+            pageSize: 'A4',
+            scaleFactor: 100,
+          },
+          (success, failureReason) => {
+            if (!success) console.warn('[K-Belgesi] Print failed:', failureReason);
+            if (!previewWin.isDestroyed()) previewWin.close();
+          },
+        );
+      } else if (title === 'KB_CLOSE') {
+        previewWin.close();
+      }
+    });
   }
 
   /**

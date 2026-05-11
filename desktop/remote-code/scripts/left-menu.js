@@ -17,6 +17,7 @@
     { label: 'Çoklu Direksiyon Takip', action: 'coklu-direksiyon' },
     { label: 'Simulasyon Raporu Oluştur', action: 'simulasyon' },
     { label: 'Çoklu Simulasyon Raporu', action: 'coklu-simulasyon' },
+    { label: 'K Belgesi Oluştur', action: 'k-belgesi' },
   ];
 
   items.forEach(item => {
@@ -131,6 +132,401 @@
       }
       if (item.action === 'coklu-simulasyon') {
         console.log('MEBBIS_BATCH_SIMULATOR');
+        return;
+      }
+
+      if (item.action === 'k-belgesi') {
+        let overlay = document.getElementById('mebbis-modal-overlay');
+        if (overlay) overlay.remove();
+
+        var store = window.__mebbisStore || { students: [], personnel: [] };
+        var students = Array.isArray(store.students) ? store.students : [];
+        var personnel = Array.isArray(store.personnel) ? store.personnel : [];
+
+        overlay = document.createElement('div');
+        overlay.id = 'mebbis-modal-overlay';
+        overlay.style.cssText =
+          'position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.7); z-index: 99999; display: flex; align-items: flex-start; justify-content: center; overflow-y: auto; padding: 20px 0;';
+
+        // -------- STEP 1: Öğrenci ara --------
+        var searchModal = document.createElement('div');
+        searchModal.style.cssText =
+          'background: #1a1a2e; border: 1px solid #2a2a4a; border-radius: 10px; padding: 24px 28px; width: 520px; font-family: Arial, sans-serif; color: white; margin: auto;';
+
+        var searchTitle = document.createElement('h3');
+        searchTitle.style.cssText = 'margin: 0 0 16px 0; color: #4361ee; font-size: 17px; border-bottom: 1px solid #2a2a4a; padding-bottom: 12px;';
+        searchTitle.textContent = 'K Belgesi — Öğrenci Seç';
+        searchModal.appendChild(searchTitle);
+
+        var hint = document.createElement('div');
+        hint.style.cssText = 'font-size: 12px; color: #888; margin-bottom: 10px;';
+        hint.textContent = students.length
+          ? 'TC veya Ad Soyad ile arayın (' + students.length + ' kayıtlı öğrenci)'
+          : 'Henüz öğrenci yüklenmemiş — önce Öğrencileri Güncelle. Manuel TC ile devam edebilirsiniz.';
+        searchModal.appendChild(hint);
+
+        var searchInput = document.createElement('input');
+        searchInput.type = 'text';
+        searchInput.placeholder = 'TC veya Ad Soyad';
+        searchInput.style.cssText =
+          'width: 100%; padding: 10px; border: 1px solid #2a2a4a; border-radius: 4px; background: #16213e; color: white; font-size: 14px; box-sizing: border-box; outline: none; margin-bottom: 8px;';
+        searchInput.onfocus = function() { searchInput.style.borderColor = '#4361ee'; };
+        searchInput.onblur = function() { searchInput.style.borderColor = '#2a2a4a'; };
+        searchModal.appendChild(searchInput);
+
+        var resultsBox = document.createElement('div');
+        resultsBox.style.cssText = 'max-height: 280px; overflow-y: auto; border: 1px solid #2a2a4a; border-radius: 4px; background: #16213e; margin-bottom: 16px;';
+        searchModal.appendChild(resultsBox);
+
+        function renderResults(q) {
+          resultsBox.innerHTML = '';
+          var query = (q || '').toLowerCase().trim();
+          if (!query) {
+            resultsBox.style.display = 'none';
+            return;
+          }
+          resultsBox.style.display = 'block';
+          var matches = students.filter(function(s) {
+            if (!s) return false;
+            var tc = (s.tc || '').toLowerCase();
+            var name = (s.adSoyad || '').toLowerCase();
+            return tc.indexOf(query) !== -1 || name.indexOf(query) !== -1;
+          }).slice(0, 30);
+          if (!matches.length) {
+            var empty = document.createElement('div');
+            empty.style.cssText = 'padding: 10px; color: #888; font-size: 13px; text-align: center;';
+            empty.textContent = 'Eşleşme bulunamadı';
+            resultsBox.appendChild(empty);
+            return;
+          }
+          matches.forEach(function(s) {
+            var row = document.createElement('div');
+            row.style.cssText = 'padding: 9px 12px; cursor: pointer; border-bottom: 1px solid #1f2a44; font-size: 13px; display: flex; justify-content: space-between; gap: 10px;';
+            var left = document.createElement('div');
+            left.innerHTML = '<div style="color:white;">' + (s.adSoyad || '-') + '</div>' +
+              '<div style="color:#888; font-size:11px;">TC: ' + (s.tc || '-') +
+              (s.grubu ? ' · ' + s.grubu : '') + '</div>';
+            var right = document.createElement('div');
+            right.style.cssText = 'color:#4361ee; font-size:11px; align-self:center;';
+            right.textContent = 'Seç →';
+            row.appendChild(left);
+            row.appendChild(right);
+            row.onmouseover = function() { row.style.background = '#1f2a44'; };
+            row.onmouseout = function() { row.style.background = 'transparent'; };
+            row.onclick = function() { openForm(s); };
+            resultsBox.appendChild(row);
+          });
+        }
+        renderResults('');
+        searchInput.oninput = function() { renderResults(searchInput.value); };
+
+        var searchBtnRow = document.createElement('div');
+        searchBtnRow.style.cssText = 'display: flex; gap: 10px; justify-content: space-between; align-items: center;';
+
+        var manualBtn = document.createElement('button');
+        manualBtn.textContent = 'Manuel doldur';
+        manualBtn.style.cssText = 'padding: 8px 14px; border: 1px solid #2a2a4a; border-radius: 4px; background: none; color: #ccc; cursor: pointer; font-size: 13px;';
+        manualBtn.onclick = function() { openForm(null); };
+        searchBtnRow.appendChild(manualBtn);
+
+        var cancelSearchBtn = document.createElement('button');
+        cancelSearchBtn.textContent = 'İptal';
+        cancelSearchBtn.style.cssText = 'padding: 8px 16px; border: 1px solid #2a2a4a; border-radius: 4px; background: none; color: #ccc; cursor: pointer; font-size: 14px;';
+        cancelSearchBtn.onclick = function() { overlay.remove(); };
+        searchBtnRow.appendChild(cancelSearchBtn);
+
+        searchModal.appendChild(searchBtnRow);
+        overlay.appendChild(searchModal);
+        overlay.onclick = function(e) { if (e.target === overlay) overlay.remove(); };
+        document.body.appendChild(overlay);
+        searchInput.focus();
+
+        function openForm(selectedStudent) {
+          overlay.innerHTML = '';
+          overlay.appendChild(modal);
+          buildForm(selectedStudent);
+        }
+
+        // -------- STEP 2: Form --------
+        const modal = document.createElement('div');
+        modal.style.cssText =
+          'background: #1a1a2e; border: 1px solid #2a2a4a; border-radius: 10px; padding: 24px 28px; width: 600px; font-family: Arial, sans-serif; color: white; margin: auto;';
+
+        const kbModalTitle = document.createElement('h3');
+        kbModalTitle.style.cssText = 'margin: 0 0 20px 0; color: #4361ee; font-size: 17px; border-bottom: 1px solid #2a2a4a; padding-bottom: 12px;';
+        kbModalTitle.textContent = 'K Belgesi Oluştur';
+        modal.appendChild(kbModalTitle);
+
+        function buildForm(student) {
+          buildFormBody(modal, student, personnel);
+        }
+
+        function buildFormBody(modal, student, personnelList) {
+        // Pick the most-frequent lesson instructor TC for this student (autopick).
+        var autoPickedPersonnelTc = '';
+        if (student && Array.isArray(student.lessons) && student.lessons.length && personnelList.length) {
+          var counts = {};
+          student.lessons.forEach(function(l) {
+            var name = (l && l.personel || '').trim();
+            if (!name) return;
+            counts[name] = (counts[name] || 0) + 1;
+          });
+          var topName = '';
+          var topCount = 0;
+          Object.keys(counts).forEach(function(n) { if (counts[n] > topCount) { topCount = counts[n]; topName = n; } });
+          if (topName) {
+            var normalize = function(s) { return (s || '').toLocaleUpperCase('tr-TR').replace(/\s+/g, ' ').trim(); };
+            var nTop = normalize(topName);
+            for (var i = 0; i < personnelList.length; i++) {
+              var p = personnelList[i];
+              if (!p) continue;
+              if (normalize(p.adSoyad) === nTop || normalize((p.ad || '') + ' ' + (p.soyad || '')) === nTop) {
+                autoPickedPersonnelTc = p.tc;
+                break;
+              }
+            }
+          }
+        }
+
+        function mkSection(title) {
+          const sec = document.createElement('div');
+          sec.style.cssText = 'margin-bottom: 18px;';
+          const hdr = document.createElement('div');
+          hdr.style.cssText = 'font-size: 12px; font-weight: bold; color: #4361ee; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 10px; padding-bottom: 4px; border-bottom: 1px solid #2a2a4a;';
+          hdr.textContent = title;
+          sec.appendChild(hdr);
+          return sec;
+        }
+
+        function mkField(parent, label, id, opts) {
+          opts = opts || {};
+          const wrap = document.createElement('div');
+          wrap.style.cssText = 'margin-bottom: 10px; display: flex; align-items: center; gap: 10px;';
+          const lbl = document.createElement('label');
+          lbl.style.cssText = 'min-width: 150px; font-size: 13px; color: #aaa; text-align: right; flex-shrink: 0;';
+          lbl.textContent = label;
+          wrap.appendChild(lbl);
+          let inp;
+          if (opts.type === 'select') {
+            inp = document.createElement('select');
+            inp.style.cssText = 'flex: 1; padding: 8px 10px; border: 1px solid #2a2a4a; border-radius: 4px; background: #16213e; color: white; font-size: 13px; outline: none; cursor: pointer;';
+            (opts.options || []).forEach(function(o) {
+              const op = document.createElement('option');
+              op.value = o.value !== undefined ? o.value : o;
+              op.textContent = o.label !== undefined ? o.label : o;
+              op.style.cssText = 'background: #16213e; color: white;';
+              inp.appendChild(op);
+            });
+          } else {
+            inp = document.createElement('input');
+            inp.type = opts.type || 'text';
+            inp.placeholder = opts.placeholder || '';
+            if (opts.maxLength) inp.maxLength = opts.maxLength;
+            if (opts.value) inp.value = opts.value;
+            inp.style.cssText = 'flex: 1; padding: 8px 10px; border: 1px solid #2a2a4a; border-radius: 4px; background: #16213e; color: white; font-size: 13px; outline: none;';
+          }
+          inp.id = 'kb-' + id;
+          inp.onfocus = function() { inp.style.borderColor = '#4361ee'; };
+          inp.onblur = function() { inp.style.borderColor = '#2a2a4a'; };
+          wrap.appendChild(inp);
+          parent.appendChild(wrap);
+          return inp;
+        }
+
+        var today = new Date();
+        var todayStr = today.toISOString().slice(0, 10);
+        var sixMonthsLater = new Date(today);
+        sixMonthsLater.setMonth(sixMonthsLater.getMonth() + 6);
+        var sixMonthsStr = sixMonthsLater.toISOString().slice(0, 10);
+
+        // ---- Autofill helpers ----
+        function splitAdSoyad(full) {
+          var s = (full || '').trim();
+          if (!s) return { ad: '', soyad: '' };
+          var parts = s.split(/\s+/);
+          if (parts.length === 1) return { ad: parts[0], soyad: '' };
+          return { ad: parts.slice(0, -1).join(' '), soyad: parts[parts.length - 1] };
+        }
+        // Convert "dd.mm.yyyy" or "dd/mm/yyyy" → "yyyy-mm-dd" for <input type="date">
+        function toIsoDate(s) {
+          if (!s) return '';
+          var m = String(s).match(/^(\d{1,2})[.\/-](\d{1,2})[.\/-](\d{4})/);
+          if (!m) return '';
+          return m[3] + '-' + m[2].padStart(2, '0') + '-' + m[1].padStart(2, '0');
+        }
+        var studentNames = splitAdSoyad(student && student.adSoyad);
+        // student.lessons[].dersYeri often holds an address-like string; pick the first non-empty
+        var lessonDersYeri = '';
+        if (student && Array.isArray(student.lessons)) {
+          for (var li = 0; li < student.lessons.length; li++) {
+            if (student.lessons[li] && student.lessons[li].dersYeri) { lessonDersYeri = student.lessons[li].dersYeri; break; }
+          }
+        }
+        // Pick auto-personnel record up-front so its fields can be inlined.
+        var autoPersonnel = null;
+        if (autoPickedPersonnelTc) {
+          for (var pi = 0; pi < personnelList.length; pi++) {
+            if (personnelList[pi] && personnelList[pi].tc === autoPickedPersonnelTc) { autoPersonnel = personnelList[pi]; break; }
+          }
+        }
+        var personnelIl = autoPersonnel ? (autoPersonnel.il || '') : '';
+        var personnelIlce = autoPersonnel ? (autoPersonnel.ilce || '') : '';
+        var personnelKurum = autoPersonnel ? (autoPersonnel.kurumAdi || '') : '';
+        var personnelNames = autoPersonnel ? splitAdSoyad(autoPersonnel.adSoyad || ((autoPersonnel.ad || '') + ' ' + (autoPersonnel.soyad || ''))) : { ad: '', soyad: '' };
+
+        // Section 1: Araç ve İzin Bilgileri
+        var sec1 = mkSection('Araç ve İzin Bilgileri');
+        mkField(sec1, 'Araç Cinsi', 'aracCinsi', {
+          type: 'select',
+          options: ['Otomobil', 'Motosiklet', 'Kamyon', 'Otobüs', 'Minibüs', 'Kamyonet', 'Traktör', 'Diğer']
+        });
+        mkField(sec1, 'Güzergah', 'gurzergah', { placeholder: 'Mahalle içi - Şehir merkezi', value: lessonDersYeri });
+        mkField(sec1, 'Gün / Saat', 'gunSaat', { placeholder: 'Pzt-Cu 09:00-17:00' });
+        mkField(sec1, 'Düzenlenme Tarihi', 'duzenlenmeTarihi', { type: 'date', value: todayStr });
+        mkField(sec1, 'Geçerlik Bitişi', 'gecerlikBitisi', { type: 'date', value: sixMonthsStr });
+        mkField(sec1, 'Müdür Adı Soyadı', 'mudurAd', { placeholder: 'Ad Soyad' });
+        modal.appendChild(sec1);
+
+        // Section 2: Kurs / Kurum Bilgileri
+        var sec2 = mkSection('Kurs / Kurum Bilgileri');
+        var ilIlceVal = (personnelIl && personnelIlce) ? (personnelIl.toLocaleUpperCase('tr-TR') + ' / ' + personnelIlce.toLocaleUpperCase('tr-TR')) : '';
+        mkField(sec2, 'İli / İlçesi', 'iliIlcesi', { placeholder: 'ANKARA / ÇANKAYA', value: ilIlceVal });
+        mkField(sec2, 'Kurs Adı', 'kursAdi', { placeholder: 'Kurs adı', value: personnelKurum || (student && student.kurum) || '' });
+        mkField(sec2, 'Belge No', 'belgeNo', { placeholder: '2026-001' });
+        mkField(sec2, 'Belge Tarihi', 'belgeTarihi', { type: 'date', value: todayStr });
+        mkField(sec2, 'Kurs Adresi', 'kursAdresi', { placeholder: 'Mahalle, Sokak, No, İlçe/İl' });
+        modal.appendChild(sec2);
+
+        // Section 3: Sürücü Adayı Bilgileri (autofilled from selected student)
+        var sec3 = mkSection('Sürücü Adayı Bilgileri');
+        mkField(sec3, 'TC Kimlik No', 'adayTc', { placeholder: '12345678901', maxLength: 11, value: (student && student.tc) || '' });
+        mkField(sec3, 'Adı', 'adayAd', { placeholder: 'Ad', value: studentNames.ad });
+        mkField(sec3, 'Soyadı', 'adaySoyad', { placeholder: 'Soyad', value: studentNames.soyad });
+        mkField(sec3, 'Baba Adı', 'adayBabaAd', { placeholder: 'Baba adı' });
+        mkField(sec3, 'Doğum Yeri', 'adayDogumYeri', { placeholder: 'İl adı' });
+        mkField(sec3, 'Doğum Tarihi', 'adayDogumTarihi', { type: 'date' });
+        mkField(sec3, 'Adresi', 'adayAdresi', { placeholder: 'Mahalle, No, İlçe/İl' });
+        modal.appendChild(sec3);
+
+        // Section 4: Usta Öğretici (dropdown of cached personnel + autopick)
+        var sec4 = mkSection('Usta Öğretici Bilgileri');
+        var personnelOpts = [{ value: '', label: personnelList.length ? '— Seçiniz —' : '(personel bulunamadı, manuel girin)' }];
+        personnelList.forEach(function(p) {
+          if (!p || !p.tc) return;
+          personnelOpts.push({ value: p.tc, label: (p.adSoyad || ((p.ad || '') + ' ' + (p.soyad || ''))) + ' · ' + p.tc });
+        });
+        var personnelSelect = mkField(sec4, 'Personel Seç', 'ustaSelect', { type: 'select', options: personnelOpts });
+        mkField(sec4, 'TC Kimlik No', 'ustaTc', { placeholder: '12345678901', maxLength: 11, value: autoPersonnel ? autoPersonnel.tc : '' });
+        mkField(sec4, 'Adı', 'ustaAd', { placeholder: 'Ad', value: personnelNames.ad });
+        mkField(sec4, 'Soyadı', 'ustaSoyad', { placeholder: 'Soyad', value: personnelNames.soyad });
+        mkField(sec4, 'Adresi', 'ustaAdresi', { placeholder: 'Mahalle, No, İl', value: (autoPersonnel && (autoPersonnel.il || autoPersonnel.ilce)) ? ([autoPersonnel.ilce, autoPersonnel.il].filter(Boolean).join('/')) : '' });
+        mkField(sec4, 'Belge Sınıfı', 'ustaBelgeSinifi', {
+          type: 'select',
+          options: ['B', 'A', 'A1', 'A2', 'BE', 'C', 'CE', 'D', 'D1', 'DE']
+        });
+        mkField(sec4, 'Belge No', 'ustaBelgeNo', { placeholder: 'Belge numarası', value: autoPersonnel ? (autoPersonnel.izinNo || '') : '' });
+        mkField(sec4, 'Belge Yeri', 'ustaBelgeYeri', { placeholder: 'İl adı', value: autoPersonnel ? (autoPersonnel.il || '') : '' });
+        if (autoPickedPersonnelTc) personnelSelect.value = autoPickedPersonnelTc;
+
+        personnelSelect.onchange = function() {
+          var selTc = personnelSelect.value;
+          var p = null;
+          for (var k = 0; k < personnelList.length; k++) {
+            if (personnelList[k] && personnelList[k].tc === selTc) { p = personnelList[k]; break; }
+          }
+          if (!p) return;
+          var nm = splitAdSoyad(p.adSoyad || ((p.ad || '') + ' ' + (p.soyad || '')));
+          var setVal = function(id, val) { var el = document.getElementById('kb-' + id); if (el && val !== undefined) el.value = val; };
+          setVal('ustaTc', p.tc || '');
+          setVal('ustaAd', nm.ad);
+          setVal('ustaSoyad', nm.soyad);
+          setVal('ustaAdresi', [p.ilce, p.il].filter(Boolean).join('/'));
+          setVal('ustaBelgeNo', p.izinNo || '');
+          setVal('ustaBelgeYeri', p.il || '');
+        };
+        modal.appendChild(sec4);
+
+        var btnRow = document.createElement('div');
+        btnRow.style.cssText = 'display: flex; gap: 10px; justify-content: flex-end; margin-top: 8px; padding-top: 16px; border-top: 1px solid #2a2a4a;';
+
+        var cancelBtn = document.createElement('button');
+        cancelBtn.textContent = 'İptal';
+        cancelBtn.style.cssText = 'padding: 9px 20px; border: 1px solid #2a2a4a; border-radius: 4px; background: none; color: #ccc; cursor: pointer; font-size: 14px;';
+        cancelBtn.onclick = function() { overlay.remove(); };
+        btnRow.appendChild(cancelBtn);
+
+        var submitBtn = document.createElement('button');
+        submitBtn.textContent = 'Oluştur';
+        submitBtn.style.cssText = 'padding: 9px 20px; border: none; border-radius: 4px; background: #4361ee; color: white; cursor: pointer; font-size: 14px; font-weight: bold;';
+        submitBtn.onclick = function() {
+          var errors = [];
+          var adayTcVal = document.getElementById('kb-adayTc').value.trim();
+          var ustaTcVal = document.getElementById('kb-ustaTc').value.trim();
+          if (adayTcVal.length !== 11 || !/^[0-9]+$/.test(adayTcVal)) errors.push('adayTc');
+          if (ustaTcVal.length !== 11 || !/^[0-9]+$/.test(ustaTcVal)) errors.push('ustaTc');
+
+          errors.forEach(function(id) {
+            var el = document.getElementById('kb-' + id);
+            if (el) el.style.borderColor = '#ff4444';
+          });
+          if (errors.length) return;
+
+          function v(id) {
+            var el = document.getElementById('kb-' + id);
+            return el ? el.value.trim() : '';
+          }
+          function fmtDateSpaced(isoStr) {
+            if (!isoStr) return '';
+            var parts = isoStr.split('-');
+            if (parts.length !== 3) return isoStr;
+            return parts[2] + '    ' + parts[1] + '    ' + parts[0];
+          }
+          function fmtDate(isoStr) {
+            if (!isoStr) return '';
+            var parts = isoStr.split('-');
+            if (parts.length !== 3) return isoStr;
+            return parts[2] + '/' + parts[1] + '/' + parts[0];
+          }
+
+          var data = {
+            aracCinsi: v('aracCinsi'),
+            gurzergah: v('gurzergah'),
+            gunSaat: v('gunSaat'),
+            duzenlenmeTarihi: fmtDateSpaced(v('duzenlenmeTarihi')),
+            gecerlikBitisi: fmtDateSpaced(v('gecerlikBitisi')),
+            mudurAd: v('mudurAd'),
+            iliIlcesi: v('iliIlcesi'),
+            kursAdi: v('kursAdi'),
+            belgeNo: v('belgeNo'),
+            belgeTarihi: fmtDate(v('belgeTarihi')),
+            kursAdresi: v('kursAdresi'),
+            adayTc: adayTcVal,
+            adayAd: v('adayAd'),
+            adaySoyad: v('adaySoyad'),
+            adayBabaAd: v('adayBabaAd'),
+            adayDogumYeri: v('adayDogumYeri'),
+            adayDogumTarihi: fmtDate(v('adayDogumTarihi')),
+            adayAdresi: v('adayAdresi'),
+            ustaTc: ustaTcVal,
+            ustaAd: v('ustaAd'),
+            ustaSoyad: v('ustaSoyad'),
+            ustaAdresi: v('ustaAdresi'),
+            ustaBelgeSinifi: v('ustaBelgeSinifi'),
+            ustaBelgeNo: v('ustaBelgeNo'),
+            ustaBelgeYeri: v('ustaBelgeYeri'),
+          };
+          console.log('MEBBIS_K_BELGESI:' + JSON.stringify(data));
+          submitBtn.disabled = true;
+          submitBtn.textContent = 'Hazırlanıyor...';
+          submitBtn.style.opacity = '0.6';
+          overlay.remove();
+        };
+        btnRow.appendChild(submitBtn);
+
+        modal.appendChild(btnRow);
+        var focusTarget = document.getElementById('kb-adayBabaAd') || document.getElementById('kb-adayTc');
+        if (focusTarget) focusTarget.focus();
+        } // end buildFormBody
         return;
       }
 

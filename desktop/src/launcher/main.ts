@@ -21,7 +21,7 @@
 
 import { app, BrowserWindow } from 'electron';
 import * as path from 'path';
-import { IS_DEV } from './config';
+import { IS_DEV, FORCE_REMOTE_CODE_IN_DEV } from './config';
 import {
   registerRendererSchemeAsPrivileged,
   installRendererProtocol,
@@ -81,6 +81,14 @@ app.whenReady().then(async () => {
     // Set DESKTOP_FORCE_REMOTE_CODE=1 in .env to test the prod bundle
     // pipeline locally end-to-end.
     appControllerStart = (await import('../main/app-controller')).start;
+    // When the env flag is set, fetch remote scripts at startup so dev picks
+    // up the latest left-menu.js / sidebar scripts from the local backend
+    // instead of using the hardcoded fallback.
+    if (FORCE_REMOTE_CODE_IN_DEV) {
+      await codeLoader.sync().catch((e) => {
+        console.error('[CodeLoader] Dev startup sync failed:', e?.message ?? e);
+      });
+    }
   } else {
     const remoteStart = await loadRemoteController(codeLoader);
     if (!remoteStart) return; // user chose Çıkış

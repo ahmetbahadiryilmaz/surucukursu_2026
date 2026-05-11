@@ -27,6 +27,7 @@ import type { MenuItemConstructorOptions } from 'electron';
 import { Account, SimulatorType } from './account-store';
 import { AuthStore } from './auth-store';
 import { configureStudentSync, pullAll as pullStudentSync } from './student-sync';
+import { configurePersonnelSync } from './personnel-sync';
 import { MebbisManager } from './mebbis-manager';
 import { apiClient, MebbisAccount, ActivityLogBody } from './api-client';
 import { configureTemplateErrorReporter } from './template-fetcher';
@@ -83,6 +84,7 @@ export async function start(ctx: BootstrapContext): Promise<AppControllerHandle>
   // Wire the student-sync HTTP client. Account-id resolver returns null;
   // sync calls receive the explicit account.id from MebbisManager scrape paths.
   configureStudentSync(() => authStore.getToken(), () => null);
+  configurePersonnelSync(() => authStore.getToken());
 
   // If we already have a valid token from a previous session, pull on boot.
   if (authStore.getToken()) {

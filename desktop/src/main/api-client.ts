@@ -220,6 +220,57 @@ export interface DetailIngestPayload {
   }>;
 }
 
+export interface PersonnelListIngestRow {
+  tc: string;
+  adSoyad?: string;
+  izinNo?: string;
+  durum?: string;
+  ad?: string;
+  soyad?: string;
+  statusu?: string;
+  gorevi?: string;
+  bransi?: string;
+  il?: string;
+  ilce?: string;
+  kurumKodu?: string;
+  kurumAdi?: string;
+  kurumAdiBaslangic?: string;
+  calismaIzniBas?: string;
+  calismaIzniBit?: string;
+  ayrilmaTarihi?: string;
+  maasKds?: string;
+  ucretKds?: string;
+  durumu?: string;
+}
+
+export interface PersonnelDetailIngestPayload {
+  tc: string;
+  dogumTarihi?: string;
+  ogrenimBilgisi?: string;
+  mezuniyetBelgeCinsi?: string;
+  mezuniyetTarihi?: string;
+  mezuniyetBelgeTarihi?: string;
+  mezuniyetBelgeSayisi?: string;
+  mezuniyetAciklama?: string;
+  gorevi?: string;
+  statusu?: string;
+  bransi?: string;
+  brans2?: string;
+  brans3?: string;
+  brans4?: string;
+  dersUcret?: string;
+  netBrutUcret?: string;
+  calismaIzniBas?: string;
+  calismaIzniBit?: string;
+  maasKarsiligiDersSayisi?: string;
+  dersUcretiKarsiligiDersSayisi?: string;
+  durumu?: string;
+  ayrilmaAciklama?: string;
+  ePosta?: string;
+  tel?: string;
+  derseProgramlar?: Array<{ program: string; tip: string }>;
+}
+
 export interface ActivityLogBody {
   event: 'school_login' | 'pdf_download' | 'desktop_error';
   school_id: number;
@@ -302,6 +353,23 @@ export const apiClient = {
     request<{ studentIsNew: boolean; mebbis_id: number }>(
       'POST',
       '/desktop/desktop-service/student-store/students/detail',
+      { mebbis_account_id: mebbisAccountId, payload } as unknown as Record<string, unknown>,
+      token,
+    ),
+
+  // ── Personnel store ─────────────────────────────────────────────
+  ingestPersonnelList: (token: string, mebbisAccountId: string, rows: PersonnelListIngestRow[]) =>
+    request<{ created: number; updated: number; linked: number }>(
+      'POST',
+      '/desktop/desktop-service/personnel-store/personnel/list',
+      { mebbis_account_id: mebbisAccountId, rows } as unknown as Record<string, unknown>,
+      token,
+    ),
+
+  ingestPersonnelDetail: (token: string, mebbisAccountId: string, payload: PersonnelDetailIngestPayload) =>
+    request<{ personnel_id: number }>(
+      'POST',
+      '/desktop/desktop-service/personnel-store/personnel/detail',
       { mebbis_account_id: mebbisAccountId, payload } as unknown as Record<string, unknown>,
       token,
     ),
