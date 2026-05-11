@@ -84,6 +84,13 @@ export class MebbisManager {
   // Pending "open student" navigation triggered from sidebar Details button
   private pendingOpenStudent: Map<string, { tc: string; phase: 'skt-module' | 'skt02009' }> = new Map();
 
+  // Personnel-update navigation: when the user clicks "Güncelle" we set this
+  // flag, navigate to OOK's home (ook00001) to establish the OOK module
+  // session, then auto-navigate to ook15003 on home-page load. A direct hop
+  // to ook15003 from elsewhere in MEBBIS bounces back to ook00001, so the
+  // two-step is mandatory.
+  private pendingPersonnelUpdate: Set<string> = new Set();
+
   // Demo subscription gating: cap tekli at 5 (toplu blocked entirely)
   private static readonly DEMO_PDF_LIMIT = 5;
   private demoSessionUsage: Map<string, number> = new Map();
@@ -334,6 +341,14 @@ export class MebbisManager {
         console.log(`[OpenStudent][${account.label}] Sidebar requested open for tc=${tc}`);
         this.openStudent(win, account, tc);
       }
+      if (message === 'MEBBIS_REQUEST_PERSONNEL_UPDATE') {
+        console.log(`[PersonnelUpdate][${account.label}] Güncelle requested — routing via OOK home`);
+        this.pendingPersonnelUpdate.add(account.id);
+        win.loadURL('https://mebbis.meb.gov.tr/Ookgm/ook00001.aspx').catch((e) => {
+          console.error(`[PersonnelUpdate][${account.label}] loadURL ook00001 failed:`, e);
+          this.pendingPersonnelUpdate.delete(account.id);
+        });
+      }
       if (message === 'MEBBIS_BATCH_CANCEL') {
         console.log(`[${account.label}] Batch cancelled by user`);
         this.clearPendingBatchDownload();
@@ -468,10 +483,20 @@ export class MebbisManager {
         this.hideStatus(win);
         this.injectLeftMenu(win, account);
         this.parseAndIngestPersonnelList(win, account);
+      } else if (currentURL.toLowerCase().includes('ook00001') && this.pendingPersonnelUpdate.has(account.id)) {
+        // Güncelle landed us on OOK home — session is now established.
+        // Chain-navigate to ook15003 to trigger the personnel scrape.
+        console.log(`[PersonnelUpdate][${account.label}] OOK home loaded, navigating to ook15003`);
+        this.injectLeftMenu(win, account);
+        win.loadURL('https://mebbis.meb.gov.tr/Ookgm/ook15003.aspx').catch((e) => {
+          console.error(`[PersonnelUpdate][${account.label}] loadURL ook15003 failed:`, e);
+          this.pendingPersonnelUpdate.delete(account.id);
+        });
       } else if (currentURL.toLowerCase().includes('ook15003')) {
         // ook15003 is the canonical personnel list (Özel Öğretim Kurumları
         // Modülü). Richer than skt04002 — has Kayıt No, ad/soyad split,
         // çalışma izni dates, onay durumu. Scraped on every visit.
+        this.pendingPersonnelUpdate.delete(account.id);
         this.hideStatus(win);
         this.injectLeftMenu(win, account);
         this.parseAndIngestPersonnelListOok(win, account);
@@ -1517,12 +1542,12 @@ export class MebbisManager {
         }
 
         function personnelGuncelle(btn) {
-          // OOK15003 is the comprehensive personnel list. It only loads when
+          // OOK15003 is the comprehensive personnel list and only loads when
           // the user is logged into "Özel Öğretim Kurumları Modülü". A user
-          // currently inside MTSK modülü has no OOK session and must log out
-          // + log back into the OOK module before this can run.
+          // inside MTSK modülü has no OOK session and must log out + log
+          // back in via the OOK module before this can run.
           const url = location.href || '';
-          const isInMtskModule = /\\/skt\\//i.test(url) || /\\/SKT\\//.test(url);
+          const isInMtskModule = /\\/skt\\//i.test(url);
           if (isInMtskModule) {
             showInfoOverlay(
               'Personel listesini güncellemek için "Özel Öğretim Kurumları Modülü"ne giriş yapmanız gerekiyor.\\n\\n' +
@@ -1531,9 +1556,10 @@ export class MebbisManager {
             return;
           }
           if (btn) { btn.disabled = true; btn.textContent = 'Yükleniyor...'; btn.style.opacity = '0.6'; }
-          // Navigate to ook15003 — the URL-detection hook in the main process
-          // will fire parseAndIngestPersonnelListOok once the page loads.
-          location.href = 'https://mebbis.meb.gov.tr/Ookgm/ook15003.aspx';
+          // Hand off to the main process — direct hops to ook15003 bounce
+          // back to ook00001 if the OOK session isn't established yet.
+          // Main: navigates to ook00001 → on load, chain to ook15003.
+          console.log('MEBBIS_REQUEST_PERSONNEL_UPDATE');
         }
 
         personnelBtn.onclick = () => {
