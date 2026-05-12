@@ -1019,8 +1019,7 @@ export async function start(ctx: BootstrapContext): Promise<AppControllerHandle>
     ipcMain.handle('accounts:local-test', async (_event, id: string) => {
       const token = authStore.getToken();
       if (!token) throw new Error('Not authenticated');
-      const isRunning = mebbisManager.isRunning(id);
-      if (isRunning) {
+      if (mebbisManager.isRunning(id)) {
         mebbisManager.focus(id);
         return true;
       }
@@ -1028,7 +1027,7 @@ export async function start(ctx: BootstrapContext): Promise<AppControllerHandle>
       const found = dbAccounts.find(m => String(m.id) === id);
       if (!found) throw new Error('Account not found');
       const account = { ...dbToAccount(found), isRunning: false };
-      await mebbisManager.start(account, mainWindow!);
+      mebbisManager.startLocalTest(account, mainWindow!);
       return true;
     });
 

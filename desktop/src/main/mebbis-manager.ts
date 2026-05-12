@@ -7,7 +7,8 @@ import { fetchEncryptedTemplate } from './template-fetcher';
 import { getRequestLogger } from './request-logger';
 import { getStudentDb } from './student-db';
 import { pushList, pushDetail } from './student-sync';
-import { getPersonnelDb } from './personnel-db';
+import { getPersonnelDb, PersonnelDetailData } from './personnel-db';
+import { pushPersonnelDetail } from './personnel-sync';
 
 
 interface RunningAccount {
@@ -90,6 +91,22 @@ export class MebbisManager {
   // to ook15003 from elsewhere in MEBBIS bounces back to ook00001, so the
   // two-step is mandatory.
   private pendingPersonnelUpdate: Set<string> = new Set();
+
+  // Sequential batch detail scraping state: after the personnel list is
+  // ingested from ook12001 we click each row's "Aç" button one at a time,
+  // visit ook12002, and scrape full detail fields. This holds the in-flight
+  // batch (account-scoped) so navigation handlers can resume after each hop.
+  private pendingPersonnelBatchDetail: {
+    accountId: string;
+    totalRows: number;
+    currentIndex: number;
+    formState: Record<string, string>;
+  } | null = null;
+
+  // Accounts that have completed a full detail batch this session. Cleared
+  // when the user requests a fresh Güncelle so the next ook12001 visit
+  // re-scrapes everything.
+  private personnelBatchDetailDone: Set<string> = new Set();
 
   // Demo subscription gating: cap tekli at 5 (toplu blocked entirely)
   private static readonly DEMO_PDF_LIMIT = 5;
@@ -942,6 +959,173 @@ export class MebbisManager {
     });
   }
 
+  /**
+   * Trigger the ASP.NET postback for the Nth row of the dgPersonelArama grid.
+   * Row 0 fires `__doPostBack` directly because we are still on the ook12001
+   * results page. Subsequent rows have already navigated to ook12002, so we
+   * synthesise a form POST back to ook12001 using the VIEWSTATE captured from
+   * the original results page (`pendingPersonnelBatchDetail.formState`).
+   */
+  private triggerPersonnelAcPostback(win: BrowserWindow, account: Account, index: number): void {
+    if (win.isDestroyed()) return;
+    const batch = this.pendingPersonnelBatchDetail;
+    if (!batch || batch.accountId !== account.id) return;
+
+    console.log(`[PersonnelBatch][${account.label}] Triggering Aç postback row ${index + 1}/${batch.totalRows}`);
+
+    if (index === 0) {
+      win.webContents.executeJavaScript(`
+        (function() {
+          try {
+            if (typeof __doPostBack === 'function') {
+              __doPostBack('dgPersonelArama', 'Select$0');
+              return true;
+            }
+            var f = document.getElementById('ook12001') || document.forms['ook12001'];
+            if (f && f.elements['__EVENTTARGET'] && f.elements['__EVENTARGUMENT']) {
+              f.elements['__EVENTTARGET'].value = 'dgPersonelArama';
+              f.elements['__EVENTARGUMENT'].value = 'Select$0';
+              f.submit();
+              return true;
+            }
+            return false;
+          } catch (e) {
+            console.log('[MEBBIS] PersonnelBatch postback 0 error: ' + e);
+            return false;
+          }
+        })()
+      `).then((ok: boolean) => {
+        if (!ok) {
+          console.log(`[PersonnelBatch][${account.label}] Postback row 0 failed — aborting batch`);
+          this.pendingPersonnelBatchDetail = null;
+        }
+      }).catch((e: any) => {
+        console.error(`[PersonnelBatch][${account.label}] Postback row 0 JS error:`, e);
+        this.pendingPersonnelBatchDetail = null;
+      });
+      return;
+    }
+
+    const formStateJson = JSON.stringify(batch.formState).replace(/<\/script/gi, '<\\/script');
+    win.webContents.executeJavaScript(`
+      (function() {
+        try {
+          var fields = ${formStateJson};
+          fields['__EVENTTARGET'] = 'dgPersonelArama';
+          fields['__EVENTARGUMENT'] = 'Select$${index}';
+          var f = document.createElement('form');
+          f.method = 'post';
+          f.action = 'https://mebbis.meb.gov.tr/Ookgm/ook12001.aspx';
+          for (var k in fields) {
+            if (!Object.prototype.hasOwnProperty.call(fields, k)) continue;
+            var inp = document.createElement('input');
+            inp.type = 'hidden';
+            inp.name = k;
+            inp.value = fields[k];
+            f.appendChild(inp);
+          }
+          document.body.appendChild(f);
+          f.submit();
+          return true;
+        } catch (e) {
+          console.log('[MEBBIS] PersonnelBatch postback error: ' + e);
+          return false;
+        }
+      })()
+    `).then((ok: boolean) => {
+      if (!ok) {
+        console.log(`[PersonnelBatch][${account.label}] Postback row ${index} failed — aborting batch`);
+        this.pendingPersonnelBatchDetail = null;
+      }
+    }).catch((e: any) => {
+      console.error(`[PersonnelBatch][${account.label}] Postback row ${index} JS error:`, e);
+      this.pendingPersonnelBatchDetail = null;
+    });
+  }
+
+  /**
+   * Scrape detail fields from a loaded ook12002 page (one personel), persist
+   * via PersonnelDb.ingestDetail, push the detail to the backend, then advance
+   * the batch index. When the batch finishes, mark the account as done so a
+   * re-visit to ook12001 in this session does not re-trigger the scrape.
+   */
+  private scrapePersonnelDetail(win: BrowserWindow, account: Account): void {
+    if (win.isDestroyed()) return;
+    const batch = this.pendingPersonnelBatchDetail;
+    if (!batch || batch.accountId !== account.id) return;
+
+    win.webContents.executeJavaScript(`
+      (function() {
+        function txt(id) {
+          var el = document.getElementById(id);
+          return el ? (el.innerText || el.textContent || '').trim() : '';
+        }
+        function val(id) {
+          var el = document.getElementById(id);
+          return el ? (el.value || '').trim() : '';
+        }
+        var progs = [];
+        var pRows = document.querySelectorAll('#dgDerseGirecegiProgram tr');
+        for (var i = 0; i < pRows.length; i++) {
+          if (pRows[i].classList.contains('frmListBaslik')) continue;
+          var cells = pRows[i].querySelectorAll('td');
+          if (cells.length >= 2) {
+            progs.push({
+              program: (cells[0].innerText || cells[0].textContent || '').trim(),
+              tip:     (cells[1].innerText || cells[1].textContent || '').trim()
+            });
+          }
+        }
+        return {
+          tc:                            txt('lblTcKimlikNo'),
+          ad:                            txt('lblAd'),
+          soyad:                         txt('lblSoyad'),
+          dogumTarihi:                   txt('lblDogumTarihi'),
+          ogrenimBilgisi:                txt('lblOgrenimBilgisi'),
+          mezuniyetBelgeCinsi:           txt('lblMezuniyetBelgeCinsi'),
+          mezuniyetTarihi:               txt('lblMezuniyetTarihi'),
+          mezuniyetBelgeTarihi:          txt('lblMezuniyetBelgeTarihi'),
+          mezuniyetBelgeSayisi:          txt('lblMezuniyetBelgeSayisi'),
+          mezuniyetAciklama:             txt('lblMezuniyetAciklama'),
+          gorevi:                        txt('lblGorevi'),
+          statusu:                       txt('lblStatusu'),
+          bransi:                        txt('lblBransi'),
+          dersUcret:                     txt('lblDersUcret'),
+          netBrutUcret:                  txt('lblNetUcretBrutUcret'),
+          calismaIzniBas:                txt('lblCalismaIzniBaslamaTarihi'),
+          calismaIzniBit:                txt('lblCalismaIzniBitisTarihi'),
+          maasKarsiligiDersSayisi:       txt('lblMaasKarsiligiDersSayisi'),
+          dersUcretiKarsiligiDersSayisi: txt('lblDersUcretiKarsiligiDersSayisi'),
+          durumu:                        txt('lblDurumu'),
+          ayrilmaAciklama:               txt('lblAyrilmaAciklama'),
+          ePosta:                        val('txtePosta'),
+          tel:                           val('txtTel'),
+          derseProgramlar:               progs
+        };
+      })()
+    `).then((detail: PersonnelDetailData & { tc?: string }) => {
+      if (detail && detail.tc) {
+        getPersonnelDb().ingestDetail(account.id, detail.tc, detail);
+        console.log(`[PersonnelBatch][${account.label}] Detail scraped: TC=${detail.tc} (${batch.currentIndex + 1}/${batch.totalRows})`);
+        pushPersonnelDetail(account.id, { tc: detail.tc, ...detail });
+      } else {
+        console.log(`[PersonnelBatch][${account.label}] ook12002 at index ${batch.currentIndex}: no TC found, skipping`);
+      }
+      batch.currentIndex++;
+      if (batch.currentIndex < batch.totalRows) {
+        this.triggerPersonnelAcPostback(win, account, batch.currentIndex);
+      } else {
+        console.log(`[PersonnelBatch][${account.label}] Personnel detail batch complete — ${batch.totalRows} records scraped`);
+        this.personnelBatchDetailDone.add(account.id);
+        this.pendingPersonnelBatchDetail = null;
+        this.pushStoreToSidebar(win, account);
+      }
+    }).catch((e: any) => {
+      console.error(`[PersonnelBatch][${account.label}] scrapePersonnelDetail failed at index ${batch.currentIndex}:`, e);
+      this.pendingPersonnelBatchDetail = null;
+    });
+  }
+
   private serializeStore(account: Account) {
     const students = getStudentDb().serialize(account.id);
     const personnel = getPersonnelDb().serialize(account.id);
@@ -1650,6 +1834,77 @@ export class MebbisManager {
   isRunning(accountId: string): boolean {
     const entry = this.running.get(accountId);
     return !!entry && !entry.window.isDestroyed();
+  }
+
+  /**
+   * Local test mode: opens a window WITHOUT logging into MEBBIS.
+   * Shows a static "Local Test Mode" overlay so the operator can exercise
+   * PDF generation against cached local data without hitting MEBBIS at all.
+   */
+  startLocalTest(account: Account, parentWindow: BrowserWindow) {
+    console.log(`\n========== STARTING LOCAL TEST: ${account.label} ==========`);
+
+    const existing = this.running.get(account.id);
+    if (existing && !existing.window.isDestroyed()) {
+      existing.window.focus();
+      return;
+    }
+
+    const partition = `persist:mebbis-localtest-${account.id}`;
+    const win = new BrowserWindow({
+      width: 1280,
+      height: 900,
+      title: `Local Test - ${account.label}`,
+      webPreferences: {
+        partition,
+        contextIsolation: true,
+        nodeIntegration: false,
+        webSecurity: true,
+        devTools: true,
+      },
+      show: false,
+    });
+    win.removeMenu();
+
+    this.running.set(account.id, { account, window: win });
+
+    win.on('closed', () => {
+      this.running.delete(account.id);
+      if (parentWindow && !parentWindow.isDestroyed()) {
+        parentWindow.webContents.send('account:stopped', account.id);
+      }
+    });
+
+    win.once('ready-to-show', () => win.show());
+
+    win.webContents.once('did-finish-load', () => {
+      this.injectLeftMenu(win, account).catch((e) => {
+        console.error(`[LocalTest][${account.label}] injectLeftMenu failed:`, e);
+      });
+    });
+
+    const labelSafe = account.label.replace(/[<>&"]/g, '');
+    const html = `<!DOCTYPE html><html lang="tr"><head><meta charset="UTF-8"><title>Local Test - ${labelSafe}</title>
+<style>
+  html,body{margin:0;height:100%;background:#0f0f1e;color:#e6e6f0;font-family:Arial,sans-serif;}
+  .wrap{height:100%;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:14px;text-align:center;padding:0 24px;}
+  .badge{background:#4361ee;color:#fff;padding:6px 14px;border-radius:999px;font-size:12px;letter-spacing:2px;font-weight:700;}
+  h1{margin:0;font-size:26px;}
+  .sub{color:#9aa0bf;font-size:14px;max-width:520px;line-height:1.6;}
+  .school{color:#fff;font-weight:600;}
+</style></head>
+<body>
+  <div class="wrap">
+    <div class="badge">LOCAL TEST</div>
+    <h1>MEBBIS oturumu açılmadı</h1>
+    <div class="sub">
+      <div class="school">${labelSafe}</div>
+      Bu pencere yerel önbellek verisi üzerinde PDF üretimini test etmek içindir.
+      MEBBIS'e bağlanılmamıştır; "Güncelle" işlemleri devre dışıdır.
+    </div>
+  </div>
+</body></html>`;
+    win.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(html)}`);
   }
 
   private isLoginPage(url: string): boolean {
