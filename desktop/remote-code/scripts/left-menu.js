@@ -143,6 +143,54 @@
         var students = Array.isArray(store.students) ? store.students : [];
         var personnel = Array.isArray(store.personnel) ? store.personnel : [];
 
+        // Gate: K Belgesi needs Kurum Bilgisi (for kurum adı/adres/il-ilçe)
+        // and Personel Bilgisi (for usta öğretici autopick). If either is
+        // missing show a prompt with a Güncelle button instead of the form.
+        var hasKurum = !!(store.kurumInfo && store.kurumInfo.kurumAdi);
+        var hasPersonnel = personnel.length > 0;
+        if (!hasKurum || !hasPersonnel) {
+          var missingKind = !hasKurum ? 'kurum' : 'personel';
+          var gateOv = document.createElement('div');
+          gateOv.id = 'mebbis-modal-overlay';
+          gateOv.style.cssText =
+            'position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.6); z-index: 99999; display: flex; align-items: center; justify-content: center;';
+          var gateModal = document.createElement('div');
+          gateModal.style.cssText =
+            'background: #1a1a2e; border: 1px solid #2a2a4a; border-radius: 10px; padding: 24px 28px; width: 400px; font-family: Arial, sans-serif; color: white; text-align: center;';
+          var gateTitle = document.createElement('h3');
+          gateTitle.style.cssText = 'margin: 0 0 12px 0; color: #4361ee; font-size: 16px;';
+          gateTitle.textContent = missingKind === 'kurum' ? 'Kurum Bilgisi Eksik' : 'Personel Bilgisi Eksik';
+          gateModal.appendChild(gateTitle);
+          var gateMsg = document.createElement('div');
+          gateMsg.style.cssText = 'font-size: 14px; color: #ccc; margin-bottom: 20px; line-height: 1.5;';
+          gateMsg.textContent = missingKind === 'kurum'
+            ? 'Lütfen Kurum Bilgisi güncelleyin.'
+            : 'Lütfen Personel Bilgisi güncelleyin.';
+          gateModal.appendChild(gateMsg);
+          var gateBtns = document.createElement('div');
+          gateBtns.style.cssText = 'display: flex; gap: 10px; justify-content: center;';
+          var gateCancel = document.createElement('button');
+          gateCancel.textContent = 'İptal';
+          gateCancel.style.cssText = 'padding: 8px 16px; border: 1px solid #2a2a4a; border-radius: 4px; background: none; color: #ccc; cursor: pointer; font-size: 14px;';
+          gateCancel.onclick = function() { gateOv.remove(); };
+          gateBtns.appendChild(gateCancel);
+          var gateUpd = document.createElement('button');
+          gateUpd.textContent = 'Güncelle';
+          gateUpd.style.cssText = 'padding: 8px 16px; border: none; border-radius: 4px; background: #4361ee; color: white; cursor: pointer; font-size: 14px; font-weight: 500;';
+          gateUpd.onclick = function() {
+            gateUpd.disabled = true;
+            gateUpd.textContent = 'Yükleniyor...';
+            gateUpd.style.opacity = '0.6';
+            console.log(missingKind === 'kurum' ? 'MEBBIS_REQUEST_KURUM_UPDATE' : 'MEBBIS_REQUEST_PERSONNEL_UPDATE');
+          };
+          gateBtns.appendChild(gateUpd);
+          gateModal.appendChild(gateBtns);
+          gateOv.appendChild(gateModal);
+          gateOv.onclick = function(e) { if (e.target === gateOv) gateOv.remove(); };
+          document.body.appendChild(gateOv);
+          return;
+        }
+
         overlay = document.createElement('div');
         overlay.id = 'mebbis-modal-overlay';
         overlay.style.cssText =
@@ -197,6 +245,28 @@
             empty.style.cssText = 'padding: 10px; color: #888; font-size: 13px; text-align: center;';
             empty.textContent = 'Eşleşme bulunamadı';
             resultsBox.appendChild(empty);
+            // If the query is a valid 11-digit TC, offer to fetch from MEBBIS.
+            if (/^\d{11}$/.test(query)) {
+              var fetchWrap = document.createElement('div');
+              fetchWrap.style.cssText = 'padding: 0 10px 12px; text-align: center;';
+              var fetchHint = document.createElement('div');
+              fetchHint.style.cssText = 'color: #888; font-size: 11px; margin-bottom: 8px;';
+              fetchHint.textContent = "Bu TC yerel kayıtta yok. MEBBIS'ten çekilsin mi?";
+              fetchWrap.appendChild(fetchHint);
+              var fetchBtn = document.createElement('button');
+              fetchBtn.type = 'button';
+              fetchBtn.textContent = "MEBBIS'ten Getir →";
+              fetchBtn.style.cssText = 'padding: 8px 16px; border: none; border-radius: 4px; background: #4361ee; color: white; cursor: pointer; font-size: 13px; font-weight: 500;';
+              fetchBtn.onclick = function() {
+                fetchBtn.disabled = true;
+                fetchBtn.textContent = 'Çekiliyor...';
+                fetchBtn.style.opacity = '0.6';
+                console.log('MEBBIS_KB_FETCH_STUDENT:' + query);
+                overlay.remove();
+              };
+              fetchWrap.appendChild(fetchBtn);
+              resultsBox.appendChild(fetchWrap);
+            }
             return;
           }
           matches.forEach(function(s) {
@@ -374,6 +444,34 @@
         var personnelKurum = autoPersonnel ? (autoPersonnel.kurumAdi || '') : '';
         var personnelNames = autoPersonnel ? splitAdSoyad(autoPersonnel.adSoyad || ((autoPersonnel.ad || '') + ' ' + (autoPersonnel.soyad || ''))) : { ad: '', soyad: '' };
 
+        // Shared kurum derivations (used in section 1 + section 2)
+        var kurumInfo = store.kurumInfo || null;
+        // MEBBIS adres ends with "...ILÇE / İL"; extract the trailing two ALL-CAPS words.
+        function extractIlIlceFromAdres(adres) {
+          if (!adres) return null;
+          var m = String(adres).match(/([A-ZÇĞİÖŞÜ]+)\s*\/\s*([A-ZÇĞİÖŞÜ]+)\s*$/);
+          if (!m) return null;
+          return { ilce: m[1], il: m[2] };
+        }
+        var kurumIlIlce = kurumInfo ? extractIlIlceFromAdres(kurumInfo.kurumAdres) : null;
+        var ilIlceVal = '';
+        if (kurumIlIlce) {
+          ilIlceVal = kurumIlIlce.il + ' / ' + kurumIlIlce.ilce;
+        } else if (personnelIl && personnelIlce) {
+          ilIlceVal = personnelIl.toLocaleUpperCase('tr-TR') + ' / ' + personnelIlce.toLocaleUpperCase('tr-TR');
+        }
+        // "ÖZEL AYDINCIK BATUHAN MOTORLU TAŞIT SÜRÜCÜLERİ KURSU" → "AYDINCIK BATUHAN"
+        function shortKursAdi(full) {
+          if (!full) return '';
+          var s = String(full).trim().replace(/\s+/g, ' ');
+          s = s.replace(/^ÖZEL\s+/i, '');
+          s = s.replace(/\s+MOTORLU\s+.*$/i, '');
+          s = s.replace(/\s+SÜRÜCÜ\s+KURSU.*$/i, '');
+          return s.trim();
+        }
+        var kursAdiVal = shortKursAdi((kurumInfo && kurumInfo.kurumAdi) || personnelKurum || (student && student.kurum) || '');
+        var kursAdresVal = (kurumInfo && kurumInfo.kurumAdres) || '';
+
         // Section 1: Araç ve İzin Bilgileri
         var sec1 = mkSection('Araç ve İzin Bilgileri');
         mkField(sec1, 'Araç Cinsi', 'aracCinsi', {
@@ -384,17 +482,16 @@
         mkField(sec1, 'Gün / Saat', 'gunSaat', { placeholder: 'Pzt-Cu 09:00-17:00' });
         mkField(sec1, 'Düzenlenme Tarihi', 'duzenlenmeTarihi', { type: 'date', value: todayStr });
         mkField(sec1, 'Geçerlik Bitişi', 'gecerlikBitisi', { type: 'date', value: sixMonthsStr });
-        mkField(sec1, 'Müdür Adı Soyadı', 'mudurAd', { placeholder: 'Ad Soyad' });
+        mkField(sec1, 'Kurs Adı', 'mudurAd', { placeholder: 'Kurs adı', value: kursAdiVal });
         modal.appendChild(sec1);
 
-        // Section 2: Kurs / Kurum Bilgileri
+        // Section 2: Kurs / Kurum Bilgileri (prefer kurumInfo from skt01001 over personnel-derived fallback)
         var sec2 = mkSection('Kurs / Kurum Bilgileri');
-        var ilIlceVal = (personnelIl && personnelIlce) ? (personnelIl.toLocaleUpperCase('tr-TR') + ' / ' + personnelIlce.toLocaleUpperCase('tr-TR')) : '';
         mkField(sec2, 'İli / İlçesi', 'iliIlcesi', { placeholder: 'ANKARA / ÇANKAYA', value: ilIlceVal });
-        mkField(sec2, 'Kurs Adı', 'kursAdi', { placeholder: 'Kurs adı', value: personnelKurum || (student && student.kurum) || '' });
+        mkField(sec2, 'Kurs Adı', 'kursAdi', { placeholder: 'Kurs adı', value: kursAdiVal });
         mkField(sec2, 'Belge No', 'belgeNo', { placeholder: '2026-001' });
         mkField(sec2, 'Belge Tarihi', 'belgeTarihi', { type: 'date', value: todayStr });
-        mkField(sec2, 'Kurs Adresi', 'kursAdresi', { placeholder: 'Mahalle, Sokak, No, İlçe/İl' });
+        mkField(sec2, 'Kurs Adresi', 'kursAdresi', { placeholder: 'Mahalle, Sokak, No, İlçe/İl', value: kursAdresVal });
         modal.appendChild(sec2);
 
         // Section 3: Sürücü Adayı Bilgileri (autofilled from selected student)
@@ -646,4 +743,36 @@
     document.head.appendChild(style);
     console.log('[MEBBIS] Left menu injected');
   }
+
+  // Re-entry hook for K Belgesi auto-fetch flow. Called by the main process
+  // after it has scraped a previously-unknown student and refreshed __mebbisStore.
+  // Simulates a click on the K Belgesi menu button, then auto-selects the new row.
+  window.__openKBelgesi = function(autoTc) {
+    var menuBtns = document.querySelectorAll('#mebbis-left-menu button');
+    var clicked = false;
+    for (var i = 0; i < menuBtns.length; i++) {
+      if (menuBtns[i].textContent === 'K Belgesi Oluştur') {
+        menuBtns[i].click();
+        clicked = true;
+        break;
+      }
+    }
+    if (!clicked) {
+      console.log('[MEBBIS] __openKBelgesi: K Belgesi button not found');
+      return;
+    }
+    if (!autoTc) return;
+    setTimeout(function() {
+      var ov = document.getElementById('mebbis-modal-overlay');
+      if (!ov) return;
+      var input = ov.querySelector('input[placeholder*="Soyad"]');
+      if (!input) return;
+      input.value = autoTc;
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+      setTimeout(function() {
+        var row = ov.querySelector('div[style*="cursor: pointer"]');
+        if (row) row.click();
+      }, 120);
+    }, 60);
+  };
 })();

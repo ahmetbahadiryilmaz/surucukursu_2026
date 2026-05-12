@@ -18,9 +18,9 @@
 5. **Always verify user_type authorization** — Use appropriate guards
 6. **Sessions expire after 24h** — Expiry checked on every request
 7. **Say i read the index before start of every conversation**
-8. **Before bumping remote code version** — Read [WHATS_NEW_FORMAT.md](./desktop/ai-docs/WHATS_NEW_FORMAT.md) to write proper release notes
-
-See [CONSTRAINTS.md](./ai-docs/CONSTRAINTS.md) for full details.
+8. **Before bumping remote code version** — Read [WHATS_NEW_FORMAT.md](./desktop/ai-docs/WHATS_NEW_FORMAT.md) to write proper **
+9. **After finish editing** - create table of the files that you edit and which lines , thats clickable
+10. See [CONSTRAINTS.md](./ai-docs/CONSTRAINTS.md) for full details.
 
 ## Main Documentation
 

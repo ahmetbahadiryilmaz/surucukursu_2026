@@ -10,6 +10,7 @@ import { TemplatesModule } from './templates/templates.module';
 import { DesktopCodeModule } from './desktop-code/desktop-code.module';
 import { StudentStoreModule } from './student-store/student-store.module';
 import { PersonnelStoreModule } from './personnel-store/personnel-store.module';
+import { KurumInfoStoreModule } from './kurum-info-store/kurum-info-store.module';
 import { validate, getApiServerDatabaseConfig } from '@surucukursu/shared';
 import {
   AdminEntity,
@@ -26,6 +27,9 @@ import {
   DrivingSchoolPersonnelEntity,
   DrivingSchoolPersonnelLinkEntity,
   DrivingSchoolPersonnelProgramEntity,
+  DrivingSchoolKurumInfoEntity,
+  DrivingSchoolKurumProgramEntity,
+  DrivingSchoolKurumVehicleEntity,
   DrivingSchoolCarEntity,
   MebbisCookie,
   SystemLogsEntity,
@@ -75,6 +79,7 @@ import {
     DesktopCodeModule,
     StudentStoreModule,
     PersonnelStoreModule,
+    KurumInfoStoreModule,
     HealthModule,
   ],
 })

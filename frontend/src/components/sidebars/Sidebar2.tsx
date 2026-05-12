@@ -1,13 +1,33 @@
 import { Button } from "@/components/ui/button";
 import { School, TerminalIcon, BarChart2 } from "lucide-react";
+import { useEffect, useState } from "react";
 
+const DEMO_USERS = ['test@mtsk.app', 'batuhan33mtsk@gmail.com'];
 
 const AdminSidebar = () => {
+    const [userEmail, setUserEmail] = useState<string>('');
+    const [userName, setUserName] = useState<string>('');
+
+    useEffect(() => {
+      const userData = localStorage.getItem("user");
+      if (userData) {
+        try {
+          const parsedUser = JSON.parse(userData);
+          setUserEmail(parsedUser.email || '');
+          setUserName(parsedUser.name || parsedUser.email || '');
+        } catch (error) {
+          console.error("Error parsing user data:", error);
+        }
+      }
+    }, []);
+
+    const isDemoUser = DEMO_USERS.includes(userEmail);
+
     return (
       <div className="hidden md:flex w-64 bg-zinc-900 text-white h-screen p-4 flex-col border-r border-zinc-800">
         <div className="mb-4 flex flex-col">
-          <span className="font-bold text-sm">test@mtsk.app</span>
-          <span className="text-xs text-gray-400">DEMO</span>
+          <span className="font-bold text-sm">{userEmail || 'Loading...'}</span>
+          {isDemoUser && <span className="text-xs text-gray-400">DEMO</span>}
         </div>
         <nav className="flex-1">
           <ul className="space-y-2">

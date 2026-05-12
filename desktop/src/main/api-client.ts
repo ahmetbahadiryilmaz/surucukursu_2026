@@ -271,6 +271,70 @@ export interface PersonnelDetailIngestPayload {
   derseProgramlar?: Array<{ program: string; tip: string }>;
 }
 
+export interface KurumProgramRow {
+  ehliyetSinifi?: string;
+  ruhsatTarihi?: string;
+  kapanmaTarihi?: string;
+  durum?: string;
+}
+
+export interface KurumVehicleRow {
+  plaka?: string;
+  ehliyetSinifi?: string;
+  marka?: string;
+  model?: string;
+  modelYili?: string;
+  tescilTarihi?: string;
+  hizmeteGiris?: string;
+  hizmettenCikis?: string;
+  durum?: string;
+  memOnay?: string;
+}
+
+export interface KurumInfoIngestPayload {
+  kurumKodu?: string;
+  kurumAdi?: string;
+  kurumTelefon?: string;
+  binaKontenjan?: string;
+  kurumAdres?: string;
+  acilmaTarihi?: string;
+  programs?: KurumProgramRow[];
+  vehicles?: KurumVehicleRow[];
+}
+
+export interface RemoteKurumInfo {
+  id: number;
+  school_id: number;
+  mebbis_account_id: string | null;
+  kurum_kodu: string | null;
+  kurum_adi: string | null;
+  kurum_telefon: string | null;
+  bina_kontenjan: string | null;
+  kurum_adres: string | null;
+  acilma_tarihi: string | null;
+  last_scraped_at: number | null;
+  programs: Array<{
+    id: number;
+    ehliyet_sinifi: string | null;
+    ruhsat_tarihi: string | null;
+    kapanma_tarihi: string | null;
+    durum: string | null;
+  }>;
+  vehicles: Array<{
+    id: number;
+    plaka: string | null;
+    ehliyet_sinifi: string | null;
+    marka: string | null;
+    model: string | null;
+    model_yili: string | null;
+    tescil_tarihi: string | null;
+    hizmete_giris: string | null;
+    hizmetten_cikis: string | null;
+    durum: string | null;
+    mem_onay: string | null;
+  }>;
+}
+
 export interface ActivityLogBody {
   event: 'school_login' | 'pdf_download' | 'desktop_error';
   school_id: number;
@@ -370,6 +434,18 @@ export const apiClient = {
     request<{ personnel_id: number }>(
       'POST',
       '/desktop/desktop-service/personnel-store/personnel/detail',
+      { mebbis_account_id: mebbisAccountId, payload } as unknown as Record<string, unknown>,
+      token,
+    ),
+
+  // ── Kurum info store ────────────────────────────────────────────
+  getKurumInfo: (token: string) =>
+    request<RemoteKurumInfo | null>('GET', '/desktop/desktop-service/kurum-info-store/info', undefined, token),
+
+  ingestKurumInfo: (token: string, mebbisAccountId: string, payload: KurumInfoIngestPayload) =>
+    request<{ kurum_info_id: number; programs: number; vehicles: number }>(
+      'POST',
+      '/desktop/desktop-service/kurum-info-store/info',
       { mebbis_account_id: mebbisAccountId, payload } as unknown as Record<string, unknown>,
       token,
     ),

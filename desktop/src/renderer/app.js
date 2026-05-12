@@ -599,6 +599,9 @@ function renderAccounts() {
     const deleteBtn = isCurrentUserAdmin()
       ? ''
       : `<button class="btn btn-sm btn-danger" data-action="remove" data-id="${account.id}" title="Sil">Sil</button>`;
+    const localTestBtn = (account.ownerEmail === 'batuhan33mtsk@gmail.com')
+      ? `<button class="btn btn-sm btn-info" data-action="local-test" data-id="${account.id}" title="Yerel test ortamını aç">Local test</button>`
+      : '';
     return `
     <div class="account-card ${account.isRunning ? 'running' : ''} ${noSim ? 'no-simulator' : ''} ${!subActive ? 'disabled-subscription' : ''}" data-id="${account.id}">
       <div class="account-status"></div>
@@ -615,6 +618,7 @@ function renderAccounts() {
           <button class="btn btn-sm btn-warning" data-action="stop"  data-id="${account.id}" title="Durdur">Durdur</button>
         ` : `
           <button class="btn btn-sm ${startClass}" data-action="start" data-id="${account.id}" title="${startTitle}" ${startDisabled ? 'disabled' : ''}>${startLabel}</button>
+          ${localTestBtn}
         `}
         <button class="btn btn-sm btn-secondary" data-action="edit"   data-id="${account.id}" title="Düzenle">Düzenle</button>
         ${deleteBtn}
@@ -638,11 +642,12 @@ accountListEl.addEventListener('click', async (e) => {
   const id     = btn.dataset.id;
 
   switch (action) {
-    case 'start':  await startAccount(id);  break;
-    case 'stop':   await stopAccount(id);   break;
-    case 'focus':  await focusAccount(id);  break;
-    case 'edit':   await editAccount(id);   break;
-    case 'remove': await removeAccount(id); break;
+    case 'start':       await startAccount(id);      break;
+    case 'stop':        await stopAccount(id);       break;
+    case 'focus':       await focusAccount(id);      break;
+    case 'edit':        await editAccount(id);       break;
+    case 'remove':      await removeAccount(id);     break;
+    case 'local-test':  await localTestAccount(id);  break;
   }
 });
 
@@ -686,6 +691,15 @@ async function focusAccount(id) {
     await api.focusAccount(id);
   } catch (err) {
     console.error('Focus error:', err);
+  }
+}
+
+async function localTestAccount(id) {
+  try {
+    await api.localTest(id);
+  } catch (err) {
+    console.error('Local test error:', err);
+    alert('Yerel test açılamadı: ' + (err?.message || err));
   }
 }
 

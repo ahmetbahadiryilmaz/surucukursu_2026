@@ -71,6 +71,34 @@ class RemoteCodeLoader {
   private _whatsNew: string | null = null;
   private pollTimer: NodeJS.Timeout | null = null;
   private restartPromptShown = false;
+  /** One-time logging marker — only print "dev disk read: <path>" once per file. */
+  private devReadLogged = new Set<string>();
+
+  /**
+   * Dev-only: when reading a script/file, prefer the on-disk copy under
+   * desktop/remote-code/<path> over the in-memory cache. Lets you iterate on
+   * remote-code/* without rebuilding or pushing to backend storage.
+   *
+   * Disabled when FORCE_REMOTE_CODE_IN_DEV=1 is set (the user is explicitly
+   * exercising the prod sync pipeline locally) and in packaged builds.
+   */
+  private readDevLocal(safePath: string): Buffer | null {
+    if (!IS_DEV || FORCE_REMOTE_CODE_IN_DEV) return null;
+    // __dirname in dev = desktop/dist/launcher → ../../remote-code → desktop/remote-code
+    const localPath = path.resolve(__dirname, '..', '..', 'remote-code', safePath);
+    if (!fs.existsSync(localPath)) return null;
+    try {
+      const buf = fs.readFileSync(localPath);
+      if (!this.devReadLogged.has(safePath)) {
+        console.log(`[CodeLoader] Dev disk read: ${safePath}`);
+        this.devReadLogged.add(safePath);
+      }
+      return buf;
+    } catch (err: any) {
+      console.warn(`[CodeLoader] Dev local read failed for ${safePath}: ${err?.message ?? err}`);
+      return null;
+    }
+  }
 
   // ─────────────────────────────────────────────────────────────
   // PUBLIC API
@@ -175,9 +203,12 @@ class RemoteCodeLoader {
 
   /**
    * Returns the contents of a cached script as a string, or null if not cached.
+   * Dev mode (default): reads from desktop/remote-code/<path> on every call.
    */
   getScript(relativePath: string): string | null {
     const safePath = this.sanitizePath(relativePath);
+    const devBuf = this.readDevLocal(safePath);
+    if (devBuf) return devBuf.toString('utf-8');
     const entry = this.files.get(safePath);
     return entry ? entry.content.toString('utf-8') : null;
   }
@@ -185,9 +216,12 @@ class RemoteCodeLoader {
   /**
    * Returns the raw bytes of a cached file, or null if not cached.
    * Used by the renderer protocol handler and the main-bundle loader.
+   * Dev mode (default): reads from desktop/remote-code/<path> on every call.
    */
   getFileBuffer(relativePath: string): Buffer | null {
     const safePath = this.sanitizePath(relativePath);
+    const devBuf = this.readDevLocal(safePath);
+    if (devBuf) return devBuf;
     const entry = this.files.get(safePath);
     return entry ? entry.content : null;
   }

@@ -28,6 +28,7 @@ import { Account, SimulatorType } from './account-store';
 import { AuthStore } from './auth-store';
 import { configureStudentSync, pullAll as pullStudentSync } from './student-sync';
 import { configurePersonnelSync } from './personnel-sync';
+import { configureKurumInfoSync } from './kurum-info-sync';
 import { MebbisManager } from './mebbis-manager';
 import { apiClient, MebbisAccount, ActivityLogBody } from './api-client';
 import { configureTemplateErrorReporter } from './template-fetcher';
@@ -85,6 +86,7 @@ export async function start(ctx: BootstrapContext): Promise<AppControllerHandle>
   // sync calls receive the explicit account.id from MebbisManager scrape paths.
   configureStudentSync(() => authStore.getToken(), () => null);
   configurePersonnelSync(() => authStore.getToken());
+  configureKurumInfoSync(() => authStore.getToken());
 
   // If we already have a valid token from a previous session, pull on boot.
   if (authStore.getToken()) {
@@ -1011,6 +1013,22 @@ export async function start(ctx: BootstrapContext): Promise<AppControllerHandle>
       const account = { ...dbToAccount(found), isRunning: false };
       mebbisManager.start(account, mainWindow!);
       logActivity({ event: 'school_login', school_id: found.id });
+      return true;
+    });
+
+    ipcMain.handle('accounts:local-test', async (_event, id: string) => {
+      const token = authStore.getToken();
+      if (!token) throw new Error('Not authenticated');
+      const isRunning = mebbisManager.isRunning(id);
+      if (isRunning) {
+        mebbisManager.focus(id);
+        return true;
+      }
+      const dbAccounts = await apiClient.getAllSchools(token);
+      const found = dbAccounts.find(m => String(m.id) === id);
+      if (!found) throw new Error('Account not found');
+      const account = { ...dbToAccount(found), isRunning: false };
+      await mebbisManager.start(account, mainWindow!);
       return true;
     });
 

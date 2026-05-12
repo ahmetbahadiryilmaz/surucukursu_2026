@@ -28,6 +28,7 @@ contextBridge.exposeInMainWorld('mebbisAPI', {
 
   // Session controls
   startAccount: (id: string) => ipcRenderer.invoke('accounts:start', id),
+  localTest: (id: string) => ipcRenderer.invoke('accounts:local-test', id),
   stopAccount: (id: string) => ipcRenderer.invoke('accounts:stop', id),
   focusAccount: (id: string) => ipcRenderer.invoke('accounts:focus', id),
   getStatus: (id: string) => ipcRenderer.invoke('accounts:get-status', id),
