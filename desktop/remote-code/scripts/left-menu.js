@@ -146,7 +146,7 @@
         // Gate: K Belgesi needs Kurum Bilgisi (for kurum adı/adres/il-ilçe)
         // and Personel Bilgisi (for usta öğretici autopick). If either is
         // missing show a prompt with a Güncelle button instead of the form.
-        var hasKurum = !!(store.kurumInfo && store.kurumInfo.kurumAdi);
+        var hasKurum = !!(store.kurumInfo && (store.kurumInfo.kurum_adi || store.kurumInfo.kurumAdi));
         var hasPersonnel = personnel.length > 0;
         if (!hasKurum || !hasPersonnel) {
           var missingKind = !hasKurum ? 'kurum' : 'personel';
