@@ -160,6 +160,10 @@ export interface RemoteStudentDetail {
     uygulama_hak?: number;
     esinav_hak?: number;
     kayit_ucreti?: number;
+    baba_ad?: string;
+    dogum_yeri?: string;
+    dogum_tarihi?: string;
+    adres?: string;
     last_list_seen_at?: number;
     last_detail_seen_at?: number;
     exams: Array<{
@@ -210,6 +214,10 @@ export interface DetailIngestPayload {
   uygulamaHak?: number;
   esinavHak?: number;
   kayitUcreti?: number;
+  babaAd?: string;
+  dogumYeri?: string;
+  dogumTarihi?: string;
+  adres?: string;
   exams: Array<{
     donem?: string; sinavKodu?: string; sinavTarihi?: string; plaka?: string;
     ustaOgretici?: string; onayDurumu?: string; sinavDurumu?: string; sonuc?: string;
@@ -312,6 +320,7 @@ export interface RemoteKurumInfo {
   kurum_telefon: string | null;
   bina_kontenjan: string | null;
   kurum_adres: string | null;
+  kurum_route: string | null;
   acilma_tarihi: string | null;
   last_scraped_at: number | null;
   programs: Array<{
@@ -414,6 +423,18 @@ export const apiClient = {
       token,
     ),
 
+  updateStudentPersonal: (
+    token: string,
+    tc: string,
+    fields: { babaAd?: string; dogumYeri?: string; dogumTarihi?: string; adres?: string },
+  ) =>
+    request<{ tc: string; baba_ad: string | null; dogum_yeri: string | null; dogum_tarihi: string | null; adres: string | null }>(
+      'PATCH',
+      `/desktop/desktop-service/student-store/students/${encodeURIComponent(tc)}/personal`,
+      fields as unknown as Record<string, unknown>,
+      token,
+    ),
+
   ingestStudentList: (token: string, mebbisAccountId: string, rows: ListIngestRow[]) =>
     request<{ created: number; updated: number }>(
       'POST',
@@ -456,6 +477,14 @@ export const apiClient = {
       'POST',
       '/desktop/desktop-service/kurum-info-store/info',
       { mebbis_account_id: mebbisAccountId, payload } as unknown as Record<string, unknown>,
+      token,
+    ),
+
+  updateKurumRoute: (token: string, route: string) =>
+    request<{ id: number; kurum_route: string }>(
+      'PATCH',
+      '/desktop/desktop-service/kurum-info-store/route',
+      { route },
       token,
     ),
 };

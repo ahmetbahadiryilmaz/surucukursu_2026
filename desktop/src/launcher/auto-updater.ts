@@ -4,7 +4,7 @@ import https from 'https';
 import http from 'http';
 import * as fs from 'fs';
 import * as path from 'path';
-import { IS_DEV, API_BASE_URL, UPDATES_BASE_URL } from './config';
+import { IS_DEV, API_BASE_URL, UPDATES_BASE_URL, FORCE_VERSION_CHECK_IN_DEV } from './config';
 
 const VERSION_CHECK_URL = IS_DEV
   ? `${API_BASE_URL}/desktop/desktop-service/version`
@@ -204,8 +204,9 @@ export async function enforceVersionCheckWithSplash(): Promise<boolean> {
 
   // In dev mode skip the version gate entirely — the version in package.json
   // may be behind the server's minimumVersion requirement.
-  if (IS_DEV) {
-    console.log('[VersionGate] Dev mode — skipping version gate.');
+  // Set DESKTOP_FORCE_VERSION_CHECK=1 in desktop/.env(.local) to test it.
+  if (IS_DEV && !FORCE_VERSION_CHECK_IN_DEV) {
+    console.log('[VersionGate] Dev mode — skipping version gate. (Set DESKTOP_FORCE_VERSION_CHECK=1 to enable.)');
     return true;
   }
 
@@ -425,7 +426,8 @@ export function setupAutoUpdater(mainWindow: BrowserWindow | null) {
 
   // In dev mode there is no packaged auto-updater and the local server version
   // may differ — skip the periodic gate entirely.
-  if (IS_DEV) {
+  // Set DESKTOP_FORCE_VERSION_CHECK=1 in desktop/.env(.local) to test it.
+  if (IS_DEV && !FORCE_VERSION_CHECK_IN_DEV) {
     console.log('[PeriodicVersionCheck] Dev mode — skipping periodic version check.');
     return;
   }

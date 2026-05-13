@@ -21,6 +21,7 @@ export class DrivingSchoolKurumInfoEntity extends BaseEntity {
   @Column({ nullable: true, type: 'varchar', length: 50 }) kurum_telefon: string;
   @Column({ nullable: true, type: 'varchar', length: 50 }) bina_kontenjan: string;
   @Column({ nullable: true, type: 'varchar', length: 1000 }) kurum_adres: string;
+  @Column({ nullable: true, type: 'varchar', length: 500 }) kurum_route: string;
   @Column({ nullable: true, type: 'varchar', length: 50 }) acilma_tarihi: string;
 
   @Column({ type: 'int', unsigned: true, nullable: true }) last_scraped_at: number;

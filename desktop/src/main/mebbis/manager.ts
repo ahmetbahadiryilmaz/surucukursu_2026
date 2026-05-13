@@ -1,8 +1,12 @@
 import { BrowserWindow, session } from 'electron';
 import { Account } from '../storage/account-store';
 import { getCodeLoader } from '../../launcher/remote-code-loader';
+import { OPEN_DEVTOOLS_IN_DEV, IS_DEV } from '../../launcher/config';
 import { getRequestLogger } from '../utils/request-logger';
 import { updateCarRoute } from '../sync/car-sync';
+import { updateKurumRoute, fetchKurumInfo } from '../sync/kurum-info-sync';
+import { updateStudentPersonal } from '../sync/student-sync';
+import { getStudentDb } from '../storage/student-db';
 import type { RemoteKurumInfo, RemoteCar } from '../api/api-client';
 import * as sidebarUi from './sidebar-ui';
 import * as pdfRender from './pdf-render';
@@ -185,6 +189,10 @@ export class MebbisManager {
       return;
     }
 
+    // Fresh start — clear any stale login-attempt count from a prior session
+    // (e.g. previous window closed via X button without going through stop()).
+    this.loginAttempts.delete(account.id);
+
     const partition = `persist:mebbis-${account.id}`;
     console.log(`[${account.label}] Using partition: ${partition}`);
 
@@ -205,6 +213,10 @@ export class MebbisManager {
 
     // Hide menu bar
     win.removeMenu();
+
+    if (IS_DEV && OPEN_DEVTOOLS_IN_DEV) {
+      win.webContents.openDevTools({ mode: 'detach' });
+    }
 
     const userAgent = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
     win.webContents.setUserAgent(userAgent);
@@ -450,6 +462,47 @@ export class MebbisManager {
         } catch (e) {
           console.error(`[${account.label}] MEBBIS_SAVE_CAR_ROUTE parse error:`, e);
         }
+      }
+      if (message.startsWith('MEBBIS_SAVE_KURUM_ROUTE:')) {
+        try {
+          const { route } = JSON.parse(message.replace('MEBBIS_SAVE_KURUM_ROUTE:', '').trim());
+          updateKurumRoute(route).then(() => {
+            const info = this.kurumInfoCache.get(account.id);
+            if (info) (info as any).kurum_route = route;
+            console.log(`[${account.label}] Kurum route saved: "${route}"`);
+          });
+        } catch (e) {
+          console.error(`[${account.label}] MEBBIS_SAVE_KURUM_ROUTE parse error:`, e);
+        }
+      }
+      if (message.startsWith('MEBBIS_SAVE_STUDENT_PERSONAL:')) {
+        try {
+          const payload = JSON.parse(message.replace('MEBBIS_SAVE_STUDENT_PERSONAL:', '').trim());
+          const { tc, ...fields } = payload;
+          if (tc && /^\d{11}$/.test(tc)) {
+            // Local cache patch (sidebar refreshes immediately)
+            const ok = getStudentDb().updatePersonal(account.id, tc, fields);
+            if (ok) this.pushStoreToSidebar(win, account);
+            // Remote PATCH
+            updateStudentPersonal(tc, fields).then(() => {
+              console.log(`[${account.label}] Student personal saved: tc=${tc} ${JSON.stringify(fields)}`);
+            });
+          }
+        } catch (e) {
+          console.error(`[${account.label}] MEBBIS_SAVE_STUDENT_PERSONAL parse error:`, e);
+        }
+      }
+      if (message === 'MEBBIS_REQUEST_KURUM_UPDATE') {
+        console.log(`[${account.label}] Kurum update requested — re-fetching from backend`);
+        fetchKurumInfo().then((info) => {
+          if (info) {
+            this.kurumInfoCache.set(account.id, info);
+            console.log(`[${account.label}] Kurum info refreshed from backend`);
+          } else {
+            console.log(`[${account.label}] Kurum info fetch returned null`);
+          }
+          if (!win.isDestroyed()) this.pushStoreToSidebar(win, account);
+        });
       }
       if (message === 'MEBBIS_BATCH_CANCEL') {
         console.log(`[${account.label}] Batch cancelled by user`);

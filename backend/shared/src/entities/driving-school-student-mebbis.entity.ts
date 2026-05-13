@@ -46,6 +46,12 @@ export class DrivingSchoolStudentMebbisEntity extends BaseEntity {
   @Column({ nullable: true, type: 'int' }) esinav_hak: number;
   @Column({ nullable: true, type: 'int' }) kayit_ucreti: number;
 
+  // ── Aday kişisel bilgileri (K Belgesi'nde manuel doldurulur, geri kaydedilir) ──
+  @Column({ nullable: true, type: 'varchar', length: 100 }) baba_ad: string;
+  @Column({ nullable: true, type: 'varchar', length: 100 }) dogum_yeri: string;
+  @Column({ nullable: true, type: 'varchar', length: 20 })  dogum_tarihi: string;
+  @Column({ nullable: true, type: 'varchar', length: 500 }) adres: string;
+
   // ── timestamps (epoch seconds) ─────────────────────────────────────
   @Column({ type: 'int', unsigned: true, nullable: true }) last_list_seen_at: number;
   @Column({ type: 'int', unsigned: true, nullable: true }) last_detail_seen_at: number;

@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Body, Req, UseGuards, BadRequestException } from '@nestjs/common';
+import { Controller, Get, Post, Patch, Body, Req, UseGuards, BadRequestException } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
 import { DesktopAuthGuard } from '../common/guards/desktop-auth.guard';
 import { KurumInfoStoreService, KurumInfoIngestPayload } from './kurum-info-store.service';
@@ -28,5 +28,13 @@ export class KurumInfoStoreController {
       throw new BadRequestException('payload required');
     }
     return this.service.ingestKurumInfo(req.user, body.mebbis_account_id || '', body.payload);
+  }
+
+  @Patch('route')
+  @ApiOperation({ summary: 'Save K-Belgesi güzergah for caller school kurum' })
+  @ApiResponse({ status: 200, description: 'Route saved' })
+  async updateRoute(@Req() req: any, @Body() body: { route: string }) {
+    if (!body || typeof body.route !== 'string') throw new BadRequestException('route string required');
+    return this.service.updateKurumRoute(req.user, body.route);
   }
 }

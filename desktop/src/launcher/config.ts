@@ -102,6 +102,21 @@ export const DESKTOP_CODE_BASE_URL = `${API_BASE_URL}/desktop/desktop-service/de
 export const FORCE_REMOTE_CODE_IN_DEV = /^(1|true|yes)$/i.test(envOr('DESKTOP_FORCE_REMOTE_CODE', ''));
 
 /**
+ * Dev-mode opt-in: when true, the startup version gate and the periodic
+ * version check run in dev too (instead of being skipped).
+ * Set DESKTOP_FORCE_VERSION_CHECK=1 in desktop/.env(.local) to test the
+ * splash / minimum_version.json flow locally. Packaged builds always check.
+ */
+export const FORCE_VERSION_CHECK_IN_DEV = /^(1|true|yes)$/i.test(envOr('DESKTOP_FORCE_VERSION_CHECK', ''));
+
+/**
+ * Dev-mode opt-in: when true, the main BrowserWindow opens DevTools
+ * automatically on launch (detached window). No-op outside dev.
+ * Set DESKTOP_OPEN_DEVTOOLS=1 in desktop/.env(.local).
+ */
+export const OPEN_DEVTOOLS_IN_DEV = /^(1|true|yes)$/i.test(envOr('DESKTOP_OPEN_DEVTOOLS', ''));
+
+/**
  * How often (in seconds) the desktop polls /desktop-code/version to detect
  * new server-side deploys. On change, the user is prompted to restart.
  * Default 300s (5 min). Set DESKTOP_VERSION_POLL_SECONDS=10 in .env.local

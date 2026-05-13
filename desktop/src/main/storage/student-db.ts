@@ -48,6 +48,11 @@ export interface StudentRecord {
   uygulamaHak?: number;
   eSinavHak?: number;
   kayitUcreti?: number;
+  // Aday kişisel bilgileri (K Belgesi'nde manuel doldurulur, backend'e PATCH'lenir)
+  babaAd?: string;
+  dogumYeri?: string;
+  dogumTarihi?: string;
+  adres?: string;
   exams?: ExamRow[];
   lessons?: LessonRow[];
   // Aggregate plates derived from exams + lessons (kept for fast lookup / sidebar)
@@ -99,6 +104,10 @@ export interface DetailIngestData {
   uygulamaHak?: number;
   eSinavHak?: number;
   kayitUcreti?: number;
+  babaAd?: string;
+  dogumYeri?: string;
+  dogumTarihi?: string;
+  adres?: string;
   exams: ExamRow[];
   lessons: LessonRow[];
 }
@@ -263,6 +272,10 @@ export class StudentDb {
       existing.uygulamaHak = data.uygulamaHak;
       existing.eSinavHak = data.eSinavHak;
       existing.kayitUcreti = data.kayitUcreti;
+      if (data.babaAd !== undefined) existing.babaAd = data.babaAd;
+      if (data.dogumYeri !== undefined) existing.dogumYeri = data.dogumYeri;
+      if (data.dogumTarihi !== undefined) existing.dogumTarihi = data.dogumTarihi;
+      if (data.adres !== undefined) existing.adres = data.adres;
       existing.exams = data.exams;
       existing.lessons = data.lessons;
       existing.plates = merged;
@@ -289,6 +302,10 @@ export class StudentDb {
         uygulamaHak: data.uygulamaHak,
         eSinavHak: data.eSinavHak,
         kayitUcreti: data.kayitUcreti,
+        babaAd: data.babaAd,
+        dogumYeri: data.dogumYeri,
+        dogumTarihi: data.dogumTarihi,
+        adres: data.adres,
         exams: data.exams,
         lessons: data.lessons,
         plates: [...newPlatesFromDetail],
@@ -317,6 +334,24 @@ export class StudentDb {
     const students = Object.values(bucket.students).sort((a, b) => b.lastSeenAt - a.lastSeenAt);
     const plates = [...bucket.plates].sort();
     return { students, plates };
+  }
+
+  /** Patch aday kişisel bilgileri locally (mirrors backend PATCH /students/:tc/personal). */
+  updatePersonal(
+    accountId: string,
+    tc: string,
+    fields: { babaAd?: string; dogumYeri?: string; dogumTarihi?: string; adres?: string },
+  ): boolean {
+    const bucket = this.getBucket(accountId);
+    const s = bucket.students[tc];
+    if (!s) return false;
+    if (fields.babaAd !== undefined) s.babaAd = fields.babaAd;
+    if (fields.dogumYeri !== undefined) s.dogumYeri = fields.dogumYeri;
+    if (fields.dogumTarihi !== undefined) s.dogumTarihi = fields.dogumTarihi;
+    if (fields.adres !== undefined) s.adres = fields.adres;
+    s.lastSeenAt = Date.now();
+    this.markDirty();
+    return true;
   }
 
   getStudent(accountId: string, tc: string): StudentRecord | null {

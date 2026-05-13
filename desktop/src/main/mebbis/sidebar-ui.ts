@@ -549,6 +549,22 @@ export async function injectStoreSidebarSections(_m: MebbisManager, win: Browser
             anyRendered = true;
           }
 
+          // Section: Kişisel Bilgiler (K Belgesi'nde manuel doldurulan aday alanları)
+          var kisiselFields = [
+            ['Baba Adı', row.babaAd],
+            ['Doğum Yeri', row.dogumYeri],
+            ['Doğum Tarihi', row.dogumTarihi],
+            ['Adresi', row.adres],
+          ].filter(function(f) {
+            return f[1] !== null && f[1] !== undefined && String(f[1]).trim() !== '';
+          });
+          if (kisiselFields.length) {
+            var kisisel = makeSection('Kişisel Bilgiler', false, kisiselFields.length);
+            kisiselFields.forEach(function(f) { addKV(kisisel.body, f[0], f[1]); });
+            body.appendChild(kisisel.el);
+            anyRendered = true;
+          }
+
           // Section: Sınavlar (table)
           var exams = Array.isArray(row.exams) ? row.exams : [];
           if (exams.length) {
@@ -686,11 +702,22 @@ export async function injectStoreSidebarSections(_m: MebbisManager, win: Browser
           titleWrap.appendChild(t);
           titleWrap.appendChild(sub);
 
+          var kGuncelleBtn = document.createElement('button');
+          kGuncelleBtn.textContent = 'Güncelle';
+          kGuncelleBtn.style.cssText = 'background: #4361ee; color: white; border: none; border-radius: 4px; padding: 6px 14px; font-size: 13px; cursor: pointer; flex-shrink: 0;';
+          kGuncelleBtn.onclick = function() {
+            kGuncelleBtn.disabled = true;
+            kGuncelleBtn.textContent = 'Yükleniyor...';
+            kGuncelleBtn.style.opacity = '0.6';
+            console.log('MEBBIS_REQUEST_KURUM_UPDATE');
+          };
+
           var kCloseBtn = document.createElement('button');
           kCloseBtn.textContent = '✕';
           kCloseBtn.style.cssText = 'background: none; border: none; color: #ccc; cursor: pointer; font-size: 18px; padding: 0 8px; line-height: 1;';
           kCloseBtn.onclick = closeStoreModal;
           header.appendChild(titleWrap);
+          header.appendChild(kGuncelleBtn);
           header.appendChild(kCloseBtn);
           pane.appendChild(header);
 

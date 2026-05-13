@@ -56,6 +56,11 @@ app.commandLine.appendSwitch('js-flags', '--max-old-space-size=4096');
 // Renderer scheme registration must also run before whenReady.
 registerRendererSchemeAsPrivileged();
 
+// Prevent Electron's default "quit when all windows closed" behavior from
+// firing during the startup gap between the splash closing and the main
+// window opening. app-controller.ts registers the real handler later.
+app.on('window-all-closed', () => {});
+
 app.whenReady().then(async () => {
   await initDeviceId().catch(() => {});
 
@@ -66,7 +71,7 @@ app.whenReady().then(async () => {
   // Bundled module-host uses these path strings directly — compute once.
   const preloadPath = path.join(__dirname, '..', 'preload', 'preload.js');
   const devRendererIndex = path.join(
-    __dirname, '..', '..', 'src', 'renderer', 'index.html',
+    __dirname, '..', '..', 'src', 'ui', 'driving-schools', 'index.html',
   );
   const rendererIndexUrl = IS_DEV
     ? `file://${devRendererIndex.replace(/\\/g, '/')}`
@@ -136,6 +141,7 @@ async function loadRemoteController(
 ): Promise<((ctx: BootstrapContext) => Promise<AppControllerHandle>) | null> {
   const splash = new BootstrapSplash();
   splash.show(app.getVersion());
+  const splashShownAt = Date.now();
 
   const start = await fetchWithSplashRetry(splash, async () => {
     await codeLoader.sync();
@@ -160,6 +166,13 @@ async function loadRemoteController(
     return fn as (ctx: BootstrapContext) => Promise<AppControllerHandle>;
   });
 
+  // Keep the splash visible for at least 500 ms so the user actually sees
+  // "kod indiriliyor" on fast/local servers where sync finishes in <50 ms.
+  const minDisplayMs = 500;
+  const elapsed = Date.now() - splashShownAt;
+  if (elapsed < minDisplayMs) {
+    await new Promise((r) => setTimeout(r, minDisplayMs - elapsed));
+  }
   splash.close();
   return start;
 }

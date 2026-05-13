@@ -46,6 +46,10 @@ export interface DetailIngestPayload {
   uygulamaHak?: number;
   esinavHak?: number;
   kayitUcreti?: number;
+  babaAd?: string;
+  dogumYeri?: string;
+  dogumTarihi?: string;
+  adres?: string;
   exams: Array<{
     donem?: string;
     sinavKodu?: string;
@@ -143,6 +147,42 @@ export class StudentStoreService {
       where: { school_id: schoolId },
       select: ['id', 'plate_number', 'source', 'car_type', 'brand', 'model', 'route'],
     });
+  }
+
+  /** Save aday kişisel bilgileri (K Belgesi'nde manuel doldurulur). */
+  async updateStudentPersonal(
+    user: { id: number; userType: UserTypes },
+    tc: string,
+    fields: { babaAd?: string; dogumYeri?: string; dogumTarihi?: string; adres?: string },
+  ) {
+    const schoolId = await this.resolveSchoolId(user);
+    const student = await this.studentRepository.findOne({
+      where: { school_id: schoolId, tc_number: tc },
+      relations: ['mebbis'],
+    });
+    if (!student) throw new NotFoundException(`Student ${tc} not found`);
+    let mebbis = student.mebbis;
+    if (!mebbis) {
+      const mebbisRepo = this.dataSource.getRepository(DrivingSchoolStudentMebbisEntity);
+      mebbis = mebbisRepo.create({
+        student_id: student.id,
+        school_id: schoolId,
+        has_detail: false,
+      });
+    }
+    if (fields.babaAd !== undefined) mebbis.baba_ad = fields.babaAd;
+    if (fields.dogumYeri !== undefined) mebbis.dogum_yeri = fields.dogumYeri;
+    if (fields.dogumTarihi !== undefined) mebbis.dogum_tarihi = fields.dogumTarihi;
+    if (fields.adres !== undefined) mebbis.adres = fields.adres;
+    const mebbisRepo = this.dataSource.getRepository(DrivingSchoolStudentMebbisEntity);
+    await mebbisRepo.save(mebbis);
+    return {
+      tc: student.tc_number,
+      baba_ad: mebbis.baba_ad ?? null,
+      dogum_yeri: mebbis.dogum_yeri ?? null,
+      dogum_tarihi: mebbis.dogum_tarihi ?? null,
+      adres: mebbis.adres ?? null,
+    };
   }
 
   /** Save K-Belgesi güzergah for a car owned by this school. */
@@ -283,6 +323,10 @@ export class StudentStoreService {
       mebbis.uygulama_hak = payload.uygulamaHak ?? mebbis.uygulama_hak;
       mebbis.esinav_hak = payload.esinavHak ?? mebbis.esinav_hak;
       mebbis.kayit_ucreti = payload.kayitUcreti ?? mebbis.kayit_ucreti;
+      mebbis.baba_ad = payload.babaAd ?? mebbis.baba_ad;
+      mebbis.dogum_yeri = payload.dogumYeri ?? mebbis.dogum_yeri;
+      mebbis.dogum_tarihi = payload.dogumTarihi ?? mebbis.dogum_tarihi;
+      mebbis.adres = payload.adres ?? mebbis.adres;
       mebbis = await mebbisRepo.save(mebbis);
 
       // Replace exams (idempotent — full delete + reinsert per detail visit)

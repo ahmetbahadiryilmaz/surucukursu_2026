@@ -32,6 +32,14 @@ export function pushKurumInfo(
     });
 }
 
+export function updateKurumRoute(route: string): Promise<{ id: number; kurum_route: string } | null> {
+  const token = tokenOrNull();
+  if (!token) return Promise.resolve(null);
+  return apiClient.updateKurumRoute(token, route)
+    .then((r) => r)
+    .catch((e) => { console.error('[KurumInfoSync] updateKurumRoute failed:', e?.message || e); return null; });
+}
+
 export function fetchKurumInfo(): Promise<RemoteKurumInfo | null> {
   const token = tokenOrNull();
   if (!token) {

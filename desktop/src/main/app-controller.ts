@@ -34,6 +34,7 @@ import { MebbisManager } from './mebbis/manager';
 import { apiClient, MebbisAccount, ActivityLogBody } from './api/api-client';
 import { configureTemplateErrorReporter } from './templates/template-fetcher';
 import { getCodeLoader } from '../launcher/remote-code-loader';
+import { OPEN_DEVTOOLS_IN_DEV } from '../launcher/config';
 import type { VersionCheckResult } from '../launcher/auto-updater';
 import { showBundleWhatsNew, suppressLauncherWhatsNewIfPossible } from './templates/bundle-whats-new';
 import {
@@ -140,6 +141,9 @@ export async function start(ctx: BootstrapContext): Promise<AppControllerHandle>
       },
     });
     win.loadURL(ctx.rendererIndexUrl);
+    if (ctx.isDev && OPEN_DEVTOOLS_IN_DEV) {
+      win.webContents.openDevTools({ mode: 'detach' });
+    }
     win.on('closed', () => {
       if (mainWindow === win) mainWindow = null;
     });

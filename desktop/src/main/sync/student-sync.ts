@@ -42,6 +42,18 @@ export function pushList(mebbisAccountId: string, rows: ListIngestRow[]): void {
     });
 }
 
+/** Save aday kişisel bilgileri (K Belgesi'nde manuel doldurulur). Fire-and-forget. */
+export function updateStudentPersonal(
+  tc: string,
+  fields: { babaAd?: string; dogumYeri?: string; dogumTarihi?: string; adres?: string },
+): Promise<void> {
+  const token = tokenOrNull();
+  if (!token) return Promise.resolve();
+  return apiClient.updateStudentPersonal(token, tc, fields)
+    .then(() => {})
+    .catch((e) => { console.error('[StudentSync] updateStudentPersonal failed:', e?.message || e); });
+}
+
 /** Call after every detail scrape — local DB has already ingested. */
 export function pushDetail(mebbisAccountId: string, payload: DetailIngestPayload): void {
   const token = tokenOrNull();
@@ -132,6 +144,10 @@ export async function pullAll(): Promise<void> {
           uygulamaHak: m.uygulama_hak,
           eSinavHak: m.esinav_hak,
           kayitUcreti: m.kayit_ucreti,
+          babaAd: m.baba_ad,
+          dogumYeri: m.dogum_yeri,
+          dogumTarihi: m.dogum_tarihi,
+          adres: m.adres,
           exams: (m.exams || []).map((e) => ({
             donemi: e.donem || '',
             sinavKodu: e.sinav_kodu || '',

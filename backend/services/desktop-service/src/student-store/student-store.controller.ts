@@ -36,6 +36,18 @@ export class StudentStoreController {
     return this.service.listCars(req.user);
   }
 
+  @Patch('students/:tc/personal')
+  @ApiOperation({ summary: 'Save aday kişisel bilgileri (baba ad, doğum yeri/tarihi, adres)' })
+  @ApiResponse({ status: 200, description: 'Personal fields saved' })
+  async updateStudentPersonal(
+    @Req() req: any,
+    @Param('tc') tc: string,
+    @Body() body: { babaAd?: string; dogumYeri?: string; dogumTarihi?: string; adres?: string },
+  ) {
+    if (!body || typeof body !== 'object') throw new BadRequestException('body required');
+    return this.service.updateStudentPersonal(req.user, tc, body);
+  }
+
   @Patch('cars/:id/route')
   @ApiOperation({ summary: 'Save K-Belgesi güzergah for a car' })
   @ApiResponse({ status: 200, description: 'Route saved' })

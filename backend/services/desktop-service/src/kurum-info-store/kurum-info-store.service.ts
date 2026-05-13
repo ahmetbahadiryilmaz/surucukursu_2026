@@ -70,6 +70,17 @@ export class KurumInfoStoreService {
     return school.id;
   }
 
+  async updateKurumRoute(user: { id: number; userType: UserTypes }, route: string) {
+    const schoolId = await this.resolveSchoolId(user);
+    let info = await this.infoRepository.findOne({ where: { school_id: schoolId } });
+    if (!info) {
+      info = this.infoRepository.create({ school_id: schoolId });
+    }
+    info.kurum_route = route;
+    info = await this.infoRepository.save(info);
+    return { id: info.id, kurum_route: info.kurum_route };
+  }
+
   async getKurumInfo(user: { id: number; userType: UserTypes }) {
     const schoolId = await this.resolveSchoolId(user);
     const info = await this.infoRepository.findOne({
