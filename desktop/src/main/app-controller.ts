@@ -24,18 +24,23 @@
 
 import { app, BrowserWindow, ipcMain, session, Menu, dialog, shell } from 'electron';
 import type { MenuItemConstructorOptions } from 'electron';
-import { Account, SimulatorType } from './account-store';
-import { AuthStore } from './auth-store';
-import { configureStudentSync, pullAll as pullStudentSync } from './student-sync';
-import { configurePersonnelSync } from './personnel-sync';
-import { configureKurumInfoSync } from './kurum-info-sync';
-import { configureCarSync } from './car-sync';
-import { MebbisManager } from './mebbis-manager';
-import { apiClient, MebbisAccount, ActivityLogBody } from './api-client';
-import { configureTemplateErrorReporter } from './template-fetcher';
+import { Account, SimulatorType } from './storage/account-store';
+import { AuthStore } from './auth/auth-store';
+import { configureStudentSync, pullAll as pullStudentSync } from './sync/student-sync';
+import { configurePersonnelSync } from './sync/personnel-sync';
+import { configureKurumInfoSync } from './sync/kurum-info-sync';
+import { configureCarSync } from './sync/car-sync';
+import { MebbisManager } from './mebbis/manager';
+import { apiClient, MebbisAccount, ActivityLogBody } from './api/api-client';
+import { configureTemplateErrorReporter } from './templates/template-fetcher';
 import { getCodeLoader } from '../launcher/remote-code-loader';
 import type { VersionCheckResult } from '../launcher/auto-updater';
-import { showBundleWhatsNew, suppressLauncherWhatsNewIfPossible } from './bundle-whats-new';
+import { showBundleWhatsNew, suppressLauncherWhatsNewIfPossible } from './templates/bundle-whats-new';
+import {
+  generateTestDireksiyonPdf as runTestDireksiyonPdf,
+  generateTestKBelgesiPdf as runTestKBelgesiPdf,
+  generateTestSimulatorPdf as runTestSimulatorPdf,
+} from './tests/test-pdfs';
 
 type RemoteCodeLoader = ReturnType<typeof getCodeLoader>;
 
@@ -331,7 +336,7 @@ export async function start(ctx: BootstrapContext): Promise<AppControllerHandle>
     if (!sinif) return;
 
     try {
-      await mebbisManager.generateTestDireksiyonPdf(sinif, mainWindow);
+      await runTestDireksiyonPdf(mebbisManager, sinif, mainWindow);
     } catch (err: any) {
       dialog.showErrorBox('PDF Oluşturulamadı', err?.message || 'Bilinmeyen hata');
     }
@@ -764,7 +769,7 @@ export async function start(ctx: BootstrapContext): Promise<AppControllerHandle>
     else if (r.response === 2) simType = 'both';
     if (!simType) return;
     try {
-      await mebbisManager.generateTestSimulatorPdf(simType, mainWindow);
+      await runTestSimulatorPdf(mebbisManager, simType, mainWindow);
     } catch (err: any) {
       dialog.showErrorBox('PDF Oluşturulamadı', err?.message || 'Bilinmeyen hata');
     }
@@ -787,7 +792,7 @@ export async function start(ctx: BootstrapContext): Promise<AppControllerHandle>
     if (r.response === 2) return;
     const withBackground = r.response === 0;
     try {
-      await mebbisManager.generateTestKBelgesiPdf(mainWindow, withBackground);
+      await runTestKBelgesiPdf(mebbisManager, mainWindow, withBackground);
     } catch (err: any) {
       dialog.showErrorBox('K Belgesi Oluşturulamadı', err?.message || 'Bilinmeyen hata');
     }
@@ -819,12 +824,12 @@ export async function start(ctx: BootstrapContext): Promise<AppControllerHandle>
     ipcMain.handle('dev:test-direksiyon-pdf', async (_event, sinif: string) => {
       if (!ctx.isDev) throw new Error('Only available in development mode');
       if (!mainWindow) throw new Error('No main window');
-      return mebbisManager.generateTestDireksiyonPdf(sinif || '0,B|16', mainWindow);
+      return runTestDireksiyonPdf(mebbisManager, sinif || '0,B|16', mainWindow);
     });
     ipcMain.handle('dev:test-simulator-pdf', async (_event, simType: string) => {
       if (!ctx.isDev) throw new Error('Only available in development mode');
       if (!mainWindow) throw new Error('No main window');
-      return mebbisManager.generateTestSimulatorPdf(simType || 'sesim', mainWindow);
+      return runTestSimulatorPdf(mebbisManager, simType || 'sesim', mainWindow);
     });
 
     ipcMain.handle('auth:check', async () => {

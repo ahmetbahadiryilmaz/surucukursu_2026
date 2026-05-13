@@ -1,5 +1,5 @@
-import { apiClient, ListIngestRow, DetailIngestPayload, RemoteStudent, RemoteStudentDetail } from './api-client';
-import { getStudentDb } from './student-db';
+import { apiClient, ListIngestRow, DetailIngestPayload, RemoteStudent, RemoteStudentDetail } from '../api/api-client';
+import { getStudentDb } from '../storage/student-db';
 
 /**
  * Bridges the local encrypted StudentDb with the backend student-store API.

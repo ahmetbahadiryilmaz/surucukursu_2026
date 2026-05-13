@@ -26,7 +26,7 @@ import * as https from 'https';
 import * as http from 'http';
 import { URL } from 'url';
 import { app, dialog, BrowserWindow } from 'electron';
-import { DESKTOP_CODE_BASE_URL } from '../launcher/config';
+import { DESKTOP_CODE_BASE_URL } from '../../launcher/config';
 
 interface VersionEntry {
   version: string;

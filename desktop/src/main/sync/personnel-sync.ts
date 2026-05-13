@@ -1,4 +1,4 @@
-import { apiClient, PersonnelListIngestRow, PersonnelDetailIngestPayload } from './api-client';
+import { apiClient, PersonnelListIngestRow, PersonnelDetailIngestPayload } from '../api/api-client';
 
 /**
  * Write-through bridge for personnel: every local PersonnelDb ingest fires a

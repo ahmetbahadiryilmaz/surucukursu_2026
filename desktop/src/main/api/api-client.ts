@@ -1,6 +1,6 @@
 import http from 'http';
 import https from 'https';
-import { API_BASE_URL } from '../launcher/config';
+import { API_BASE_URL } from '../../launcher/config';
 
 /**
  * Redacts the API host from a message so users never see `api.mtsk.app`.

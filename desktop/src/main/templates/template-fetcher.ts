@@ -15,13 +15,13 @@
  * blank "Geçersiz istek" the user sees.
  */
 
-import { ENCRYPTED_TEMPLATE_URL } from '../launcher/config';
+import { ENCRYPTED_TEMPLATE_URL } from '../../launcher/config';
 import {
   postSignedBinary,
   decryptPayload,
   signRequestBody,
-} from '../launcher/desktop-crypto-client';
-import { apiClient, sanitizeErrorMessage } from './api-client';
+} from '../../launcher/desktop-crypto-client';
+import { apiClient, sanitizeErrorMessage } from '../api/api-client';
 
 let _getToken: () => string | null = () => null;
 let _getSchoolId: () => number = () => 0;

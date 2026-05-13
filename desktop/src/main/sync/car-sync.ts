@@ -1,4 +1,4 @@
-import { apiClient, RemoteCar } from './api-client';
+import { apiClient, RemoteCar } from '../api/api-client';
 
 type TokenGetter = () => string | null;
 
