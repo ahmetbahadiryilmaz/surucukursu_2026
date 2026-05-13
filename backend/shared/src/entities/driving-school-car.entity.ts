@@ -73,6 +73,10 @@ export class DrivingSchoolCarEntity extends BaseEntity {
   @Column({ nullable: true })
   status: string;
 
+  // K-Belgesi güzergah for this vehicle, saved per school
+  @Column({ nullable: true, type: 'varchar', length: 500 })
+  route: string;
+
   @Column()
   school_id: number;
 

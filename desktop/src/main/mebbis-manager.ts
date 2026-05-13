@@ -10,7 +10,8 @@ import { pushList, pushDetail } from './student-sync';
 import { getPersonnelDb, PersonnelDetailData } from './personnel-db';
 import { pushPersonnelList, pushPersonnelDetail } from './personnel-sync';
 import { fetchKurumInfo } from './kurum-info-sync';
-import type { RemoteKurumInfo } from './api-client';
+import { fetchCars, updateCarRoute } from './car-sync';
+import type { RemoteKurumInfo, RemoteCar } from './api-client';
 
 
 interface RunningAccount {
@@ -112,6 +113,12 @@ export class MebbisManager {
   private kurumInfoCache: Map<string, RemoteKurumInfo> = new Map();
   // Tracks accounts with an in-flight fetch so we don't fire it repeatedly.
   private kurumInfoFetching: Set<string> = new Set();
+
+  // Cars (plates + routes) per account, fetched once per account on first
+  // pushStoreToSidebar. The K-Belgesi form reads store.cars to pre-fill
+  // güzergah from the matched vehicle's saved route.
+  private carsCache: Map<string, RemoteCar[]> = new Map();
+  private carsFetching: Set<string> = new Set();
 
   // Öğrenciler "Güncelle" toplu listele flow: when the user clicks Güncelle
   // in the sidebar Öğrenciler modal we set this flag, navigate to skt02006,
@@ -490,6 +497,22 @@ export class MebbisManager {
           this.generateKBelgesiPdf(data, win);
         } catch (e) {
           console.error(`[${account.label}] K Belgesi parse error:`, e);
+        }
+      }
+      if (message.startsWith('MEBBIS_SAVE_CAR_ROUTE:')) {
+        try {
+          const { carId, route } = JSON.parse(message.replace('MEBBIS_SAVE_CAR_ROUTE:', '').trim());
+          updateCarRoute(carId, route).then(() => {
+            // Update the cache so subsequent store pushes carry the new route
+            const cars = this.carsCache.get(account.id);
+            if (cars) {
+              const car = cars.find(c => c.id === carId);
+              if (car) car.route = route;
+            }
+            console.log(`[${account.label}] Car route saved: id=${carId} route="${route}"`);
+          });
+        } catch (e) {
+          console.error(`[${account.label}] MEBBIS_SAVE_CAR_ROUTE parse error:`, e);
         }
       }
       if (message === 'MEBBIS_BATCH_CANCEL') {
@@ -1384,7 +1407,8 @@ export class MebbisManager {
     const students = getStudentDb().serialize(account.id);
     const personnel = getPersonnelDb().serialize(account.id);
     const kurumInfo = this.kurumInfoCache.get(account.id) || null;
-    return { ...students, personnel: personnel.personnel, kurumInfo };
+    const cars = this.carsCache.get(account.id) || null;
+    return { ...students, personnel: personnel.personnel, kurumInfo, cars };
   }
 
   private pushStoreToSidebar(win: BrowserWindow, account: Account): void {
@@ -1409,8 +1433,6 @@ export class MebbisManager {
     `).catch((e) => console.error(`[Sidebar][${account.label}] Push failed:`, e));
 
     // Lazy fire-and-forget kurum info fetch on the first push for this account.
-    // When it resolves, we cache it and re-push so the sidebar's Kurum button
-    // lights up. Subsequent calls short-circuit.
     if (!this.kurumInfoCache.has(account.id) && !this.kurumInfoFetching.has(account.id)) {
       this.kurumInfoFetching.add(account.id);
       fetchKurumInfo()
@@ -1421,6 +1443,19 @@ export class MebbisManager {
           if (!win.isDestroyed()) this.pushStoreToSidebar(win, account);
         })
         .catch(() => { this.kurumInfoFetching.delete(account.id); });
+    }
+
+    // Lazy fire-and-forget cars fetch on the first push for this account.
+    if (!this.carsCache.has(account.id) && !this.carsFetching.has(account.id)) {
+      this.carsFetching.add(account.id);
+      fetchCars()
+        .then((cars) => {
+          this.carsFetching.delete(account.id);
+          if (!cars) return;
+          this.carsCache.set(account.id, cars);
+          if (!win.isDestroyed()) this.pushStoreToSidebar(win, account);
+        })
+        .catch(() => { this.carsFetching.delete(account.id); });
     }
   }
 

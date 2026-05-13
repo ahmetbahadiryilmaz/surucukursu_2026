@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Param, Body, Req, UseGuards, BadRequestException } from '@nestjs/common';
+import { Controller, Get, Post, Patch, Param, Body, Req, UseGuards, BadRequestException } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
 import { DesktopAuthGuard } from '../common/guards/desktop-auth.guard';
 import {
@@ -34,6 +34,18 @@ export class StudentStoreController {
   @ApiResponse({ status: 200, description: 'Cars returned' })
   async listCars(@Req() req: any) {
     return this.service.listCars(req.user);
+  }
+
+  @Patch('cars/:id/route')
+  @ApiOperation({ summary: 'Save K-Belgesi güzergah for a car' })
+  @ApiResponse({ status: 200, description: 'Route saved' })
+  async updateCarRoute(
+    @Req() req: any,
+    @Param('id') id: string,
+    @Body() body: { route: string },
+  ) {
+    if (!body || typeof body.route !== 'string') throw new BadRequestException('route string required');
+    return this.service.updateCarRoute(req.user, Number(id), body.route);
   }
 
   @Post('students/list')

@@ -446,6 +446,18 @@
 
         // Shared kurum derivations (used in section 1 + section 2)
         var kurumInfo = store.kurumInfo || null;
+        var carsIndex = {};
+        if (Array.isArray(store.cars)) {
+          store.cars.forEach(function(c) { if (c.plate_number) carsIndex[c.plate_number.toUpperCase()] = c; });
+        }
+        // Find the best-matching car for this student (first lesson plate found in carsIndex)
+        var matchedCar = null;
+        if (student && Array.isArray(student.lessons)) {
+          for (var ci = 0; ci < student.lessons.length; ci++) {
+            var lp = student.lessons[ci] && student.lessons[ci].plaka;
+            if (lp && carsIndex[lp.toUpperCase()]) { matchedCar = carsIndex[lp.toUpperCase()]; break; }
+          }
+        }
         // MEBBIS adres ends with "...ILÇE / İL"; extract the trailing two ALL-CAPS words.
         function extractIlIlceFromAdres(adres) {
           if (!adres) return null;
@@ -453,7 +465,7 @@
           if (!m) return null;
           return { ilce: m[1], il: m[2] };
         }
-        var kurumIlIlce = kurumInfo ? extractIlIlceFromAdres(kurumInfo.kurumAdres) : null;
+        var kurumIlIlce = kurumInfo ? extractIlIlceFromAdres(kurumInfo.kurum_adres || kurumInfo.kurumAdres) : null;
         var ilIlceVal = '';
         if (kurumIlIlce) {
           ilIlceVal = kurumIlIlce.il + ' / ' + kurumIlIlce.ilce;
@@ -479,7 +491,17 @@
           type: 'select',
           options: ['Otomobil', 'Motosiklet', 'Kamyon', 'Otobüs', 'Minibüs', 'Kamyonet', 'Traktör', 'Diğer']
         });
-        mkField(sec1, 'Güzergah', 'gurzergah', { placeholder: 'Mahalle içi - Şehir merkezi', value: lessonDersYeri });
+        var gurzergahVal = (matchedCar && matchedCar.route) || lessonDersYeri || '';
+        var gurzergahInp = mkField(sec1, 'Güzergah', 'gurzergah', { placeholder: 'Mahalle içi - Şehir merkezi', value: gurzergahVal });
+        if (matchedCar) {
+          gurzergahInp.addEventListener('change', function() {
+            var val = gurzergahInp.value.trim();
+            if (val && val !== (matchedCar.route || '')) {
+              matchedCar.route = val;
+              console.log('MEBBIS_SAVE_CAR_ROUTE:' + JSON.stringify({ carId: matchedCar.id, route: val }));
+            }
+          });
+        }
         mkField(sec1, 'Gün / Saat', 'gunSaat', { placeholder: 'Pzt-Cu 09:00-17:00' });
         mkField(sec1, 'Düzenlenme Tarihi', 'duzenlenmeTarihi', { type: 'date', value: todayStr });
         mkField(sec1, 'Geçerlik Bitişi', 'gecerlikBitisi', { type: 'date', value: sixMonthsStr });

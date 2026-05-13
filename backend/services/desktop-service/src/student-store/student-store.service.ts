@@ -141,8 +141,18 @@ export class StudentStoreService {
     const schoolId = await this.resolveSchoolId(user);
     return this.carRepository.find({
       where: { school_id: schoolId },
-      select: ['id', 'plate_number', 'source', 'car_type', 'brand', 'model'],
+      select: ['id', 'plate_number', 'source', 'car_type', 'brand', 'model', 'route'],
     });
+  }
+
+  /** Save K-Belgesi güzergah for a car owned by this school. */
+  async updateCarRoute(user: { id: number; userType: UserTypes }, carId: number, route: string) {
+    const schoolId = await this.resolveSchoolId(user);
+    const car = await this.carRepository.findOne({ where: { id: carId, school_id: schoolId } });
+    if (!car) throw new Error(`Car ${carId} not found for school ${schoolId}`);
+    car.route = route.trim();
+    await this.carRepository.save(car);
+    return { id: car.id, route: car.route };
   }
 
   /**

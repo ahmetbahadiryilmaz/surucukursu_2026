@@ -29,6 +29,7 @@ import { AuthStore } from './auth-store';
 import { configureStudentSync, pullAll as pullStudentSync } from './student-sync';
 import { configurePersonnelSync } from './personnel-sync';
 import { configureKurumInfoSync } from './kurum-info-sync';
+import { configureCarSync } from './car-sync';
 import { MebbisManager } from './mebbis-manager';
 import { apiClient, MebbisAccount, ActivityLogBody } from './api-client';
 import { configureTemplateErrorReporter } from './template-fetcher';
@@ -87,6 +88,7 @@ export async function start(ctx: BootstrapContext): Promise<AppControllerHandle>
   configureStudentSync(() => authStore.getToken(), () => null);
   configurePersonnelSync(() => authStore.getToken());
   configureKurumInfoSync(() => authStore.getToken());
+  configureCarSync(() => authStore.getToken());
 
   // If we already have a valid token from a previous session, pull on boot.
   if (authStore.getToken()) {

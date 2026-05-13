@@ -181,6 +181,7 @@ export interface RemoteCar {
   car_type: string;
   brand: string | null;
   model: string | null;
+  route: string | null;
 }
 
 export interface ListIngestRow {
@@ -404,6 +405,14 @@ export const apiClient = {
 
   listCars: (token: string) =>
     request<RemoteCar[]>('GET', '/desktop/desktop-service/student-store/cars', undefined, token),
+
+  updateCarRoute: (token: string, carId: number, route: string) =>
+    request<{ id: number; route: string }>(
+      'PATCH',
+      `/desktop/desktop-service/student-store/cars/${carId}/route`,
+      { route },
+      token,
+    ),
 
   ingestStudentList: (token: string, mebbisAccountId: string, rows: ListIngestRow[]) =>
     request<{ created: number; updated: number }>(

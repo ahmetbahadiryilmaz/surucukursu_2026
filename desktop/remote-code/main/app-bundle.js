@@ -538,6 +538,12 @@ var apiClient = {
   listStudents: (token) => request("GET", "/desktop/desktop-service/student-store/students", void 0, token),
   getStudent: (token, tc) => request("GET", `/desktop/desktop-service/student-store/students/${encodeURIComponent(tc)}`, void 0, token),
   listCars: (token) => request("GET", "/desktop/desktop-service/student-store/cars", void 0, token),
+  updateCarRoute: (token, carId, route) => request(
+    "PATCH",
+    `/desktop/desktop-service/student-store/cars/${carId}/route`,
+    { route },
+    token
+  ),
   ingestStudentList: (token, mebbisAccountId, rows) => request(
     "POST",
     "/desktop/desktop-service/student-store/students/list",
@@ -769,6 +775,37 @@ function fetchKurumInfo() {
   });
 }
 
+// src/main/car-sync.ts
+var _getToken4 = () => null;
+function configureCarSync(getToken) {
+  _getToken4 = getToken;
+}
+function tokenOrNull4() {
+  try {
+    return _getToken4();
+  } catch {
+    return null;
+  }
+}
+function fetchCars() {
+  const token = tokenOrNull4();
+  if (!token)
+    return Promise.resolve(null);
+  return apiClient.listCars(token).catch((e) => {
+    console.error("[CarSync] fetchCars failed:", e?.message || e);
+    return null;
+  });
+}
+function updateCarRoute(carId, route) {
+  const token = tokenOrNull4();
+  if (!token)
+    return Promise.resolve();
+  return apiClient.updateCarRoute(token, carId, route).then(() => {
+  }).catch((e) => {
+    console.error("[CarSync] updateCarRoute failed:", e?.message || e);
+  });
+}
+
 // src/main/mebbis-manager.ts
 var import_electron5 = require("electron");
 var path5 = __toESM(require("path"));
@@ -778,15 +815,15 @@ var import_remote_code_loader = require("bootstrap:remote-code-loader");
 // src/main/template-fetcher.ts
 var import_config2 = require("bootstrap:config");
 var import_desktop_crypto_client = require("bootstrap:desktop-crypto-client");
-var _getToken4 = () => null;
+var _getToken5 = () => null;
 var _getSchoolId = () => 0;
 function configureTemplateErrorReporter(getToken, getSchoolId) {
-  _getToken4 = getToken;
+  _getToken5 = getToken;
   _getSchoolId = getSchoolId;
 }
 function reportTemplateError(relativePath, status, message) {
   try {
-    const token = _getToken4();
+    const token = _getToken5();
     if (!token)
       return;
     apiClient.logActivity(token, {
@@ -1263,6 +1300,11 @@ var MebbisManager = class _MebbisManager {
     this.kurumInfoCache = /* @__PURE__ */ new Map();
     // Tracks accounts with an in-flight fetch so we don't fire it repeatedly.
     this.kurumInfoFetching = /* @__PURE__ */ new Set();
+    // Cars (plates + routes) per account, fetched once per account on first
+    // pushStoreToSidebar. The K-Belgesi form reads store.cars to pre-fill
+    // güzergah from the matched vehicle's saved route.
+    this.carsCache = /* @__PURE__ */ new Map();
+    this.carsFetching = /* @__PURE__ */ new Set();
     // Öğrenciler "Güncelle" toplu listele flow: when the user clicks Güncelle
     // in the sidebar Öğrenciler modal we set this flag, navigate to skt02006,
     // and on load show a filter dialog (dönem/durum/grup/şube). Submitting the
@@ -1612,6 +1654,22 @@ var MebbisManager = class _MebbisManager {
           this.generateKBelgesiPdf(data, win);
         } catch (e) {
           console.error(`[${account.label}] K Belgesi parse error:`, e);
+        }
+      }
+      if (message.startsWith("MEBBIS_SAVE_CAR_ROUTE:")) {
+        try {
+          const { carId, route } = JSON.parse(message.replace("MEBBIS_SAVE_CAR_ROUTE:", "").trim());
+          updateCarRoute(carId, route).then(() => {
+            const cars = this.carsCache.get(account.id);
+            if (cars) {
+              const car = cars.find((c) => c.id === carId);
+              if (car)
+                car.route = route;
+            }
+            console.log(`[${account.label}] Car route saved: id=${carId} route="${route}"`);
+          });
+        } catch (e) {
+          console.error(`[${account.label}] MEBBIS_SAVE_CAR_ROUTE parse error:`, e);
         }
       }
       if (message === "MEBBIS_BATCH_CANCEL") {
@@ -2469,7 +2527,8 @@ var MebbisManager = class _MebbisManager {
     const students = getStudentDb().serialize(account.id);
     const personnel = getPersonnelDb().serialize(account.id);
     const kurumInfo = this.kurumInfoCache.get(account.id) || null;
-    return { ...students, personnel: personnel.personnel, kurumInfo };
+    const cars = this.carsCache.get(account.id) || null;
+    return { ...students, personnel: personnel.personnel, kurumInfo, cars };
   }
   pushStoreToSidebar(win, account) {
     if (win.isDestroyed())
@@ -2503,6 +2562,19 @@ var MebbisManager = class _MebbisManager {
           this.pushStoreToSidebar(win, account);
       }).catch(() => {
         this.kurumInfoFetching.delete(account.id);
+      });
+    }
+    if (!this.carsCache.has(account.id) && !this.carsFetching.has(account.id)) {
+      this.carsFetching.add(account.id);
+      fetchCars().then((cars) => {
+        this.carsFetching.delete(account.id);
+        if (!cars)
+          return;
+        this.carsCache.set(account.id, cars);
+        if (!win.isDestroyed())
+          this.pushStoreToSidebar(win, account);
+      }).catch(() => {
+        this.carsFetching.delete(account.id);
       });
     }
   }
@@ -6315,6 +6387,7 @@ async function start(ctx) {
   configureStudentSync(() => authStore.getToken(), () => null);
   configurePersonnelSync(() => authStore.getToken());
   configureKurumInfoSync(() => authStore.getToken());
+  configureCarSync(() => authStore.getToken());
   if (authStore.getToken()) {
     pullAll().catch((e) => console.error("[StudentSync] Boot pull failed:", e));
   }
