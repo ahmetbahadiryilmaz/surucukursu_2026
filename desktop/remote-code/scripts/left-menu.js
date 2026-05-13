@@ -463,10 +463,11 @@
         // "ÖZEL AYDINCIK BATUHAN MOTORLU TAŞIT SÜRÜCÜLERİ KURSU" → "AYDINCIK BATUHAN"
         function shortKursAdi(full) {
           if (!full) return '';
-          var s = String(full).trim().replace(/\s+/g, ' ');
-          s = s.replace(/^ÖZEL\s+/i, '');
-          s = s.replace(/\s+MOTORLU\s+.*$/i, '');
-          s = s.replace(/\s+SÜRÜCÜ\s+KURSU.*$/i, '');
+          var s = String(full).trim().toUpperCase().replace(/\s+/g, ' ');
+          // Strip leading "ÖZEL " (Turkish uppercase, no /i needed after toUpperCase)
+          s = s.replace(/^ÖZEL\s+/, '');
+          // Strip from "MOTORLU" or "TAŞIT" or "SÜRÜCÜLERİ" or "KURSU" onwards
+          s = s.replace(/\s+(MOTORLU|TA[ŞS]IT|SÜRÜCÜ|KURSU)\b.*$/, '');
           return s.trim();
         }
         var kursAdiVal = shortKursAdi((kurumInfo && kurumInfo.kurumAdi) || personnelKurum || (student && student.kurum) || '');
