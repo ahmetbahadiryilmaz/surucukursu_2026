@@ -470,8 +470,8 @@
           s = s.replace(/\s+(MOTORLU|TA[ŞS]IT|SÜRÜCÜ|KURSU)\b.*$/, '');
           return s.trim();
         }
-        var kursAdiVal = shortKursAdi((kurumInfo && kurumInfo.kurumAdi) || personnelKurum || (student && student.kurum) || '');
-        var kursAdresVal = (kurumInfo && kurumInfo.kurumAdres) || '';
+        var kursAdiVal = shortKursAdi((kurumInfo && (kurumInfo.kurum_adi || kurumInfo.kurumAdi)) || personnelKurum || (student && student.kurum) || '');
+        var kursAdresVal = (kurumInfo && (kurumInfo.kurum_adres || kurumInfo.kurumAdres)) || '';
 
         // Section 1: Araç ve İzin Bilgileri
         var sec1 = mkSection('Araç ve İzin Bilgileri');
