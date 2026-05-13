@@ -442,6 +442,17 @@
         var personnelIl = autoPersonnel ? (autoPersonnel.il || '') : '';
         var personnelIlce = autoPersonnel ? (autoPersonnel.ilce || '') : '';
         var personnelKurum = autoPersonnel ? (autoPersonnel.kurumAdi || '') : '';
+        // Fallback: scan all personnel for kurum/il/ilçe — school staff always have the school's own kurum
+        if (!personnelKurum || !personnelIl) {
+          for (var pfi = 0; pfi < personnelList.length; pfi++) {
+            var pf = personnelList[pfi];
+            if (!pf) continue;
+            if (!personnelKurum && pf.kurumAdi) personnelKurum = pf.kurumAdi;
+            if (!personnelIl    && pf.il)       personnelIl    = pf.il;
+            if (!personnelIlce  && pf.ilce)     personnelIlce  = pf.ilce;
+            if (personnelKurum && personnelIl && personnelIlce) break;
+          }
+        }
         var personnelNames = autoPersonnel ? splitAdSoyad(autoPersonnel.adSoyad || ((autoPersonnel.ad || '') + ' ' + (autoPersonnel.soyad || ''))) : { ad: '', soyad: '' };
 
         // Shared kurum derivations (used in section 1 + section 2)
@@ -482,19 +493,10 @@
           s = s.replace(/\s+(MOTORLU|TA[ŞS]IT|SÜRÜCÜ|KURSU)\b.*$/, '');
           return s.trim();
         }
-        // Prefer kurumInfo (scraped from skt01001), then the current student's kurum,
-        // then any student in the store that has a kurum value (school-wide fallback).
-        var anyStudentKurum = '';
-        if (!student || !student.kurum) {
-          for (var si = 0; si < students.length; si++) {
-            if (students[si] && students[si].kurum) { anyStudentKurum = students[si].kurum; break; }
-          }
-        }
         var kursAdiVal = shortKursAdi(
           (kurumInfo && (kurumInfo.kurum_adi || kurumInfo.kurumAdi)) ||
           personnelKurum ||
-          (student && student.kurum) ||
-          anyStudentKurum || ''
+          (student && student.kurum) || ''
         );
         var kursAdresVal = (kurumInfo && (kurumInfo.kurum_adres || kurumInfo.kurumAdres)) || '';
 

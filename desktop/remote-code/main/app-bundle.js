@@ -30,130 +30,6 @@ var __toESM = (mod, isNodeMode, target) => (target = mod != null ? __create(__ge
 ));
 var __toCommonJS = (mod) => __copyProps(__defProp({}, "__esModule", { value: true }), mod);
 
-// src/main/api-client.ts
-function sanitizeErrorMessage(msg) {
-  if (!msg)
-    return msg;
-  return msg.replace(/https?:\/\/[^\s"')]*?(?=\/|\s|$|["'),])([^\s"')]*)/g, (_m, rest) => rest || "").replace(/(?:^|[\s"'(])([a-z0-9.-]+\.mtsk\.app)(?=[\s/"'),:])/gi, (m, host) => m.replace(host, ""));
-}
-function request(method, urlPath, body, token) {
-  return new Promise((resolve, reject) => {
-    const fullUrl = new URL(import_config.API_BASE_URL + urlPath);
-    const isHttps = fullUrl.protocol === "https:";
-    const transport = isHttps ? import_https.default : import_http.default;
-    const bodyStr = body ? JSON.stringify(body) : void 0;
-    const options = {
-      hostname: fullUrl.hostname,
-      port: fullUrl.port || (isHttps ? "443" : "80"),
-      path: fullUrl.pathname + fullUrl.search,
-      method,
-      headers: {
-        "Content-Type": "application/json",
-        Accept: "application/json",
-        ...token ? { Authorization: `Bearer ${token}` } : {},
-        ...bodyStr ? { "Content-Length": String(Buffer.byteLength(bodyStr)) } : {}
-      }
-    };
-    const sanitize = sanitizeErrorMessage;
-    const req = transport.request(options, (res) => {
-      let data = "";
-      res.on("data", (chunk) => data += chunk);
-      res.on("end", () => {
-        try {
-          const parsed = JSON.parse(data);
-          const status = res.statusCode ?? 0;
-          if (status >= 200 && status < 300) {
-            resolve(parsed);
-          } else {
-            reject(new Error(sanitize(parsed?.message || `HTTP ${status}`)));
-          }
-        } catch {
-          reject(new Error("Sunucudan ge\xE7ersiz yan\u0131t al\u0131nd\u0131."));
-        }
-      });
-    });
-    req.on("error", (err) => {
-      const msg = err.code === "ECONNREFUSED" || err.code === "ENOTFOUND" || err.code === "ETIMEDOUT" || err.code === "ECONNRESET" ? "Sunucuya ula\u015F\u0131lam\u0131yor. \u0130nternet ba\u011Flant\u0131n\u0131z\u0131 kontrol edin." : sanitize(err.message || "Ba\u011Flant\u0131 hatas\u0131.");
-      reject(new Error(msg));
-    });
-    req.setTimeout(1e4, () => {
-      req.destroy();
-      reject(new Error("Sunucu yan\u0131t vermedi (zaman a\u015F\u0131m\u0131)."));
-    });
-    if (bodyStr)
-      req.write(bodyStr);
-    req.end();
-  });
-}
-var import_http, import_https, import_config, apiClient;
-var init_api_client = __esm({
-  "src/main/api-client.ts"() {
-    "use strict";
-    import_http = __toESM(require("http"));
-    import_https = __toESM(require("https"));
-    import_config = require("bootstrap:config");
-    apiClient = {
-      login: (email, password) => request("POST", "/desktop/desktop-service/auth/login", { email, password }),
-      logout: (token) => request("POST", "/desktop/desktop-service/auth/logout", void 0, token),
-      getMySchool: (token) => request("GET", "/desktop/desktop-service/driving-school/me", void 0, token),
-      getMebbisAccounts: (token) => request("GET", "/desktop/desktop-service/driving-school/me/mebbis-accounts", void 0, token),
-      getAllSchools: (token) => request("GET", "/desktop/desktop-service/driving-school/all", void 0, token),
-      upsertMebbisAccount: (token, schoolId, data) => request("POST", `/desktop/desktop-service/driving-school/me/mebbis-accounts/${schoolId}`, data, token),
-      removeMebbisAccount: (token, schoolId) => request("DELETE", `/desktop/desktop-service/driving-school/me/mebbis-accounts/${schoolId}`, void 0, token),
-      setupSchool: (token, name) => request("POST", "/desktop/desktop-service/driving-school/me/setup", { name }, token),
-      forgotPassword: (email, phone) => request("POST", "/desktop/desktop-service/auth/forgot-password", { email, phone }),
-      verifyResetCode: (email, code) => request("POST", "/desktop/desktop-service/auth/verify-reset-code", { email, code }),
-      resetPassword: (email, code, newPassword) => request("POST", "/desktop/desktop-service/auth/reset-password", { email, code, newPassword }),
-      logActivity: (token, body) => request("POST", "/desktop/desktop-service/activity-log", body, token),
-      getProfile: (token) => request("GET", "/desktop/desktop-service/auth/profile", void 0, token),
-      updateProfile: (token, phone) => request("PATCH", "/desktop/desktop-service/auth/profile", { phone }, token),
-      // ── Student store ───────────────────────────────────────────────
-      listStudents: (token) => request("GET", "/desktop/desktop-service/student-store/students", void 0, token),
-      getStudent: (token, tc) => request("GET", `/desktop/desktop-service/student-store/students/${encodeURIComponent(tc)}`, void 0, token),
-      listCars: (token) => request("GET", "/desktop/desktop-service/student-store/cars", void 0, token),
-      updateCarRoute: (token, carId, route) => request(
-        "PATCH",
-        `/desktop/desktop-service/student-store/cars/${carId}/route`,
-        { route },
-        token
-      ),
-      ingestStudentList: (token, mebbisAccountId, rows) => request(
-        "POST",
-        "/desktop/desktop-service/student-store/students/list",
-        { mebbis_account_id: mebbisAccountId, rows },
-        token
-      ),
-      ingestStudentDetail: (token, mebbisAccountId, payload) => request(
-        "POST",
-        "/desktop/desktop-service/student-store/students/detail",
-        { mebbis_account_id: mebbisAccountId, payload },
-        token
-      ),
-      // ── Personnel store ─────────────────────────────────────────────
-      ingestPersonnelList: (token, mebbisAccountId, rows) => request(
-        "POST",
-        "/desktop/desktop-service/personnel-store/personnel/list",
-        { mebbis_account_id: mebbisAccountId, rows },
-        token
-      ),
-      ingestPersonnelDetail: (token, mebbisAccountId, payload) => request(
-        "POST",
-        "/desktop/desktop-service/personnel-store/personnel/detail",
-        { mebbis_account_id: mebbisAccountId, payload },
-        token
-      ),
-      // ── Kurum info store ────────────────────────────────────────────
-      getKurumInfo: (token) => request("GET", "/desktop/desktop-service/kurum-info-store/info", void 0, token),
-      ingestKurumInfo: (token, mebbisAccountId, payload) => request(
-        "POST",
-        "/desktop/desktop-service/kurum-info-store/info",
-        { mebbis_account_id: mebbisAccountId, payload },
-        token
-      )
-    };
-  }
-});
-
 // src/main/student-db.ts
 var student_db_exports = {};
 __export(student_db_exports, {
@@ -449,57 +325,6 @@ var init_student_db = __esm({
   }
 });
 
-// src/main/kurum-info-sync.ts
-var kurum_info_sync_exports = {};
-__export(kurum_info_sync_exports, {
-  configureKurumInfoSync: () => configureKurumInfoSync,
-  fetchKurumInfo: () => fetchKurumInfo,
-  pushKurumInfo: () => pushKurumInfo
-});
-function configureKurumInfoSync(getToken) {
-  _getToken3 = getToken;
-}
-function tokenOrNull3() {
-  try {
-    return _getToken3();
-  } catch {
-    return null;
-  }
-}
-function pushKurumInfo(mebbisAccountId, payload) {
-  const token = tokenOrNull3();
-  if (!token) {
-    console.log("[KurumInfoSync] No auth token, skipping push");
-    return Promise.resolve(null);
-  }
-  return apiClient.ingestKurumInfo(token, mebbisAccountId, payload).then((r) => {
-    console.log(`[KurumInfoSync] Pushed (account=${mebbisAccountId}): info_id=${r.kurum_info_id}, programs=${r.programs}, vehicles=${r.vehicles}`);
-    return r;
-  }).catch((e) => {
-    console.error("[KurumInfoSync] Push failed:", e?.message || e);
-    return null;
-  });
-}
-function fetchKurumInfo() {
-  const token = tokenOrNull3();
-  if (!token) {
-    console.log("[KurumInfoSync] No auth token, skipping fetch");
-    return Promise.resolve(null);
-  }
-  return apiClient.getKurumInfo(token).catch((e) => {
-    console.error("[KurumInfoSync] Fetch failed:", e?.message || e);
-    return null;
-  });
-}
-var _getToken3;
-var init_kurum_info_sync = __esm({
-  "src/main/kurum-info-sync.ts"() {
-    "use strict";
-    init_api_client();
-    _getToken3 = () => null;
-  }
-});
-
 // src/main/app-controller.ts
 var app_controller_exports = {};
 __export(app_controller_exports, {
@@ -636,8 +461,125 @@ var AuthStore = class {
   }
 };
 
+// src/main/api-client.ts
+var import_http = __toESM(require("http"));
+var import_https = __toESM(require("https"));
+var import_config = require("bootstrap:config");
+function sanitizeErrorMessage(msg) {
+  if (!msg)
+    return msg;
+  return msg.replace(/https?:\/\/[^\s"')]*?(?=\/|\s|$|["'),])([^\s"')]*)/g, (_m, rest) => rest || "").replace(/(?:^|[\s"'(])([a-z0-9.-]+\.mtsk\.app)(?=[\s/"'),:])/gi, (m, host) => m.replace(host, ""));
+}
+function request(method, urlPath, body, token) {
+  return new Promise((resolve, reject) => {
+    const fullUrl = new URL(import_config.API_BASE_URL + urlPath);
+    const isHttps = fullUrl.protocol === "https:";
+    const transport = isHttps ? import_https.default : import_http.default;
+    const bodyStr = body ? JSON.stringify(body) : void 0;
+    const options = {
+      hostname: fullUrl.hostname,
+      port: fullUrl.port || (isHttps ? "443" : "80"),
+      path: fullUrl.pathname + fullUrl.search,
+      method,
+      headers: {
+        "Content-Type": "application/json",
+        Accept: "application/json",
+        ...token ? { Authorization: `Bearer ${token}` } : {},
+        ...bodyStr ? { "Content-Length": String(Buffer.byteLength(bodyStr)) } : {}
+      }
+    };
+    const sanitize = sanitizeErrorMessage;
+    const req = transport.request(options, (res) => {
+      let data = "";
+      res.on("data", (chunk) => data += chunk);
+      res.on("end", () => {
+        try {
+          const parsed = JSON.parse(data);
+          const status = res.statusCode ?? 0;
+          if (status >= 200 && status < 300) {
+            resolve(parsed);
+          } else {
+            reject(new Error(sanitize(parsed?.message || `HTTP ${status}`)));
+          }
+        } catch {
+          reject(new Error("Sunucudan ge\xE7ersiz yan\u0131t al\u0131nd\u0131."));
+        }
+      });
+    });
+    req.on("error", (err) => {
+      const msg = err.code === "ECONNREFUSED" || err.code === "ENOTFOUND" || err.code === "ETIMEDOUT" || err.code === "ECONNRESET" ? "Sunucuya ula\u015F\u0131lam\u0131yor. \u0130nternet ba\u011Flant\u0131n\u0131z\u0131 kontrol edin." : sanitize(err.message || "Ba\u011Flant\u0131 hatas\u0131.");
+      reject(new Error(msg));
+    });
+    req.setTimeout(1e4, () => {
+      req.destroy();
+      reject(new Error("Sunucu yan\u0131t vermedi (zaman a\u015F\u0131m\u0131)."));
+    });
+    if (bodyStr)
+      req.write(bodyStr);
+    req.end();
+  });
+}
+var apiClient = {
+  login: (email, password) => request("POST", "/desktop/desktop-service/auth/login", { email, password }),
+  logout: (token) => request("POST", "/desktop/desktop-service/auth/logout", void 0, token),
+  getMySchool: (token) => request("GET", "/desktop/desktop-service/driving-school/me", void 0, token),
+  getMebbisAccounts: (token) => request("GET", "/desktop/desktop-service/driving-school/me/mebbis-accounts", void 0, token),
+  getAllSchools: (token) => request("GET", "/desktop/desktop-service/driving-school/all", void 0, token),
+  upsertMebbisAccount: (token, schoolId, data) => request("POST", `/desktop/desktop-service/driving-school/me/mebbis-accounts/${schoolId}`, data, token),
+  removeMebbisAccount: (token, schoolId) => request("DELETE", `/desktop/desktop-service/driving-school/me/mebbis-accounts/${schoolId}`, void 0, token),
+  setupSchool: (token, name) => request("POST", "/desktop/desktop-service/driving-school/me/setup", { name }, token),
+  forgotPassword: (email, phone) => request("POST", "/desktop/desktop-service/auth/forgot-password", { email, phone }),
+  verifyResetCode: (email, code) => request("POST", "/desktop/desktop-service/auth/verify-reset-code", { email, code }),
+  resetPassword: (email, code, newPassword) => request("POST", "/desktop/desktop-service/auth/reset-password", { email, code, newPassword }),
+  logActivity: (token, body) => request("POST", "/desktop/desktop-service/activity-log", body, token),
+  getProfile: (token) => request("GET", "/desktop/desktop-service/auth/profile", void 0, token),
+  updateProfile: (token, phone) => request("PATCH", "/desktop/desktop-service/auth/profile", { phone }, token),
+  // ── Student store ───────────────────────────────────────────────
+  listStudents: (token) => request("GET", "/desktop/desktop-service/student-store/students", void 0, token),
+  getStudent: (token, tc) => request("GET", `/desktop/desktop-service/student-store/students/${encodeURIComponent(tc)}`, void 0, token),
+  listCars: (token) => request("GET", "/desktop/desktop-service/student-store/cars", void 0, token),
+  updateCarRoute: (token, carId, route) => request(
+    "PATCH",
+    `/desktop/desktop-service/student-store/cars/${carId}/route`,
+    { route },
+    token
+  ),
+  ingestStudentList: (token, mebbisAccountId, rows) => request(
+    "POST",
+    "/desktop/desktop-service/student-store/students/list",
+    { mebbis_account_id: mebbisAccountId, rows },
+    token
+  ),
+  ingestStudentDetail: (token, mebbisAccountId, payload) => request(
+    "POST",
+    "/desktop/desktop-service/student-store/students/detail",
+    { mebbis_account_id: mebbisAccountId, payload },
+    token
+  ),
+  // ── Personnel store ─────────────────────────────────────────────
+  ingestPersonnelList: (token, mebbisAccountId, rows) => request(
+    "POST",
+    "/desktop/desktop-service/personnel-store/personnel/list",
+    { mebbis_account_id: mebbisAccountId, rows },
+    token
+  ),
+  ingestPersonnelDetail: (token, mebbisAccountId, payload) => request(
+    "POST",
+    "/desktop/desktop-service/personnel-store/personnel/detail",
+    { mebbis_account_id: mebbisAccountId, payload },
+    token
+  ),
+  // ── Kurum info store ────────────────────────────────────────────
+  getKurumInfo: (token) => request("GET", "/desktop/desktop-service/kurum-info-store/info", void 0, token),
+  ingestKurumInfo: (token, mebbisAccountId, payload) => request(
+    "POST",
+    "/desktop/desktop-service/kurum-info-store/info",
+    { mebbis_account_id: mebbisAccountId, payload },
+    token
+  )
+};
+
 // src/main/student-sync.ts
-init_api_client();
 init_student_db();
 var _getToken = () => null;
 var _accountIdResolver = () => null;
@@ -771,7 +713,6 @@ async function pullAll() {
 }
 
 // src/main/personnel-sync.ts
-init_api_client();
 var _getToken2 = () => null;
 function configurePersonnelSync(getToken) {
   _getToken2 = getToken;
@@ -810,11 +751,31 @@ function pushPersonnelDetail(mebbisAccountId, payload) {
   });
 }
 
-// src/main/app-controller.ts
-init_kurum_info_sync();
+// src/main/kurum-info-sync.ts
+var _getToken3 = () => null;
+function configureKurumInfoSync(getToken) {
+  _getToken3 = getToken;
+}
+function tokenOrNull3() {
+  try {
+    return _getToken3();
+  } catch {
+    return null;
+  }
+}
+function fetchKurumInfo() {
+  const token = tokenOrNull3();
+  if (!token) {
+    console.log("[KurumInfoSync] No auth token, skipping fetch");
+    return Promise.resolve(null);
+  }
+  return apiClient.getKurumInfo(token).catch((e) => {
+    console.error("[KurumInfoSync] Fetch failed:", e?.message || e);
+    return null;
+  });
+}
 
 // src/main/car-sync.ts
-init_api_client();
 var _getToken4 = () => null;
 function configureCarSync(getToken) {
   _getToken4 = getToken;
@@ -854,7 +815,6 @@ var import_remote_code_loader = require("bootstrap:remote-code-loader");
 // src/main/template-fetcher.ts
 var import_config2 = require("bootstrap:config");
 var import_desktop_crypto_client = require("bootstrap:desktop-crypto-client");
-init_api_client();
 var _getToken5 = () => null;
 var _getSchoolId = () => 0;
 function configureTemplateErrorReporter(getToken, getSchoolId) {
@@ -1267,7 +1227,6 @@ function getPersonnelDb() {
 }
 
 // src/main/mebbis-manager.ts
-init_kurum_info_sync();
 var PERIOD_HELPERS_JS = `
   const TR_MONTHS = {
     'Ocak':0,'\u015Eubat':1,'Mart':2,'Nisan':3,'May\u0131s':4,'Haziran':5,
@@ -1825,10 +1784,6 @@ var MebbisManager = class _MebbisManager {
         this.hideStatus(win);
         this.injectLeftMenu(win, account);
         this.handleStudentUpdateOptions(win, account);
-      } else if (currentURL.toLowerCase().includes("skt01001")) {
-        this.hideStatus(win);
-        this.injectLeftMenu(win, account);
-        this.parseAndPushKurumInfo(win, account);
       } else if (currentURL.toLowerCase().includes("skt02006")) {
         this.hideStatus(win);
         this.injectLeftMenu(win, account);
@@ -2225,55 +2180,6 @@ var MebbisManager = class _MebbisManager {
       })));
     }).catch((e) => {
       console.error(`[ListParser][${account.label}] List scrape failed:`, e);
-    });
-  }
-  /** skt01001 passive scrape — pushes kurum adı/adres to backend so K Belgesi form can auto-fill. */
-  parseAndPushKurumInfo(win, account) {
-    if (win.isDestroyed())
-      return;
-    if (this.kurumInfoCache.has(account.id))
-      return;
-    console.log(`[KurumInfoParser][${account.label}] Scraping skt01001 for kurum info`);
-    win.webContents.executeJavaScript(`
-      (function() {
-        function txt(id) {
-          var el = document.getElementById(id);
-          return el ? (el.value || el.textContent || '').trim().replace(/\\s+/g, ' ') : '';
-        }
-        // skt01001 field IDs (standard MEBBIS form)
-        return {
-          kurumAdi:   txt('lblKurumAdi')   || txt('txtKurumAdi'),
-          kurumAdres: txt('lblKurumAdres') || txt('txtAdres') || txt('txtKurumAdres'),
-          kurumKodu:  txt('lblKurumKodu')  || txt('txtKurumKodu'),
-          kurumTelefon: txt('lblTelefon') || txt('txtTelefon'),
-        };
-      })();
-    `).then(async (result) => {
-      if (!result || !result.kurumAdi) {
-        console.log(`[KurumInfoParser][${account.label}] No kurum ad\u0131 found on skt01001`);
-        return;
-      }
-      console.log(`[KurumInfoParser][${account.label}] Found: ${result.kurumAdi}`);
-      const { pushKurumInfo: pushKurumInfo2 } = await Promise.resolve().then(() => (init_kurum_info_sync(), kurum_info_sync_exports));
-      pushKurumInfo2(account.id, {
-        kurumAdi: result.kurumAdi || void 0,
-        kurumAdres: result.kurumAdres || void 0,
-        kurumKodu: result.kurumKodu || void 0,
-        kurumTelefon: result.kurumTelefon || void 0
-      }).then((r) => {
-        if (!r)
-          return;
-        fetchKurumInfo().then((info) => {
-          if (!info)
-            return;
-          this.kurumInfoCache.set(account.id, info);
-          if (!win.isDestroyed())
-            this.pushStoreToSidebar(win, account);
-        }).catch(() => {
-        });
-      });
-    }).catch((e) => {
-      console.error(`[KurumInfoParser][${account.label}] scrape failed:`, e);
     });
   }
   /** skt04002 ddlPersonel scrape — extracts personnel/staff into the local DB. */
@@ -6314,9 +6220,6 @@ ${errorSummary}` : `Klas\xF6r: ${outputDir}`;
     await import_electron5.shell.openPath(outputDir);
   }
 };
-
-// src/main/app-controller.ts
-init_api_client();
 
 // src/main/bundle-whats-new.ts
 var fs6 = __toESM(require("fs"));
