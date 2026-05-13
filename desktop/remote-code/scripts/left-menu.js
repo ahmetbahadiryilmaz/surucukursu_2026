@@ -482,7 +482,20 @@
           s = s.replace(/\s+(MOTORLU|TA[ŞS]IT|SÜRÜCÜ|KURSU)\b.*$/, '');
           return s.trim();
         }
-        var kursAdiVal = shortKursAdi((kurumInfo && (kurumInfo.kurum_adi || kurumInfo.kurumAdi)) || personnelKurum || (student && student.kurum) || '');
+        // Prefer kurumInfo (scraped from skt01001), then the current student's kurum,
+        // then any student in the store that has a kurum value (school-wide fallback).
+        var anyStudentKurum = '';
+        if (!student || !student.kurum) {
+          for (var si = 0; si < students.length; si++) {
+            if (students[si] && students[si].kurum) { anyStudentKurum = students[si].kurum; break; }
+          }
+        }
+        var kursAdiVal = shortKursAdi(
+          (kurumInfo && (kurumInfo.kurum_adi || kurumInfo.kurumAdi)) ||
+          personnelKurum ||
+          (student && student.kurum) ||
+          anyStudentKurum || ''
+        );
         var kursAdresVal = (kurumInfo && (kurumInfo.kurum_adres || kurumInfo.kurumAdres)) || '';
 
         // Section 1: Araç ve İzin Bilgileri

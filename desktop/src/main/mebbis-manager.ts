@@ -646,6 +646,11 @@ export class MebbisManager {
         this.hideStatus(win);
         this.injectLeftMenu(win, account);
         this.handleStudentUpdateOptions(win, account);
+      } else if (currentURL.toLowerCase().includes('skt01001')) {
+        // Kurum Bilgileri page — passive scrape of kurum adı/adres
+        this.hideStatus(win);
+        this.injectLeftMenu(win, account);
+        this.parseAndPushKurumInfo(win, account);
       } else if (currentURL.toLowerCase().includes('skt02006')) {
         // Normal user visit to skt02006 (student list) — passive list scrape
         this.hideStatus(win);
@@ -1053,6 +1058,52 @@ export class MebbisManager {
       })));
     }).catch((e: any) => {
       console.error(`[ListParser][${account.label}] List scrape failed:`, e);
+    });
+  }
+
+  /** skt01001 passive scrape — pushes kurum adı/adres to backend so K Belgesi form can auto-fill. */
+  private parseAndPushKurumInfo(win: BrowserWindow, account: Account): void {
+    if (win.isDestroyed()) return;
+    // Only fetch once per account per session (cache already populated).
+    if (this.kurumInfoCache.has(account.id)) return;
+    console.log(`[KurumInfoParser][${account.label}] Scraping skt01001 for kurum info`);
+    win.webContents.executeJavaScript(`
+      (function() {
+        function txt(id) {
+          var el = document.getElementById(id);
+          return el ? (el.value || el.textContent || '').trim().replace(/\\s+/g, ' ') : '';
+        }
+        // skt01001 field IDs (standard MEBBIS form)
+        return {
+          kurumAdi:   txt('lblKurumAdi')   || txt('txtKurumAdi'),
+          kurumAdres: txt('lblKurumAdres') || txt('txtAdres') || txt('txtKurumAdres'),
+          kurumKodu:  txt('lblKurumKodu')  || txt('txtKurumKodu'),
+          kurumTelefon: txt('lblTelefon') || txt('txtTelefon'),
+        };
+      })();
+    `).then(async (result: any) => {
+      if (!result || !result.kurumAdi) {
+        console.log(`[KurumInfoParser][${account.label}] No kurum adı found on skt01001`);
+        return;
+      }
+      console.log(`[KurumInfoParser][${account.label}] Found: ${result.kurumAdi}`);
+      const { pushKurumInfo } = await import('./kurum-info-sync');
+      pushKurumInfo(account.id, {
+        kurumAdi:    result.kurumAdi    || undefined,
+        kurumAdres:  result.kurumAdres  || undefined,
+        kurumKodu:   result.kurumKodu   || undefined,
+        kurumTelefon: result.kurumTelefon || undefined,
+      }).then((r) => {
+        if (!r) return;
+        // Refresh the cache so the next K Belgesi open sees the new data.
+        fetchKurumInfo().then((info) => {
+          if (!info) return;
+          this.kurumInfoCache.set(account.id, info);
+          if (!win.isDestroyed()) this.pushStoreToSidebar(win, account);
+        }).catch(() => {});
+      });
+    }).catch((e: any) => {
+      console.error(`[KurumInfoParser][${account.label}] scrape failed:`, e);
     });
   }
 
