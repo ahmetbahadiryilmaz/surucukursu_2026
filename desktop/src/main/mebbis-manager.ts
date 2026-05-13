@@ -8,7 +8,9 @@ import { getRequestLogger } from './request-logger';
 import { getStudentDb } from './student-db';
 import { pushList, pushDetail } from './student-sync';
 import { getPersonnelDb, PersonnelDetailData } from './personnel-db';
-import { pushPersonnelDetail } from './personnel-sync';
+import { pushPersonnelList, pushPersonnelDetail } from './personnel-sync';
+import { fetchKurumInfo } from './kurum-info-sync';
+import type { RemoteKurumInfo } from './api-client';
 
 
 interface RunningAccount {
@@ -87,10 +89,36 @@ export class MebbisManager {
 
   // Personnel-update navigation: when the user clicks "Güncelle" we set this
   // flag, navigate to OOK's home (ook00001) to establish the OOK module
-  // session, then auto-navigate to ook15003 on home-page load. A direct hop
-  // to ook15003 from elsewhere in MEBBIS bounces back to ook00001, so the
+  // session, then auto-navigate to ook12001 on home-page load. A direct hop
+  // to ook12001 from elsewhere in MEBBIS bounces back to ook00001, so the
   // two-step is mandatory.
   private pendingPersonnelUpdate: Set<string> = new Set();
+
+  // Tracks accounts where the auto-Ara click has already been fired on
+  // ook12001 this update cycle, preventing infinite reload loops when the
+  // grid is initially empty and needs the "Aç" filter applied.
+  private personnelAutoSearched: Set<string> = new Set();
+
+  // K Belgesi auto-fetch flow: when the user types a TC into K Belgesi that
+  // is not in the local student cache, we navigate skt02009 to scrape that
+  // student's detail. accountId → expected TC. Cleared on detail-load
+  // (either the form is blank → toast "MEBBIS'te bulunamadı" or matches →
+  // calls `window.__openKBelgesi(tc)` to re-open the form prefilled).
+  private pendingKbFetch: Map<string, string> = new Map();
+
+  // Cached Kurum Bilgisi per account, populated by a fire-and-forget fetch
+  // from the backend on the first pushStoreToSidebar call. The sidebar reads
+  // this via window.__mebbisStore.kurumInfo to render the "Kurum" modal.
+  private kurumInfoCache: Map<string, RemoteKurumInfo> = new Map();
+  // Tracks accounts with an in-flight fetch so we don't fire it repeatedly.
+  private kurumInfoFetching: Set<string> = new Set();
+
+  // Öğrenciler "Güncelle" toplu listele flow: when the user clicks Güncelle
+  // in the sidebar Öğrenciler modal we set this flag, navigate to skt02006,
+  // and on load show a filter dialog (dönem/durum/grup/şube). Submitting the
+  // dialog re-POSTs the form; the resulting list page is parsed by the
+  // passive skt02006 branch in the page-load handler.
+  private pendingStudentUpdate: Set<string> = new Set();
 
   // Sequential batch detail scraping state: after the personnel list is
   // ingested from ook12001 we click each row's "Aç" button one at a time,
@@ -358,13 +386,101 @@ export class MebbisManager {
         console.log(`[OpenStudent][${account.label}] Sidebar requested open for tc=${tc}`);
         this.openStudent(win, account, tc);
       }
+      // K Belgesi auto-fetch: caller typed a TC not in the local cache; navigate
+      // skt02009 to scrape it. parseAndLogStudentPage resolves the pending entry
+      // once the detail loads (or surfaces a "not found" toast on a blank form).
+      if (message.startsWith('MEBBIS_KB_FETCH_STUDENT:')) {
+        const tc = message.replace('MEBBIS_KB_FETCH_STUDENT:', '').trim();
+        if (!/^\d{11}$/.test(tc)) {
+          console.log(`[KbFetch][${account.label}] Invalid TC: ${tc}`);
+        } else {
+          console.log(`[KbFetch][${account.label}] Fetching student data for TC=${tc}`);
+          this.pendingKbFetch.set(account.id, tc);
+          this.openStudent(win, account, tc);
+        }
+      }
+      // Öğrenciler toplu Güncelle: navigate (or click into) skt02006 then show
+      // the filter dialog. While a batch download is in progress we ignore the
+      // request so we don't disturb that flow.
+      if (message === 'MEBBIS_REQUEST_STUDENT_UPDATE') {
+        console.log(`[StudentUpdate][${account.label}] Güncelle requested`);
+        if (this.pendingBatchDownload) {
+          console.log(`[StudentUpdate][${account.label}] Batch in progress, ignoring`);
+          return;
+        }
+        this.pendingStudentUpdate.add(account.id);
+        const currentURL = win.webContents.getURL().toLowerCase();
+        if (currentURL.includes('skt02006')) {
+          this.handleStudentUpdateOptions(win, account);
+        } else if (currentURL.includes('/skt/')) {
+          this.clickMenuItemForSkt02006(win, account);
+        } else {
+          win.loadURL('https://mebbis.meb.gov.tr/SKT/skt02006.aspx').catch((e) => {
+            console.error(`[StudentUpdate][${account.label}] loadURL skt02006 failed:`, e);
+            this.pendingStudentUpdate.delete(account.id);
+          });
+        }
+      }
+      if (message.startsWith('MEBBIS_STUDENT_UPDATE_START:')) {
+        const payload = message.replace('MEBBIS_STUDENT_UPDATE_START:', '').trim();
+        try {
+          const options = JSON.parse(payload);
+          console.log(`[StudentUpdate][${account.label}] Submitting with options:`, options);
+          this.submitStudentUpdateForm(win, options);
+        } catch (e) {
+          console.error(`[StudentUpdate][${account.label}] start parse error:`, e);
+        }
+      }
+      if (message === 'MEBBIS_STUDENT_UPDATE_CANCEL') {
+        console.log(`[StudentUpdate][${account.label}] Cancelled by user`);
+        this.pendingStudentUpdate.delete(account.id);
+      }
       if (message === 'MEBBIS_REQUEST_PERSONNEL_UPDATE') {
-        console.log(`[PersonnelUpdate][${account.label}] Güncelle requested — routing via OOK home`);
+        console.log(`[PersonnelUpdate][${account.label}] Güncelle requested`);
         this.pendingPersonnelUpdate.add(account.id);
-        win.loadURL('https://mebbis.meb.gov.tr/Ookgm/ook00001.aspx').catch((e) => {
-          console.error(`[PersonnelUpdate][${account.label}] loadURL ook00001 failed:`, e);
-          this.pendingPersonnelUpdate.delete(account.id);
-        });
+        // Fresh cycle: clear per-account caches so the parser re-fires its
+        // auto-Ara click and the detail batch is re-run from scratch.
+        this.personnelAutoSearched.delete(account.id);
+        this.personnelBatchDetailDone.delete(account.id);
+        this.pendingPersonnelBatchDetail = null;
+        const currentURL = win.webContents.getURL();
+        if (currentURL.toLowerCase().includes('/skt/')) {
+          // Inside MTSK module — a direct OOK navigation bounces back. Click
+          // "Modül Çıkış" first so the OOK loadURL on the next page-load sticks.
+          console.log(`[PersonnelUpdate][${account.label}] In MTSK module — clicking Modül Çıkış`);
+          win.webContents.executeJavaScript(`
+            (function() {
+              const all = Array.from(document.querySelectorAll('a, td, button, input[type="button"]'));
+              for (const el of all) {
+                const txt = (el.textContent || el.value || '').trim();
+                if (txt === 'Modül Çıkış' || txt === 'Modul Cikis') { el.click(); return true; }
+              }
+              for (const el of all) {
+                const href = el.getAttribute('href') || '';
+                const onclick = el.getAttribute('onclick') || '';
+                if (href.toLowerCase().includes('main.aspx') || onclick.toLowerCase().includes('main.aspx')) {
+                  el.click(); return true;
+                }
+              }
+              console.log('[MEBBIS] Modül Çıkış not found, falling back to direct OOK navigation');
+              return false;
+            })();
+          `).then((clicked: boolean) => {
+            if (!clicked) {
+              win.loadURL('https://mebbis.meb.gov.tr/Ookgm/ook00001.aspx').catch((e) => {
+                console.error(`[PersonnelUpdate][${account.label}] ook00001 fallback failed:`, e);
+                this.pendingPersonnelUpdate.delete(account.id);
+              });
+            }
+          }).catch(() => {
+            win.loadURL('https://mebbis.meb.gov.tr/Ookgm/ook00001.aspx').catch(() => {});
+          });
+        } else {
+          win.loadURL('https://mebbis.meb.gov.tr/Ookgm/ook00001.aspx').catch((e) => {
+            console.error(`[PersonnelUpdate][${account.label}] loadURL ook00001 failed:`, e);
+            this.pendingPersonnelUpdate.delete(account.id);
+          });
+        }
       }
       if (message.startsWith('MEBBIS_K_BELGESI:')) {
         const payload = message.replace('MEBBIS_K_BELGESI:', '').trim();
@@ -500,6 +616,13 @@ export class MebbisManager {
           this.hideStatus(win);
           this.injectLeftMenu(win, account);
         }
+      } else if (currentURL.toLowerCase().includes('skt02006') && this.pendingStudentUpdate.has(account.id)) {
+        // Öğrenciler Güncelle flow: show the filter dialog. The user's submit
+        // re-POSTs the form; the resulting list page falls into the passive
+        // branch below (parseAndIngestStudentList already pushes to backend).
+        this.hideStatus(win);
+        this.injectLeftMenu(win, account);
+        this.handleStudentUpdateOptions(win, account);
       } else if (currentURL.toLowerCase().includes('skt02006')) {
         // Normal user visit to skt02006 (student list) — passive list scrape
         this.hideStatus(win);
@@ -510,23 +633,51 @@ export class MebbisManager {
         this.hideStatus(win);
         this.injectLeftMenu(win, account);
         this.parseAndIngestPersonnelList(win, account);
-      } else if (currentURL.toLowerCase().includes('ook00001') && this.pendingPersonnelUpdate.has(account.id)) {
-        // Güncelle landed us on OOK home — session is now established.
-        // Chain-navigate to ook15003 to trigger the personnel scrape.
-        console.log(`[PersonnelUpdate][${account.label}] OOK home loaded, navigating to ook15003`);
+      } else if (currentURL.toLowerCase().includes('main.aspx') && this.pendingPersonnelUpdate.has(account.id)) {
+        // Modül Çıkış landed us on the portal — chain to OOK home. The next
+        // ook00001 page-load reaches the branch below which navigates onward.
+        console.log(`[PersonnelUpdate][${account.label}] Main portal loaded after Modül Çıkış, navigating to OOK`);
         this.injectLeftMenu(win, account);
-        win.loadURL('https://mebbis.meb.gov.tr/Ookgm/ook15003.aspx').catch((e) => {
-          console.error(`[PersonnelUpdate][${account.label}] loadURL ook15003 failed:`, e);
+        win.loadURL('https://mebbis.meb.gov.tr/Ookgm/ook00001.aspx').catch((e) => {
+          console.error(`[PersonnelUpdate][${account.label}] ook00001 from main failed:`, e);
           this.pendingPersonnelUpdate.delete(account.id);
         });
-      } else if (currentURL.toLowerCase().includes('ook15003')) {
-        // ook15003 is the canonical personnel list (Özel Öğretim Kurumları
-        // Modülü). Richer than skt04002 — has Kayıt No, ad/soyad split,
-        // çalışma izni dates, onay durumu. Scraped on every visit.
+      } else if (currentURL.toLowerCase().includes('ook00001') && this.pendingPersonnelUpdate.has(account.id)) {
+        // Güncelle landed us on OOK home — session is now established.
+        // Chain-navigate to ook12001 (Personel Arama) to trigger the scrape.
+        console.log(`[PersonnelUpdate][${account.label}] OOK home loaded, navigating to ook12001`);
+        // A fresh Güncelle cycle: clear the per-account flags so the parser
+        // re-fires its auto-Ara click and the detail batch is re-run.
+        this.personnelAutoSearched.delete(account.id);
+        this.pendingPersonnelBatchDetail = null;
+        this.personnelBatchDetailDone.delete(account.id);
+        this.injectLeftMenu(win, account);
+        win.loadURL('https://mebbis.meb.gov.tr/Ookgm/ook12001.aspx').catch((e) => {
+          console.error(`[PersonnelUpdate][${account.label}] loadURL ook12001 failed:`, e);
+          this.pendingPersonnelUpdate.delete(account.id);
+        });
+      } else if (currentURL.toLowerCase().includes('ook12001')) {
+        // ook12001 (Personel Arama) is the canonical personnel inventory in
+        // the OOK module. Two paths:
+        //   - mid-batch: the previous "Aç" postback bounced back here, so
+        //     re-trigger the next row's postback.
+        //   - first visit: parse the grid (auto-clicking Ara if empty).
         this.pendingPersonnelUpdate.delete(account.id);
         this.hideStatus(win);
         this.injectLeftMenu(win, account);
-        this.parseAndIngestPersonnelListOok(win, account);
+        if (this.pendingPersonnelBatchDetail?.accountId === account.id) {
+          this.triggerPersonnelAcPostback(win, account, this.pendingPersonnelBatchDetail.currentIndex);
+        } else {
+          this.parseAndIngestPersonnelListOok(win, account);
+        }
+      } else if (currentURL.toLowerCase().includes('ook12002')) {
+        // Per-personel detail page reached via "Aç" postback from ook12001.
+        // Only act when we have an in-flight batch for this account.
+        this.hideStatus(win);
+        this.injectLeftMenu(win, account);
+        if (this.pendingPersonnelBatchDetail?.accountId === account.id) {
+          this.scrapePersonnelDetail(win, account);
+        }
       } else if (currentURL.toLowerCase().includes('skt02009')) {
         // Handle skt02009 page loads for direksiyon takip download
         if (this.pendingDownload && this.pendingDownloadPhase === 'navigate') {
@@ -748,6 +899,24 @@ export class MebbisManager {
       const { tc, adSoyad, donem, exams, lessons } = result;
       if (!tc || !adSoyad) {
         console.log(`[StudentParser][${account.label}] skt02009 loaded but no student data (blank form)`);
+        // K Belgesi auto-fetch: a blank form means MEBBIS could not find
+        // the TC the user typed. Surface a toast and clear the pending flag.
+        const expectedTcBlank = this.pendingKbFetch.get(account.id);
+        if (expectedTcBlank) {
+          this.pendingKbFetch.delete(account.id);
+          if (!win.isDestroyed()) {
+            const safeTc = expectedTcBlank.replace(/[^0-9]/g, '');
+            win.webContents.executeJavaScript(`
+              (function() {
+                var ov = document.createElement('div');
+                ov.style.cssText = 'position:fixed;top:80px;right:20px;z-index:10003;background:#7a1a1a;color:white;padding:12px 20px;border-radius:6px;font-family:Arial,sans-serif;font-size:13px;box-shadow:0 4px 12px rgba(0,0,0,0.4);max-width:320px;';
+                ov.textContent = "MEBBIS'te bulunamadı: ${safeTc}";
+                document.body.appendChild(ov);
+                setTimeout(function() { ov.remove(); }, 4500);
+              })();
+            `).catch(() => {});
+          }
+        }
         return;
       }
       console.log(`[StudentParser][${account.label}] Detail scraped: tc=${tc}, adSoyad=${adSoyad}, exams=${exams.length}, lessons=${lessons.length}`);
@@ -764,6 +933,21 @@ export class MebbisManager {
       });
       console.log(`[Store][${account.label}] Detail ingested tc=${tc} ${r.studentIsNew ? '(NEW)' : '(UPDATE)'}. New plates for student=${r.newPlatesForStudent.length}, account=${r.newPlatesForAccount.length}. Total students=${db.countStudents(account.id)} (${db.countDetailed(account.id)} with detail)`);
       this.pushStoreToSidebar(win, account);
+
+      // K Belgesi auto-fetch: if this detail load resolves a pending fetch,
+      // re-open the K Belgesi form prefilled with the now-cached student.
+      const expectedKbTc = this.pendingKbFetch.get(account.id);
+      if (expectedKbTc && expectedKbTc === tc) {
+        this.pendingKbFetch.delete(account.id);
+        setTimeout(() => {
+          if (!win.isDestroyed()) {
+            const safeTc = tc.replace(/[^0-9]/g, '');
+            win.webContents.executeJavaScript(
+              `window.__openKBelgesi && window.__openKBelgesi('${safeTc}');`
+            ).catch(() => {});
+          }
+        }, 500);
+      }
 
       // Push to backend (write-through, fire-and-forget)
       pushDetail(account.id, {
@@ -896,56 +1080,92 @@ export class MebbisManager {
     });
   }
 
-  /** ook15003 list scrape — the canonical personnel inventory (OOK module). */
+  /**
+   * ook12001 (Personel Arama) list scrape — canonical personnel inventory in
+   * the OOK module. When the grid is initially empty, this method auto-sets
+   * the "Durumu = Görevde" filter and clicks Ara so MEBBIS returns one row
+   * per ACTIVE personel (otherwise the same TC appears multiple times — one
+   * row per past çalışma izni record). After the list is scraped, kicks off
+   * a sequential detail-scrape batch over each "Aç" button to fill in
+   * ook12002 detail fields.
+   */
   private parseAndIngestPersonnelListOok(win: BrowserWindow, account: Account): void {
     if (win.isDestroyed()) return;
-    console.log(`[PersonnelParserOok][${account.label}] Scanning ook15003 personnel list`);
+    const alreadySearched = this.personnelAutoSearched.has(account.id);
+    console.log(`[PersonnelParserOok][${account.label}] Scanning ook12001 personnel list (alreadySearched=${alreadySearched})`);
+
     win.webContents.executeJavaScript(`
       (function() {
         function txt(el) { return (el && el.textContent || '').trim().replace(/\\s+/g, ' '); }
-        // Find a frmList table whose header row contains "TC Kimlik No".
-        // Skipping the page-frame frmList tables that wrap the layout.
-        const tables = document.querySelectorAll('table.frmList');
-        let target = null;
-        for (const t of tables) {
-          const head = t.querySelector('tr.frmListBaslik');
-          if (head && /TC\\s*Kimlik\\s*No/i.test(head.textContent || '')) {
-            target = t;
-            break;
+        const grid = document.getElementById('dgPersonelArama');
+        if (!grid) {
+          // Grid not rendered yet — pre-select "Görevde" (cmbPersonelDurum=1)
+          // so MEBBIS returns one row per ACTIVE teacher, then click Ara.
+          // We only auto-search once per cycle to avoid an infinite reload.
+          if (!${alreadySearched}) {
+            const durumSel = document.getElementById('cmbPersonelDurum');
+            if (durumSel) {
+              durumSel.value = '1';
+              durumSel.dispatchEvent(new Event('change', { bubbles: true }));
+            }
+            const araBtn = document.getElementById('btnAra');
+            if (araBtn) {
+              araBtn.click();
+              return { rows: [], autoSearchTriggered: true };
+            }
           }
+          return { rows: [], reason: 'dgPersonelArama not found' };
         }
-        if (!target) return { rows: [], reason: 'no personnel frmList found' };
         const out = [];
-        const trs = target.querySelectorAll('tr');
+        const trs = grid.querySelectorAll('tr');
         for (const tr of trs) {
           if (tr.classList.contains('frmListBaslik')) continue;
-          const cells = Array.from(tr.querySelectorAll('td')).map(txt);
-          // OOK15003 columns:
-          //   0:Aç | 1:Kayıt No | 2:TC | 3:Adı | 4:Soyadı |
-          //   5:Çalışma İzni Baş.Tar. | 6:Çalışma İzni Bit.Tar. |
-          //   7:Kurum Onay Durumu | 8:İl/İlçe Onay Durumu
-          if (cells.length < 9) continue;
+          const tds = Array.from(tr.querySelectorAll('td'));
+          if (tds.length < 19) continue;
+          const cells = tds.map(txt);
+          // OOK12001 columns:
+          //   0:Aç | 1:İzin No | 2:TC | 3:Adı | 4:Soyadı | 5:Statüsü |
+          //   6:Görevi | 7:Branşı | 8:İl | 9:İlçe | 10:Kurum Kodu |
+          //   11:Kurum Adı | 12:Görev Başlama Kurum Adı |
+          //   13:İzin Baş | 14:İzin Bit | 15:Görevden Ayrılma |
+          //   16:Maaş KDS | 17:Ücret KDS | 18:Durumu | 19:Fotoğraf
           const tc = cells[2] || '';
           if (!/^[0-9]{11}$/.test(tc)) continue;
           out.push({
             tc,
-            kayitNo: cells[1] || '',
-            ad: cells[3] || '',
-            soyad: cells[4] || '',
-            calismaIzniBas: cells[5] || '',
-            calismaIzniBit: cells[6] || '',
-            kurumOnay: cells[7] || '',
-            ilOnay: cells[8] || '',
+            izinNo:            cells[1] || '',
+            ad:                cells[3] || '',
+            soyad:             cells[4] || '',
+            statusu:           cells[5] || '',
+            gorevi:            cells[6] || '',
+            bransi:            cells[7] || '',
+            il:                cells[8] || '',
+            ilce:              cells[9] || '',
+            kurumKodu:         cells[10] || '',
+            kurumAdi:          cells[11] || '',
+            kurumAdiBaslangic: cells[12] || '',
+            calismaIzniBas:    cells[13] || '',
+            calismaIzniBit:    cells[14] || '',
+            ayrilmaTarihi:     cells[15] || '',
+            maasKds:           cells[16] || '',
+            ucretKds:          cells[17] || '',
+            durumu:            cells[18] || '',
           });
         }
         return { rows: out };
       })();
     `).then((result: any) => {
+      if (result?.autoSearchTriggered) {
+        console.log(`[PersonnelParserOok][${account.label}] Auto-clicked btnAra — waiting for results page`);
+        this.personnelAutoSearched.add(account.id);
+        return;
+      }
       if (!result || !Array.isArray(result.rows)) {
         console.log(`[PersonnelParserOok][${account.label}] No rows; reason=${result?.reason || 'unknown'}`);
         return;
       }
       const rows = result.rows as any[];
+      this.personnelAutoSearched.delete(account.id);
       if (!rows.length) {
         console.log(`[PersonnelParserOok][${account.label}] Empty personnel list`);
         return;
@@ -954,6 +1174,40 @@ export class MebbisManager {
       const r = db.ingestList(account.id, rows);
       console.log(`[PersonnelParserOok][${account.label}] Ingested ${rows.length} OOK personnel: created=${r.created}, updated=${r.updated}. Total=${db.countPersonnel(account.id)}`);
       this.pushStoreToSidebar(win, account);
+      pushPersonnelList(account.id, rows);
+
+      if (this.personnelBatchDetailDone.has(account.id) || this.pendingPersonnelBatchDetail) return;
+
+      // Kick off the detail batch: capture the ook12001 form's hidden fields
+      // (VIEWSTATE et al.) so subsequent rows can re-POST back to ook12001.
+      win.webContents.executeJavaScript(`
+        (function() {
+          var f = document.getElementById('ook12001') || document.forms['ook12001'];
+          if (!f) return null;
+          var fields = {};
+          for (var i = 0; i < f.elements.length; i++) {
+            var el = f.elements[i];
+            if (el.type === 'hidden') fields[el.name] = el.value;
+          }
+          return fields;
+        })()
+      `).then((formState: Record<string, string> | null) => {
+        if (!formState || typeof formState !== 'object') {
+          console.log(`[PersonnelBatch][${account.label}] Could not capture form state — skipping detail batch`);
+          return;
+        }
+        const totalRows = rows.length;
+        console.log(`[PersonnelBatch][${account.label}] Starting detail scrape batch for ${totalRows} records`);
+        this.pendingPersonnelBatchDetail = {
+          accountId: account.id,
+          totalRows,
+          currentIndex: 0,
+          formState,
+        };
+        this.triggerPersonnelAcPostback(win, account, 0);
+      }).catch((e: any) => {
+        console.error(`[PersonnelBatch][${account.label}] Form state capture failed:`, e);
+      });
     }).catch((e: any) => {
       console.error(`[PersonnelParserOok][${account.label}] Scrape failed:`, e);
     });
@@ -1129,13 +1383,14 @@ export class MebbisManager {
   private serializeStore(account: Account) {
     const students = getStudentDb().serialize(account.id);
     const personnel = getPersonnelDb().serialize(account.id);
-    return { ...students, personnel: personnel.personnel };
+    const kurumInfo = this.kurumInfoCache.get(account.id) || null;
+    return { ...students, personnel: personnel.personnel, kurumInfo };
   }
 
   private pushStoreToSidebar(win: BrowserWindow, account: Account): void {
     if (win.isDestroyed()) return;
     const payload = this.serializeStore(account);
-    console.log(`[Sidebar][${account.label}] Pushing store: ${payload.students.length} students, ${payload.plates.length} plates, ${payload.personnel.length} personnel`);
+    console.log(`[Sidebar][${account.label}] Pushing store: ${payload.students.length} students, ${payload.plates.length} plates, ${payload.personnel.length} personnel, kurumInfo=${payload.kurumInfo ? 'yes' : 'no'}`);
     const json = JSON.stringify(payload).replace(/<\/script/gi, '<\\/script');
     win.webContents.executeJavaScript(`
       (function() {
@@ -1152,6 +1407,21 @@ export class MebbisManager {
         }
       })();
     `).catch((e) => console.error(`[Sidebar][${account.label}] Push failed:`, e));
+
+    // Lazy fire-and-forget kurum info fetch on the first push for this account.
+    // When it resolves, we cache it and re-push so the sidebar's Kurum button
+    // lights up. Subsequent calls short-circuit.
+    if (!this.kurumInfoCache.has(account.id) && !this.kurumInfoFetching.has(account.id)) {
+      this.kurumInfoFetching.add(account.id);
+      fetchKurumInfo()
+        .then((info) => {
+          this.kurumInfoFetching.delete(account.id);
+          if (!info) return;
+          this.kurumInfoCache.set(account.id, info);
+          if (!win.isDestroyed()) this.pushStoreToSidebar(win, account);
+        })
+        .catch(() => { this.kurumInfoFetching.delete(account.id); });
+    }
   }
 
   private openStudent(win: BrowserWindow, account: Account, tc: string): void {
@@ -1566,14 +1836,26 @@ export class MebbisManager {
           return b;
         }
 
-        const studentsBtn = makeSectionBtn('mebbis-students-btn', 'Öğrenciler');
-        const carsBtn = makeSectionBtn('mebbis-cars-btn', 'Araçlar');
+        const studentsBtn  = makeSectionBtn('mebbis-students-btn',  'Öğrenciler');
+        const carsBtn      = makeSectionBtn('mebbis-cars-btn',      'Araçlar');
         const personnelBtn = makeSectionBtn('mebbis-personnel-btn', 'Personeller');
+        // "Kurum" shows kurum bilgileri + programs + vehicles. Renders "Kurum (—)"
+        // until the lazy fetch resolves; "(✓)" once cached.
+        const kurumBtn = (function() {
+          const b = document.createElement('button');
+          b.id = 'mebbis-kurum-btn';
+          b.dataset.label = 'Kurum';
+          b.style.cssText = 'background: none; border: none; color: #4361ee; font-size: 13px; font-weight: bold; padding: 12px 15px; text-align: left; cursor: pointer; width: 100%; border-bottom: 1px solid #2a2a4a; letter-spacing: 0.3px; transition: background 0.15s;';
+          b.textContent = 'Kurum (—)';
+          b.onmouseover = () => { b.style.background = '#2a2a4a'; };
+          b.onmouseout  = () => { b.style.background = 'none'; };
+          return b;
+        })();
+        container.appendChild(kurumBtn);
         container.appendChild(studentsBtn);
         container.appendChild(carsBtn);
         container.appendChild(personnelBtn);
-        // Insert above the dev section if present (dev section is anchored to the bottom
-        // via margin-top:auto); otherwise append at the end of the sidebar.
+        // Insert above the dev section if present; otherwise append at the end.
         const devAnchor = document.getElementById('mebbis-dev-section-title');
         if (devAnchor) {
           sidebar.insertBefore(container, devAnchor);
@@ -1592,6 +1874,9 @@ export class MebbisManager {
           }
         }
 
+        // ─── Table modal with optional live search + header actions ───
+        // opts: { kind, title, columns, rows, onRowAction?, headerActions?,
+        //         searchKeys?: string[], searchPlaceholder?: string }
         function openTableModal(opts) {
           closeStoreModal();
           const overlay = document.createElement('div');
@@ -1627,6 +1912,21 @@ export class MebbisManager {
           header.appendChild(rightSide);
           modal.appendChild(header);
 
+          // Optional live search bar — present when opts.searchKeys is a non-empty array.
+          let searchInput = null;
+          if (Array.isArray(opts.searchKeys) && opts.searchKeys.length) {
+            const searchWrap = document.createElement('div');
+            searchWrap.style.cssText = 'margin-bottom: 10px; flex-shrink: 0;';
+            searchInput = document.createElement('input');
+            searchInput.type = 'text';
+            searchInput.placeholder = opts.searchPlaceholder || 'Ara...';
+            searchInput.style.cssText = 'width: 100%; padding: 9px 12px; border: 1px solid #2a2a4a; border-radius: 4px; background: #1a1a2e; color: white; font-size: 14px; box-sizing: border-box; outline: none;';
+            searchInput.onfocus = () => { searchInput.style.borderColor = '#4361ee'; };
+            searchInput.onblur = () => { searchInput.style.borderColor = '#2a2a4a'; };
+            searchWrap.appendChild(searchInput);
+            modal.appendChild(searchWrap);
+          }
+
           const tableWrap = document.createElement('div');
           tableWrap.style.cssText = 'overflow: auto; flex: 1;';
           const table = document.createElement('table');
@@ -1642,16 +1942,22 @@ export class MebbisManager {
           thead.appendChild(trh);
           table.appendChild(thead);
           const tbody = document.createElement('tbody');
-          if (!opts.rows.length) {
-            const tr = document.createElement('tr');
-            const td = document.createElement('td');
-            td.colSpan = opts.columns.length;
-            td.style.cssText = 'padding: 20px; text-align: center; color: #888; font-style: italic;';
-            td.textContent = '— henüz yok —';
-            tr.appendChild(td);
-            tbody.appendChild(tr);
-          } else {
-            opts.rows.forEach(row => {
+
+          // Render the given rows into tbody. Used both for the initial draw
+          // and to re-render after a search filter applies.
+          function renderRows(rows) {
+            tbody.innerHTML = '';
+            if (!rows.length) {
+              const tr = document.createElement('tr');
+              const td = document.createElement('td');
+              td.colSpan = opts.columns.length;
+              td.style.cssText = 'padding: 20px; text-align: center; color: #888; font-style: italic;';
+              td.textContent = '— eşleşme yok —';
+              tr.appendChild(td);
+              tbody.appendChild(tr);
+              return;
+            }
+            rows.forEach(row => {
               const tr = document.createElement('tr');
               tr.style.cssText = 'border-bottom: 1px solid #20203a;';
               opts.columns.forEach(col => {
@@ -1671,6 +1977,34 @@ export class MebbisManager {
               tbody.appendChild(tr);
             });
           }
+
+          if (!opts.rows.length) {
+            const tr = document.createElement('tr');
+            const td = document.createElement('td');
+            td.colSpan = opts.columns.length;
+            td.style.cssText = 'padding: 20px; text-align: center; color: #888; font-style: italic;';
+            td.textContent = '— henüz yok —';
+            tr.appendChild(td);
+            tbody.appendChild(tr);
+          } else {
+            renderRows(opts.rows);
+          }
+
+          if (searchInput) {
+            searchInput.oninput = () => {
+              const q = searchInput.value.toLocaleLowerCase('tr-TR').trim();
+              if (!q) { renderRows(opts.rows); return; }
+              const filtered = opts.rows.filter(row => {
+                for (let i = 0; i < opts.searchKeys.length; i++) {
+                  const v = row[opts.searchKeys[i]];
+                  if (v != null && String(v).toLocaleLowerCase('tr-TR').indexOf(q) !== -1) return true;
+                }
+                return false;
+              });
+              renderRows(filtered);
+            };
+          }
+
           table.appendChild(tbody);
           tableWrap.appendChild(table);
           modal.appendChild(tableWrap);
@@ -1683,22 +2017,654 @@ export class MebbisManager {
           document.addEventListener('keydown', activeModalKeyHandler);
         }
 
+        function personnelGuncelle(btn) {
+          if (btn) { btn.disabled = true; btn.textContent = 'Yükleniyor...'; btn.style.opacity = '0.6'; }
+          // Main process handles MTSK→OOK module switch (Modül Çıkış) and
+          // ook00001 → ook12001 chain navigation, then runs the detail batch.
+          console.log('MEBBIS_REQUEST_PERSONNEL_UPDATE');
+        }
+
+        function studentGuncelle(btn) {
+          if (btn) { btn.disabled = true; btn.textContent = 'Yükleniyor...'; btn.style.opacity = '0.6'; }
+          // Main process navigates to skt02006 (or clicks into it from /skt/)
+          // then shows the filter dialog; submit re-POSTs and the list page
+          // falls into parseAndIngestStudentList (already pushes to backend).
+          console.log('MEBBIS_REQUEST_STUDENT_UPDATE');
+        }
+
+        // ─── Personel Detay modal ───
+        // Section-by-section overlay. Sections collapse/expand on header click;
+        // the first non-empty section is open by default. Empty sections (every
+        // field '' or '-') hide entirely so the user only sees data MEBBIS
+        // actually returned.
+        function showPersonnelDetail(row) {
+          var ov = document.createElement('div');
+          ov.style.cssText = 'position: fixed; inset: 0; z-index: 10002; background: rgba(0,0,0,0.65); display: flex; align-items: center; justify-content: center; font-family: Arial, sans-serif;';
+          var box = document.createElement('div');
+          box.style.cssText = 'background: #1a1a2e; border: 1px solid #4361ee; border-radius: 8px; width: 560px; max-width: 90vw; max-height: 85vh; display: flex; flex-direction: column; color: white;';
+          var head = document.createElement('div');
+          head.style.cssText = 'padding: 16px 20px; border-bottom: 1px solid #2a2a4a; display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-shrink: 0;';
+          var titleWrap = document.createElement('div');
+          titleWrap.style.cssText = 'flex: 1; min-width: 0;';
+          var t = document.createElement('div');
+          t.style.cssText = 'color: #4361ee; font-size: 16px; font-weight: bold;';
+          t.textContent = row.adSoyad || ((row.ad || '') + ' ' + (row.soyad || '')).trim() || 'Personel';
+          var sub = document.createElement('div');
+          sub.style.cssText = 'color: #888; font-size: 12px; margin-top: 2px;';
+          sub.textContent = 'TC ' + (row.tc || '-') + (row.durumu ? ' • ' + row.durumu : '');
+          titleWrap.appendChild(t);
+          titleWrap.appendChild(sub);
+          var closeBtn = document.createElement('button');
+          closeBtn.textContent = '✕';
+          closeBtn.style.cssText = 'background: none; border: none; color: #ccc; cursor: pointer; font-size: 18px; padding: 0 6px; line-height: 1;';
+          closeBtn.onclick = function() { ov.remove(); };
+          head.appendChild(titleWrap);
+          head.appendChild(closeBtn);
+          box.appendChild(head);
+
+          var body = document.createElement('div');
+          body.style.cssText = 'padding: 8px 20px 20px; overflow-y: auto; flex: 1;';
+
+          var sections = [
+            { title: 'Kimlik',          fields: [
+              ['TC Kimlik No', row.tc], ['Ad', row.ad], ['Soyad', row.soyad],
+              ['Doğum Tarihi', row.dogumTarihi],
+            ]},
+            { title: 'Görev',           fields: [
+              ['Görevi', row.gorevi], ['Statüsü', row.statusu], ['Branşı', row.bransi],
+              ['Ek Branş 1', row.brans2], ['Ek Branş 2', row.brans3], ['Ek Branş 3', row.brans4],
+            ]},
+            { title: 'Çalışma İzni',    fields: [
+              ['İzin No', row.izinNo],
+              ['Başlama Tarihi', row.calismaIzniBas], ['Bitiş Tarihi', row.calismaIzniBit],
+              ['Durumu', row.durumu], ['Ayrılma Tarihi', row.ayrilmaTarihi],
+              ['Ayrılma Açıklama', row.ayrilmaAciklama],
+            ]},
+            { title: 'Ücret',           fields: [
+              ['Ders Ücreti', row.dersUcret], ['Net / Brüt Ücret', row.netBrutUcret],
+              ['Maaş KDS', row.maasKds], ['Ücret KDS', row.ucretKds],
+              ['Maaş Karşılığı Ders Sayısı', row.maasKarsiligiDersSayisi],
+              ['Ders Ücreti Karşılığı Ders Sayısı', row.dersUcretiKarsiligiDersSayisi],
+            ]},
+            { title: 'Öğrenim',         fields: [
+              ['Öğrenim Bilgisi', row.ogrenimBilgisi],
+              ['Mezuniyet Belge Cinsi', row.mezuniyetBelgeCinsi],
+              ['Mezuniyet Tarihi', row.mezuniyetTarihi],
+              ['Mezuniyet Belge Tarihi', row.mezuniyetBelgeTarihi],
+              ['Mezuniyet Belge Sayısı', row.mezuniyetBelgeSayisi],
+              ['Mezuniyet Açıklama', row.mezuniyetAciklama],
+            ]},
+            { title: 'Kurum',           fields: [
+              ['Kurum Kodu', row.kurumKodu], ['Kurum Adı', row.kurumAdi],
+              ['Görev Başlama Kurum Adı', row.kurumAdiBaslangic],
+              ['İl', row.il], ['İlçe', row.ilce],
+            ]},
+            { title: 'İletişim',        fields: [
+              ['e-Posta', row.ePosta], ['Telefon', row.tel],
+            ]},
+          ];
+
+          function hasValue(v) {
+            return v !== null && v !== undefined &&
+              String(v).trim() !== '' && String(v).trim() !== '-' && String(v).trim() !== '&nbsp;';
+          }
+
+          var sectionRendered = 0;
+          sections.forEach(function(sec) {
+            var visibleFields = sec.fields.filter(function(f) { return hasValue(f[1]); });
+            if (!visibleFields.length) return;
+            var openByDefault = (sectionRendered === 0);
+            sectionRendered++;
+            var secEl = document.createElement('div');
+            secEl.style.cssText = 'margin-top: 12px; border: 1px solid #2a2a4a; border-radius: 6px; overflow: hidden;';
+            var hdr = document.createElement('button');
+            hdr.type = 'button';
+            hdr.style.cssText = 'width: 100%; text-align: left; background: #20203a; border: none; color: #4361ee; cursor: pointer; padding: 10px 14px; font-size: 13px; font-weight: 600; display: flex; justify-content: space-between; align-items: center;';
+            var caret = document.createElement('span');
+            caret.style.cssText = 'color: #888; font-size: 12px; transition: transform 0.15s;';
+            caret.textContent = '▾';
+            var hLbl = document.createElement('span');
+            hLbl.textContent = sec.title + '  (' + visibleFields.length + ')';
+            hdr.appendChild(hLbl);
+            hdr.appendChild(caret);
+            var content = document.createElement('div');
+            content.style.cssText = 'padding: 10px 14px; background: #16162a; display: ' + (openByDefault ? 'block' : 'none') + ';';
+            caret.style.transform = openByDefault ? 'rotate(0deg)' : 'rotate(-90deg)';
+            visibleFields.forEach(function(f) {
+              var rowEl = document.createElement('div');
+              rowEl.style.cssText = 'display: flex; padding: 4px 0; font-size: 13px; line-height: 1.4; gap: 8px;';
+              var k = document.createElement('div');
+              k.style.cssText = 'color: #888; flex: 0 0 180px;';
+              k.textContent = f[0];
+              var v = document.createElement('div');
+              v.style.cssText = 'color: #ddd; flex: 1; word-break: break-word;';
+              v.textContent = String(f[1]).replace(/\\u00a0/g, ' ').trim();
+              rowEl.appendChild(k);
+              rowEl.appendChild(v);
+              content.appendChild(rowEl);
+            });
+            hdr.onclick = function() {
+              var open = content.style.display !== 'none';
+              content.style.display = open ? 'none' : 'block';
+              caret.style.transform = open ? 'rotate(-90deg)' : 'rotate(0deg)';
+            };
+            secEl.appendChild(hdr);
+            secEl.appendChild(content);
+            body.appendChild(secEl);
+          });
+
+          // Programs section: table-shaped, rendered separately from the
+          // key/value sections above.
+          if (Array.isArray(row.derseProgramlar) && row.derseProgramlar.length) {
+            var pSec = document.createElement('div');
+            pSec.style.cssText = 'margin-top: 12px; border: 1px solid #2a2a4a; border-radius: 6px; overflow: hidden;';
+            var pHdr = document.createElement('button');
+            pHdr.type = 'button';
+            pHdr.style.cssText = 'width: 100%; text-align: left; background: #20203a; border: none; color: #4361ee; cursor: pointer; padding: 10px 14px; font-size: 13px; font-weight: 600; display: flex; justify-content: space-between; align-items: center;';
+            var pCaret = document.createElement('span');
+            pCaret.style.cssText = 'color: #888; font-size: 12px;';
+            pCaret.textContent = '▾';
+            var pLbl = document.createElement('span');
+            pLbl.textContent = 'Derse Gireceği Programlar  (' + row.derseProgramlar.length + ')';
+            pHdr.appendChild(pLbl);
+            pHdr.appendChild(pCaret);
+            var pContent = document.createElement('div');
+            pContent.style.cssText = 'padding: 10px 14px; background: #16162a;';
+            row.derseProgramlar.forEach(function(p) {
+              var r = document.createElement('div');
+              r.style.cssText = 'display: flex; padding: 4px 0; font-size: 13px; gap: 8px;';
+              var n = document.createElement('div');
+              n.style.cssText = 'color: #ddd; flex: 1;';
+              n.textContent = p.program;
+              var ty = document.createElement('div');
+              ty.style.cssText = 'color: #888; flex: 0 0 100px; text-align: right;';
+              ty.textContent = p.tip || '';
+              r.appendChild(n); r.appendChild(ty);
+              pContent.appendChild(r);
+            });
+            pHdr.onclick = function() {
+              var open = pContent.style.display !== 'none';
+              pContent.style.display = open ? 'none' : 'block';
+              pCaret.style.transform = open ? 'rotate(-90deg)' : 'rotate(0deg)';
+            };
+            pSec.appendChild(pHdr);
+            pSec.appendChild(pContent);
+            body.appendChild(pSec);
+          }
+
+          if (!sectionRendered && !(Array.isArray(row.derseProgramlar) && row.derseProgramlar.length)) {
+            var empty = document.createElement('div');
+            empty.style.cssText = 'padding: 24px; color: #888; font-style: italic; text-align: center;';
+            empty.textContent = 'Detay henüz çekilmedi — Güncelle butonu ile yeniden deneyin.';
+            body.appendChild(empty);
+          }
+
+          box.appendChild(body);
+          ov.appendChild(box);
+          ov.onclick = function(e) { if (e.target === ov) ov.remove(); };
+          document.body.appendChild(ov);
+          var keyH = function(e) {
+            if (e.key === 'Escape') { ov.remove(); document.removeEventListener('keydown', keyH); }
+          };
+          document.addEventListener('keydown', keyH);
+        }
+
+        function fmtTimestamp(ms) {
+          if (!ms || typeof ms !== 'number') return '';
+          var d = new Date(ms);
+          var pad = function(n) { return n < 10 ? '0' + n : '' + n; };
+          return pad(d.getDate()) + '.' + pad(d.getMonth() + 1) + '.' + d.getFullYear() +
+            ' ' + pad(d.getHours()) + ':' + pad(d.getMinutes());
+        }
+
+        // ─── Öğrenci Detay modal ───
+        // Cached detail overlay with a Güncelle/Detay Çek button. The button
+        // emits MEBBIS_OPEN_STUDENT which navigates skt02009 to (re-)scrape.
+        // After parseAndLogStudentPage ingests + pushStoreToSidebar refreshes
+        // window.__mebbisStore, the next open of this modal sees fresh data.
+        function showStudentDetail(row) {
+          var ov = document.createElement('div');
+          ov.style.cssText = 'position: fixed; inset: 0; z-index: 10002; background: rgba(0,0,0,0.65); display: flex; align-items: center; justify-content: center; font-family: Arial, sans-serif;';
+          var box = document.createElement('div');
+          box.style.cssText = 'background: #1a1a2e; border: 1px solid #4361ee; border-radius: 8px; width: 640px; max-width: 92vw; max-height: 88vh; display: flex; flex-direction: column; color: white;';
+          var head = document.createElement('div');
+          head.style.cssText = 'padding: 14px 18px; border-bottom: 1px solid #2a2a4a; display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-shrink: 0;';
+          var titleWrap = document.createElement('div');
+          titleWrap.style.cssText = 'flex: 1; min-width: 0;';
+          var t = document.createElement('div');
+          t.style.cssText = 'color: #4361ee; font-size: 16px; font-weight: bold;';
+          t.textContent = row.adSoyad || 'Öğrenci';
+          var sub = document.createElement('div');
+          sub.style.cssText = 'color: #888; font-size: 12px; margin-top: 2px;';
+          var subParts = ['TC ' + (row.tc || '-')];
+          if (row.donemi) subParts.push(row.donemi);
+          if (row.grubu)  subParts.push(row.grubu);
+          if (row.durumu) subParts.push(row.durumu);
+          sub.textContent = subParts.join(' • ');
+          titleWrap.appendChild(t);
+          titleWrap.appendChild(sub);
+
+          var rightWrap = document.createElement('div');
+          rightWrap.style.cssText = 'display: flex; align-items: center; gap: 10px; flex-shrink: 0;';
+
+          var updateBtn = document.createElement('button');
+          updateBtn.type = 'button';
+          updateBtn.textContent = row.hasDetail ? 'Güncelle' : 'Detay Çek';
+          updateBtn.style.cssText = 'background: #4361ee; border: none; color: white; cursor: pointer; padding: 7px 14px; font-size: 13px; border-radius: 4px; font-weight: 500;';
+          updateBtn.onclick = function() {
+            updateBtn.disabled = true;
+            updateBtn.textContent = 'Yükleniyor...';
+            updateBtn.style.opacity = '0.6';
+            console.log('[MEBBIS_SIDEBAR] Detay update for tc=' + row.tc);
+            console.log('MEBBIS_OPEN_STUDENT:' + row.tc);
+            // Close both this overlay and the table modal so the user can
+            // see the MEBBIS browser doing the navigation.
+            ov.remove();
+            closeStoreModal();
+          };
+          rightWrap.appendChild(updateBtn);
+
+          var sCloseBtn = document.createElement('button');
+          sCloseBtn.textContent = '✕';
+          sCloseBtn.style.cssText = 'background: none; border: none; color: #ccc; cursor: pointer; font-size: 18px; padding: 0 6px; line-height: 1;';
+          sCloseBtn.onclick = function() { ov.remove(); };
+          rightWrap.appendChild(sCloseBtn);
+
+          head.appendChild(titleWrap);
+          head.appendChild(rightWrap);
+          box.appendChild(head);
+
+          // Meta strip: last scrape timestamp (or call-to-action when missing).
+          var meta = document.createElement('div');
+          meta.style.cssText = 'padding: 8px 18px; background: #16162a; border-bottom: 1px solid #20203a; font-size: 12px; color: #888; flex-shrink: 0;';
+          var stamp = fmtTimestamp(row.lastDetailSeenAt);
+          meta.textContent = row.hasDetail
+            ? ('Son detay güncellemesi: ' + (stamp || '-'))
+            : 'Detay henüz çekilmedi — yukarıdaki "Detay Çek" ile başlatın.';
+          box.appendChild(meta);
+
+          var body = document.createElement('div');
+          body.style.cssText = 'padding: 8px 18px 18px; overflow-y: auto; flex: 1;';
+
+          function makeSection(titleText, openByDefault, badge) {
+            var secEl = document.createElement('div');
+            secEl.style.cssText = 'margin-top: 12px; border: 1px solid #2a2a4a; border-radius: 6px; overflow: hidden;';
+            var hdr = document.createElement('button');
+            hdr.type = 'button';
+            hdr.style.cssText = 'width: 100%; text-align: left; background: #20203a; border: none; color: #4361ee; cursor: pointer; padding: 10px 14px; font-size: 13px; font-weight: 600; display: flex; justify-content: space-between; align-items: center;';
+            var caret = document.createElement('span');
+            caret.style.cssText = 'color: #888; font-size: 12px; transition: transform 0.15s;';
+            caret.textContent = '▾';
+            var hLbl = document.createElement('span');
+            hLbl.textContent = titleText + (badge != null ? '  (' + badge + ')' : '');
+            hdr.appendChild(hLbl);
+            hdr.appendChild(caret);
+            var content = document.createElement('div');
+            content.style.cssText = 'padding: 10px 14px; background: #16162a; display: ' + (openByDefault ? 'block' : 'none') + ';';
+            caret.style.transform = openByDefault ? 'rotate(0deg)' : 'rotate(-90deg)';
+            hdr.onclick = function() {
+              var open = content.style.display !== 'none';
+              content.style.display = open ? 'none' : 'block';
+              caret.style.transform = open ? 'rotate(-90deg)' : 'rotate(0deg)';
+            };
+            secEl.appendChild(hdr);
+            secEl.appendChild(content);
+            return { el: secEl, body: content };
+          }
+
+          function addKV(parent, key, val) {
+            var r = document.createElement('div');
+            r.style.cssText = 'display: flex; padding: 4px 0; font-size: 13px; line-height: 1.4; gap: 8px;';
+            var k = document.createElement('div');
+            k.style.cssText = 'color: #888; flex: 0 0 200px;';
+            k.textContent = key;
+            var v = document.createElement('div');
+            v.style.cssText = 'color: #ddd; flex: 1; word-break: break-word;';
+            v.textContent = val == null || val === '' ? '-' : String(val);
+            r.appendChild(k);
+            r.appendChild(v);
+            parent.appendChild(r);
+          }
+
+          var anyRendered = false;
+
+          // Section: Kayıt Bilgileri (key/value)
+          var kayitFields = [
+            ['Kurum', row.kurum], ['Dönemi', row.donemi], ['Grubu', row.grubu], ['Şubesi', row.subesi],
+            ['Mevcut Sürücü Belgesi', row.mevcutBelge], ['İstenen Sertifika', row.istenenSertifika],
+            ['Kurum Onayı', row.kurumOnay], ['İlçe Onayı', row.ilceOnay],
+            ['Uygulama', row.uygulama], ['Durumu', row.durumu],
+            ['Teorik Hak', row.teorikHak], ['Uygulama Hak', row.uygulamaHak],
+            ['E-Sınav Hak', row.eSinavHak], ['Kayıt Ücreti', row.kayitUcreti],
+          ].filter(function(f) {
+            return f[1] !== null && f[1] !== undefined && String(f[1]).trim() !== '' && String(f[1]).trim() !== '-';
+          });
+          if (kayitFields.length) {
+            var kayit = makeSection('Kayıt Bilgileri', true, kayitFields.length);
+            kayitFields.forEach(function(f) { addKV(kayit.body, f[0], f[1]); });
+            body.appendChild(kayit.el);
+            anyRendered = true;
+          }
+
+          // Section: Sınavlar (table)
+          var exams = Array.isArray(row.exams) ? row.exams : [];
+          if (exams.length) {
+            var sinav = makeSection('Sınavlar', false, exams.length);
+            var tbl = document.createElement('table');
+            tbl.style.cssText = 'width: 100%; border-collapse: collapse; font-size: 12px;';
+            var sThead = document.createElement('thead');
+            var sTrh = document.createElement('tr');
+            ['Dönem','Kod','Tarih','Plaka','Usta Öğretici','Onay','Durum','Sonuç'].forEach(function(h) {
+              var th = document.createElement('th');
+              th.style.cssText = 'text-align: left; padding: 6px 8px; border-bottom: 1px solid #2a2a4a; color: #4361ee; font-weight: 600;';
+              th.textContent = h;
+              sTrh.appendChild(th);
+            });
+            sThead.appendChild(sTrh);
+            tbl.appendChild(sThead);
+            var sTb = document.createElement('tbody');
+            exams.forEach(function(e) {
+              var tr = document.createElement('tr');
+              tr.style.cssText = 'border-bottom: 1px solid #20203a;';
+              [e.donemi, e.sinavKodu, e.sinavTarihi, e.plaka, e.ustaOgretici, e.onayDurumu, e.sinavDurumu, e.sonuc].forEach(function(c) {
+                var td = document.createElement('td');
+                td.style.cssText = 'padding: 6px 8px; color: #ddd;';
+                td.textContent = c == null ? '' : String(c);
+                tr.appendChild(td);
+              });
+              sTb.appendChild(tr);
+            });
+            tbl.appendChild(sTb);
+            sinav.body.appendChild(tbl);
+            body.appendChild(sinav.el);
+            anyRendered = true;
+          }
+
+          // Section: Dersler (table)
+          var lessons = Array.isArray(row.lessons) ? row.lessons : [];
+          if (lessons.length) {
+            var ders = makeSection('Dersler', false, lessons.length);
+            var lTbl = document.createElement('table');
+            lTbl.style.cssText = 'width: 100%; border-collapse: collapse; font-size: 12px;';
+            var lThead = document.createElement('thead');
+            var lTrh = document.createElement('tr');
+            ['Dönem','Grup','Şube','Plaka','Yer','Tarih','Saat','Personel','Tür'].forEach(function(h) {
+              var th = document.createElement('th');
+              th.style.cssText = 'text-align: left; padding: 6px 8px; border-bottom: 1px solid #2a2a4a; color: #4361ee; font-weight: 600;';
+              th.textContent = h;
+              lTrh.appendChild(th);
+            });
+            lThead.appendChild(lTrh);
+            lTbl.appendChild(lThead);
+            var lTb = document.createElement('tbody');
+            lessons.forEach(function(l) {
+              var tr = document.createElement('tr');
+              tr.style.cssText = 'border-bottom: 1px solid #20203a;';
+              [l.donemi, l.grupAdi, l.subesi, l.plaka, l.dersYeri, l.dersTarihi, l.dersSaati, l.personel, l.egitimTuru].forEach(function(c) {
+                var td = document.createElement('td');
+                td.style.cssText = 'padding: 6px 8px; color: #ddd;';
+                td.textContent = c == null ? '' : String(c);
+                tr.appendChild(td);
+              });
+              lTb.appendChild(tr);
+            });
+            lTbl.appendChild(lTb);
+            ders.body.appendChild(lTbl);
+            body.appendChild(ders.el);
+            anyRendered = true;
+          }
+
+          // Section: Plakalar (chips)
+          var plates = Array.isArray(row.plates) ? row.plates : [];
+          if (plates.length) {
+            var plkSec = makeSection('Plakalar', false, plates.length);
+            var chips = document.createElement('div');
+            chips.style.cssText = 'display: flex; flex-wrap: wrap; gap: 6px;';
+            plates.forEach(function(p) {
+              var chip = document.createElement('span');
+              chip.style.cssText = 'background: #20203a; color: #ddd; padding: 4px 10px; border-radius: 4px; font-size: 12px; font-family: monospace;';
+              chip.textContent = p;
+              chips.appendChild(chip);
+            });
+            plkSec.body.appendChild(chips);
+            body.appendChild(plkSec.el);
+            anyRendered = true;
+          }
+
+          if (!anyRendered) {
+            var sEmpty = document.createElement('div');
+            sEmpty.style.cssText = 'padding: 24px; color: #888; font-style: italic; text-align: center;';
+            sEmpty.textContent = row.hasDetail
+              ? 'Detay var ama doldurulacak alan bulunamadı.'
+              : 'Detay henüz çekilmedi. "Detay Çek" ile başlatın.';
+            body.appendChild(sEmpty);
+          }
+
+          box.appendChild(body);
+          ov.appendChild(box);
+          ov.onclick = function(e) { if (e.target === ov) ov.remove(); };
+          document.body.appendChild(ov);
+          var keyH = function(e) {
+            if (e.key === 'Escape') { ov.remove(); document.removeEventListener('keydown', keyH); }
+          };
+          document.addEventListener('keydown', keyH);
+        }
+
+        // ─── Kurum panel ───
+        // Renders in the content pane (to the right of the 200px sidebar),
+        // matching openTableModal's layout. Reuses #mebbis-store-modal so
+        // opening Öğrenciler/Personeller/Araçlar/Kurum swaps content cleanly
+        // and closeStoreModal works the same way (✕ button or Escape).
+        function showKurumDetail() {
+          closeStoreModal();
+          var info = (window.__mebbisStore && window.__mebbisStore.kurumInfo) || null;
+
+          var overlay = document.createElement('div');
+          overlay.id = 'mebbis-store-modal';
+          overlay.dataset.kind = 'kurum';
+          overlay.style.cssText = 'position: fixed; left: 200px; top: 0; right: 0; bottom: 0; z-index: 10001; background: #16213e; color: white; font-family: Arial, sans-serif; display: flex; flex-direction: column;';
+
+          var pane = document.createElement('div');
+          pane.style.cssText = 'flex: 1; display: flex; flex-direction: column; padding: 20px; min-height: 0;';
+
+          var header = document.createElement('div');
+          header.style.cssText = 'display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; padding-bottom: 10px; border-bottom: 1px solid #2a2a4a; flex-shrink: 0; gap: 12px;';
+          var titleWrap = document.createElement('div');
+          titleWrap.style.cssText = 'flex: 1; min-width: 0;';
+          var t = document.createElement('h3');
+          t.style.cssText = 'margin: 0; color: #4361ee; font-size: 18px;';
+          t.textContent = (info && info.kurum_adi) || 'Kurum Bilgileri';
+          var sub = document.createElement('div');
+          sub.style.cssText = 'color: #888; font-size: 12px; margin-top: 2px;';
+          var subParts = [];
+          if (info && info.kurum_kodu)    subParts.push('Kod ' + info.kurum_kodu);
+          if (info && info.kurum_telefon) subParts.push(info.kurum_telefon);
+          sub.textContent = subParts.join(' • ');
+          titleWrap.appendChild(t);
+          titleWrap.appendChild(sub);
+
+          var kCloseBtn = document.createElement('button');
+          kCloseBtn.textContent = '✕';
+          kCloseBtn.style.cssText = 'background: none; border: none; color: #ccc; cursor: pointer; font-size: 18px; padding: 0 8px; line-height: 1;';
+          kCloseBtn.onclick = closeStoreModal;
+          header.appendChild(titleWrap);
+          header.appendChild(kCloseBtn);
+          pane.appendChild(header);
+
+          // Meta strip — mirrors the Öğrenci Detay style
+          var meta = document.createElement('div');
+          meta.style.cssText = 'padding: 8px 0; font-size: 12px; color: #888; flex-shrink: 0;';
+          if (info && info.last_scraped_at) {
+            meta.textContent = 'Son güncelleme: ' + fmtTimestamp(info.last_scraped_at);
+          } else {
+            meta.textContent = 'Kurum bilgisi henüz çekilmedi.';
+          }
+          pane.appendChild(meta);
+
+          var body = document.createElement('div');
+          body.style.cssText = 'overflow-y: auto; flex: 1; padding-bottom: 4px;';
+
+          if (!info) {
+            var empty = document.createElement('div');
+            empty.style.cssText = 'padding: 24px; color: #888; font-style: italic; text-align: center;';
+            empty.textContent = 'Henüz kurum bilgisi bulunamadı. MEBBIS\\'te skt01001 sayfasına bir kez girince kayıtlar gelir.';
+            body.appendChild(empty);
+            pane.appendChild(body);
+            overlay.appendChild(pane);
+            overlay.onclick = function(e) { if (e.target === overlay) closeStoreModal(); };
+            document.body.appendChild(overlay);
+            activeModalKeyHandler = function(e) { if (e.key === 'Escape') closeStoreModal(); };
+            document.addEventListener('keydown', activeModalKeyHandler);
+            return;
+          }
+
+          function makeSectionLocal(titleText, openByDefault, badge) {
+            var secEl = document.createElement('div');
+            secEl.style.cssText = 'margin-top: 12px; border: 1px solid #2a2a4a; border-radius: 6px; overflow: hidden;';
+            var hdr = document.createElement('button');
+            hdr.type = 'button';
+            hdr.style.cssText = 'width: 100%; text-align: left; background: #20203a; border: none; color: #4361ee; cursor: pointer; padding: 10px 14px; font-size: 13px; font-weight: 600; display: flex; justify-content: space-between; align-items: center;';
+            var caret = document.createElement('span');
+            caret.style.cssText = 'color: #888; font-size: 12px; transition: transform 0.15s;';
+            caret.textContent = '▾';
+            var hLbl = document.createElement('span');
+            hLbl.textContent = titleText + (badge != null ? '  (' + badge + ')' : '');
+            hdr.appendChild(hLbl);
+            hdr.appendChild(caret);
+            var content = document.createElement('div');
+            content.style.cssText = 'padding: 10px 14px; background: #16162a; display: ' + (openByDefault ? 'block' : 'none') + ';';
+            caret.style.transform = openByDefault ? 'rotate(0deg)' : 'rotate(-90deg)';
+            hdr.onclick = function() {
+              var open = content.style.display !== 'none';
+              content.style.display = open ? 'none' : 'block';
+              caret.style.transform = open ? 'rotate(-90deg)' : 'rotate(0deg)';
+            };
+            secEl.appendChild(hdr);
+            secEl.appendChild(content);
+            return { el: secEl, body: content };
+          }
+
+          function addKVLocal(parent, key, val) {
+            var r = document.createElement('div');
+            r.style.cssText = 'display: flex; padding: 4px 0; font-size: 13px; line-height: 1.4; gap: 8px;';
+            var k = document.createElement('div');
+            k.style.cssText = 'color: #888; flex: 0 0 200px;';
+            k.textContent = key;
+            var v = document.createElement('div');
+            v.style.cssText = 'color: #ddd; flex: 1; word-break: break-word;';
+            v.textContent = val == null || val === '' ? '-' : String(val);
+            r.appendChild(k);
+            r.appendChild(v);
+            parent.appendChild(r);
+          }
+
+          // Section: Bilgiler
+          var bilgiler = [
+            ['Kurum Adı',      info.kurum_adi],
+            ['Kurum Kodu',     info.kurum_kodu],
+            ['Telefon',        info.kurum_telefon],
+            ['Adres',          info.kurum_adres],
+            ['Bina Kontenjan', info.bina_kontenjan],
+            ['Açılma Tarihi',  info.acilma_tarihi],
+          ].filter(function(f) {
+            return f[1] !== null && f[1] !== undefined && String(f[1]).trim() !== '';
+          });
+          if (bilgiler.length) {
+            var bsec = makeSectionLocal('Kurum Bilgileri', true, bilgiler.length);
+            bilgiler.forEach(function(f) { addKVLocal(bsec.body, f[0], f[1]); });
+            body.appendChild(bsec.el);
+          }
+
+          // Section: Programlar (table)
+          var progs = Array.isArray(info.programs) ? info.programs : [];
+          if (progs.length) {
+            var psec = makeSectionLocal('Programlar', false, progs.length);
+            var pTbl = document.createElement('table');
+            pTbl.style.cssText = 'width: 100%; border-collapse: collapse; font-size: 12px;';
+            var pThead = document.createElement('thead');
+            var pTrh = document.createElement('tr');
+            ['Ehliyet Sınıfı','Ruhsat Tarihi','Kapanma Tarihi','Durum'].forEach(function(h) {
+              var th = document.createElement('th');
+              th.style.cssText = 'text-align: left; padding: 6px 8px; border-bottom: 1px solid #2a2a4a; color: #4361ee; font-weight: 600;';
+              th.textContent = h;
+              pTrh.appendChild(th);
+            });
+            pThead.appendChild(pTrh);
+            pTbl.appendChild(pThead);
+            var pTb = document.createElement('tbody');
+            progs.forEach(function(p) {
+              var tr = document.createElement('tr');
+              tr.style.cssText = 'border-bottom: 1px solid #20203a;';
+              [p.ehliyet_sinifi, p.ruhsat_tarihi, p.kapanma_tarihi, p.durum].forEach(function(c) {
+                var td = document.createElement('td');
+                td.style.cssText = 'padding: 6px 8px; color: #ddd;';
+                td.textContent = c == null ? '' : String(c);
+                tr.appendChild(td);
+              });
+              pTb.appendChild(tr);
+            });
+            pTbl.appendChild(pTb);
+            psec.body.appendChild(pTbl);
+            body.appendChild(psec.el);
+          }
+
+          // Section: Araçlar (table)
+          var vehs = Array.isArray(info.vehicles) ? info.vehicles : [];
+          if (vehs.length) {
+            var vsec = makeSectionLocal('Araçlar', false, vehs.length);
+            var vTbl = document.createElement('table');
+            vTbl.style.cssText = 'width: 100%; border-collapse: collapse; font-size: 12px;';
+            var vThead = document.createElement('thead');
+            var vTrh = document.createElement('tr');
+            ['Plaka','Sınıf','Marka','Model','Yıl','Tescil','Giriş','Çıkış','Durum','Onay'].forEach(function(h) {
+              var th = document.createElement('th');
+              th.style.cssText = 'text-align: left; padding: 6px 8px; border-bottom: 1px solid #2a2a4a; color: #4361ee; font-weight: 600;';
+              th.textContent = h;
+              vTrh.appendChild(th);
+            });
+            vThead.appendChild(vTrh);
+            vTbl.appendChild(vThead);
+            var vTb = document.createElement('tbody');
+            vehs.forEach(function(v) {
+              var tr = document.createElement('tr');
+              tr.style.cssText = 'border-bottom: 1px solid #20203a;';
+              [v.plaka, v.ehliyet_sinifi, v.marka, v.model, v.model_yili, v.tescil_tarihi, v.hizmete_giris, v.hizmetten_cikis, v.durum, v.mem_onay].forEach(function(c) {
+                var td = document.createElement('td');
+                td.style.cssText = 'padding: 6px 8px; color: #ddd;';
+                td.textContent = c == null ? '' : String(c);
+                tr.appendChild(td);
+              });
+              vTb.appendChild(tr);
+            });
+            vTbl.appendChild(vTb);
+            vsec.body.appendChild(vTbl);
+            body.appendChild(vsec.el);
+          }
+
+          pane.appendChild(body);
+          overlay.appendChild(pane);
+          document.body.appendChild(overlay);
+          activeModalKeyHandler = function(e) { if (e.key === 'Escape') closeStoreModal(); };
+          document.addEventListener('keydown', activeModalKeyHandler);
+        }
+
         studentsBtn.onclick = () => {
           const store = window.__mebbisStore || { students: [], plates: [] };
           openTableModal({
             kind: 'students',
             title: 'Öğrenciler (' + store.students.length + ')',
             columns: [
-              { key: 'tc', label: 'TC Kimlik' },
+              { key: 'tc',      label: 'TC Kimlik' },
               { key: 'adSoyad', label: 'Ad Soyad' },
-              { key: 'detay', label: '', action: 'Detay' },
+              { key: 'detay',   label: '', action: 'Detay' },
             ],
             rows: store.students,
-            onRowAction: (row) => {
-              console.log('[MEBBIS_SIDEBAR] Detay clicked for tc=' + row.tc);
-              console.log('MEBBIS_OPEN_STUDENT:' + row.tc);
-              closeStoreModal();
-            },
+            searchKeys: ['tc', 'adSoyad'],
+            searchPlaceholder: 'TC veya Ad Soyad ile ara...',
+            onRowAction: (row) => { showStudentDetail(row); },
+            headerActions: [
+              { label: 'Güncelle', onClick: studentGuncelle },
+            ],
           });
         };
 
@@ -1712,49 +2678,7 @@ export class MebbisManager {
           });
         };
 
-        function showInfoOverlay(message) {
-          const ov = document.createElement('div');
-          ov.style.cssText = 'position: fixed; inset: 0; z-index: 10002; background: rgba(0,0,0,0.6); display: flex; align-items: center; justify-content: center; font-family: Arial, sans-serif;';
-          const box = document.createElement('div');
-          box.style.cssText = 'background: #1a1a2e; border: 1px solid #4361ee; border-radius: 8px; padding: 24px; max-width: 480px; color: white;';
-          const t = document.createElement('div');
-          t.style.cssText = 'color: #4361ee; font-size: 16px; font-weight: bold; margin-bottom: 12px;';
-          t.textContent = 'Bilgi';
-          const m = document.createElement('div');
-          m.style.cssText = 'font-size: 14px; line-height: 1.5; color: #ddd; white-space: pre-line;';
-          m.textContent = message;
-          const ok = document.createElement('button');
-          ok.style.cssText = 'margin-top: 16px; background: #4361ee; border: none; color: white; padding: 8px 18px; border-radius: 4px; cursor: pointer; font-size: 14px; float: right;';
-          ok.textContent = 'Tamam';
-          ok.onclick = () => ov.remove();
-          box.appendChild(t);
-          box.appendChild(m);
-          box.appendChild(ok);
-          ov.appendChild(box);
-          ov.onclick = (e) => { if (e.target === ov) ov.remove(); };
-          document.body.appendChild(ov);
-        }
-
-        function personnelGuncelle(btn) {
-          // OOK15003 is the comprehensive personnel list and only loads when
-          // the user is logged into "Özel Öğretim Kurumları Modülü". A user
-          // inside MTSK modülü has no OOK session and must log out + log
-          // back in via the OOK module before this can run.
-          const url = location.href || '';
-          const isInMtskModule = /\\/skt\\//i.test(url);
-          if (isInMtskModule) {
-            showInfoOverlay(
-              'Personel listesini güncellemek için "Özel Öğretim Kurumları Modülü"ne giriş yapmanız gerekiyor.\\n\\n' +
-              'Şu anda "Özel MTSK Modülü"ndesiniz. MEBBİS\\'ten çıkış yapıp modül seçiminde "Özel Öğretim Kurumları"nı seçerek tekrar giriş yapın.'
-            );
-            return;
-          }
-          if (btn) { btn.disabled = true; btn.textContent = 'Yükleniyor...'; btn.style.opacity = '0.6'; }
-          // Hand off to the main process — direct hops to ook15003 bounce
-          // back to ook00001 if the OOK session isn't established yet.
-          // Main: navigates to ook00001 → on load, chain to ook15003.
-          console.log('MEBBIS_REQUEST_PERSONNEL_UPDATE');
-        }
+        kurumBtn.onclick = () => { showKurumDetail(); };
 
         personnelBtn.onclick = () => {
           const store = window.__mebbisStore || { students: [], plates: [], personnel: [] };
@@ -1763,14 +2687,18 @@ export class MebbisManager {
             kind: 'personnel',
             title: 'Personeller (' + rows.length + ')',
             columns: [
-              { key: 'adSoyad', label: 'Ad Soyad' },
-              { key: 'tc', label: 'TC Kimlik' },
-              { key: 'kayitNo', label: 'Kayıt No' },
-              { key: 'izinNo', label: 'İzin No' },
+              { key: 'adSoyad',        label: 'Ad Soyad' },
+              { key: 'tc',             label: 'TC' },
+              { key: 'gorevi',         label: 'Görevi' },
+              { key: 'statusu',        label: 'Statüsü' },
+              { key: 'bransi',         label: 'Branş' },
               { key: 'calismaIzniBit', label: 'İzin Bitiş' },
-              { key: 'durum', label: 'Durum' },
+              { key: 'detay',          label: '', action: 'Detay' },
             ],
             rows: rows,
+            searchKeys: ['adSoyad', 'tc', 'gorevi', 'bransi'],
+            searchPlaceholder: 'Ad Soyad, TC, görev veya branş ile ara...',
+            onRowAction: showPersonnelDetail,
             headerActions: [
               { label: 'Güncelle', onClick: personnelGuncelle },
             ],
@@ -1782,15 +2710,17 @@ export class MebbisManager {
           const sBtn = document.getElementById('mebbis-students-btn');
           const cBtn = document.getElementById('mebbis-cars-btn');
           const pBtn = document.getElementById('mebbis-personnel-btn');
+          const kBtn = document.getElementById('mebbis-kurum-btn');
           if (sBtn) sBtn.textContent = 'Öğrenciler (' + store.students.length + ')';
           if (cBtn) cBtn.textContent = 'Araçlar (' + store.plates.length + ')';
           if (pBtn) pBtn.textContent = 'Personeller (' + (store.personnel || []).length + ')';
-          // Refresh open modal in place to show new rows without flicker
+          if (kBtn) kBtn.textContent = 'Kurum (' + (store.kurumInfo ? '✓' : '—') + ')';
+          // Refresh the open modal in place so the new rows appear without flicker.
           const open = document.getElementById('mebbis-store-modal');
           if (open) {
             const kind = open.dataset.kind;
-            if (kind === 'students' && sBtn) sBtn.click();
-            else if (kind === 'cars' && cBtn) cBtn.click();
+            if      (kind === 'students'  && sBtn) sBtn.click();
+            else if (kind === 'cars'      && cBtn) cBtn.click();
             else if (kind === 'personnel' && pBtn) pBtn.click();
           }
           console.log('[MEBBIS_SIDEBAR] Counts updated: ' + store.students.length + ' students, ' + store.plates.length + ' plates, ' + (store.personnel || []).length + ' personnel');
@@ -3363,6 +4293,194 @@ export class MebbisManager {
       this.clearPendingBatchDownload();
       this.pendingDownloadPhase = null;
     }
+  }
+
+  /**
+   * Scrapes filter dropdown options from a freshly loaded skt02006 page and
+   * shows a modal letting the user choose dönem / öğrenci durumu / onay
+   * durumu / grup / şube. Clicking "Güncelle" emits MEBBIS_STUDENT_UPDATE_START
+   * with the selected values; the main process then calls
+   * submitStudentUpdateForm to re-POST the form. Closing the modal emits
+   * MEBBIS_STUDENT_UPDATE_CANCEL.
+   *
+   * Only runs for accounts present in pendingStudentUpdate; the caller is
+   * expected to add the account before navigating to skt02006.
+   */
+  private async handleStudentUpdateOptions(win: BrowserWindow, account: Account): Promise<void> {
+    if (!this.pendingStudentUpdate.has(account.id)) return;
+    try {
+      const formOptions = await win.webContents.executeJavaScript(`
+        (function() {
+          function getSelectOptions(id) {
+            const sel = document.getElementById(id);
+            if (!sel) return [];
+            return Array.from(sel.options).map(o => ({ value: o.value, label: o.textContent.trim() }));
+          }
+          return {
+            donemi:        getSelectOptions('cmbEgitimDonemi'),
+            ogrenciDurumu: getSelectOptions('cmbOgrenciDurumu'),
+            onayDurumu:    getSelectOptions('cmbDurumu'),
+            grubu:         getSelectOptions('cmbGrubu'),
+            subesi:        getSelectOptions('cmbSubesi'),
+          };
+        })();
+      `);
+
+      const json = (v: any) => JSON.stringify(v ?? []);
+
+      await win.webContents.executeJavaScript(`
+        (function() {
+          let overlay = document.getElementById('mebbis-student-update-overlay');
+          if (overlay) overlay.remove();
+
+          overlay = document.createElement('div');
+          overlay.id = 'mebbis-student-update-overlay';
+          overlay.style.cssText = 'position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.7); z-index: 99999; display: flex; align-items: center; justify-content: center; font-family: Arial, sans-serif;';
+
+          const modal = document.createElement('div');
+          modal.style.cssText = 'background: #1a1a2e; border: 1px solid #2a2a4a; border-radius: 8px; padding: 24px; width: 420px; max-height: 80vh; overflow-y: auto; color: white;';
+
+          const title = document.createElement('h3');
+          title.style.cssText = 'margin: 0 0 6px 0; color: #4361ee; font-size: 18px; text-align: center;';
+          title.textContent = 'Öğrencileri Güncelle';
+          modal.appendChild(title);
+
+          const sub = document.createElement('div');
+          sub.style.cssText = 'text-align:center; color:#888; font-size:12px; margin-bottom:18px;';
+          sub.textContent = 'Filtreyi seçin; öğrenci listesi yerel kayıt ve veritabanıyla güncellenecek.';
+          modal.appendChild(sub);
+
+          function createSelect(labelText, id, options, defaultValue) {
+            const wrap = document.createElement('div');
+            wrap.style.cssText = 'margin-bottom: 14px;';
+            const label = document.createElement('label');
+            label.style.cssText = 'display: block; margin-bottom: 6px; font-size: 13px; color: #aaa;';
+            label.textContent = labelText;
+            wrap.appendChild(label);
+            const select = document.createElement('select');
+            select.id = id;
+            select.style.cssText = 'width: 100%; padding: 8px 10px; border: 1px solid #2a2a4a; border-radius: 4px; background: #16213e; color: white; font-size: 13px; box-sizing: border-box; outline: none; cursor: pointer;';
+            select.onfocus = () => { select.style.borderColor = '#4361ee'; };
+            select.onblur  = () => { select.style.borderColor = '#2a2a4a'; };
+            options.forEach(o => {
+              const opt = document.createElement('option');
+              opt.value = o.value;
+              opt.textContent = o.label;
+              opt.style.cssText = 'color: white; background-color: #16213e;';
+              if (o.value === defaultValue) opt.selected = true;
+              select.appendChild(opt);
+            });
+            wrap.appendChild(select);
+            return wrap;
+          }
+
+          // Prefer "Tümü" entries when the field offers one; otherwise fall back to the first option.
+          function pickTumOr(opts, fallback) {
+            const tum = opts.find(o => (o.label || '').toLowerCase().includes('tüm'));
+            return tum ? tum.value : (fallback ?? (opts[0] ? opts[0].value : ''));
+          }
+
+          const donemOpts   = ${json(formOptions.donemi)};
+          const ogrenciOpts = ${json(formOptions.ogrenciDurumu)};
+          const onayOpts    = ${json(formOptions.onayDurumu)};
+          const grubuOpts   = ${json(formOptions.grubu)};
+          const subesiOpts  = ${json(formOptions.subesi)};
+
+          modal.appendChild(createSelect('Eğitim Dönemi',   'su-donemi',        donemOpts,   pickTumOr(donemOpts)));
+          modal.appendChild(createSelect('Öğrenci Durumu',  'su-ogrenciDurumu', ogrenciOpts, pickTumOr(ogrenciOpts)));
+          modal.appendChild(createSelect('Onay Durumu',     'su-onayDurumu',    onayOpts,    pickTumOr(onayOpts)));
+          modal.appendChild(createSelect('Grubu',           'su-grubu',         grubuOpts,   '-1'));
+          modal.appendChild(createSelect('Şubesi',          'su-subesi',        subesiOpts,  '-1'));
+
+          const progress = document.createElement('div');
+          progress.id = 'su-progress';
+          progress.style.cssText = 'display: none; margin-top: 16px; padding: 10px; border-radius: 4px; background: #16213e; color: #4361ee; font-size: 13px; text-align: center;';
+          modal.appendChild(progress);
+
+          const btnRow = document.createElement('div');
+          btnRow.style.cssText = 'display: flex; gap: 10px; margin-top: 20px; justify-content: flex-end;';
+
+          const cancelBtn = document.createElement('button');
+          cancelBtn.textContent = 'İptal';
+          cancelBtn.style.cssText = 'padding: 10px 20px; border: 1px solid #2a2a4a; border-radius: 4px; background: none; color: #ccc; cursor: pointer; font-size: 14px;';
+          cancelBtn.onclick = () => { overlay.remove(); console.log('MEBBIS_STUDENT_UPDATE_CANCEL'); };
+          btnRow.appendChild(cancelBtn);
+
+          const startBtn = document.createElement('button');
+          startBtn.id = 'su-start-btn';
+          startBtn.textContent = 'Güncelle';
+          startBtn.style.cssText = 'padding: 10px 20px; border: none; border-radius: 4px; background: #4361ee; color: white; cursor: pointer; font-size: 14px; font-weight: bold;';
+          startBtn.onclick = () => {
+            const options = {
+              donemi:        document.getElementById('su-donemi').value,
+              ogrenciDurumu: document.getElementById('su-ogrenciDurumu').value,
+              onayDurumu:    document.getElementById('su-onayDurumu').value,
+              grubu:         document.getElementById('su-grubu').value,
+              subesi:        document.getElementById('su-subesi').value,
+            };
+            startBtn.disabled = true;
+            startBtn.textContent = 'Yükleniyor...';
+            startBtn.style.opacity = '0.6';
+            cancelBtn.disabled = true;
+            const p = document.getElementById('su-progress');
+            if (p) { p.style.display = 'block'; p.textContent = 'Öğrenci listesi alınıyor...'; }
+            console.log('MEBBIS_STUDENT_UPDATE_START:' + JSON.stringify(options));
+          };
+          btnRow.appendChild(startBtn);
+
+          modal.appendChild(btnRow);
+          overlay.appendChild(modal);
+          overlay.onclick = (e) => { if (e.target === overlay) { overlay.remove(); console.log('MEBBIS_STUDENT_UPDATE_CANCEL'); } };
+          document.body.appendChild(overlay);
+        })();
+      `);
+    } catch (e: any) {
+      console.error(`[StudentUpdate][${account.label}] options scrape error:`, e);
+      this.pendingStudentUpdate.delete(account.id);
+    }
+  }
+
+  /**
+   * Submits the skt02006 filter form for the student-update flow. The
+   * resulting page load is caught by the passive skt02006 branch in the
+   * page-load handler, which runs parseAndIngestStudentList (already wired
+   * to push to the backend). Clears the pending flag so subsequent visits
+   * behave normally.
+   */
+  private async submitStudentUpdateForm(
+    win: BrowserWindow,
+    options: { donemi: string; ogrenciDurumu: string; onayDurumu: string; grubu: string; subesi: string },
+  ): Promise<void> {
+    const j = (s: string) => JSON.stringify(String(s ?? ''));
+    try {
+      await win.webContents.executeJavaScript(`
+        (function() {
+          function setSelectValue(id, value) {
+            const sel = document.getElementById(id);
+            if (sel) {
+              sel.value = value;
+              sel.dispatchEvent(new Event('change', { bubbles: true }));
+            }
+          }
+          setSelectValue('cmbEgitimDonemi',  ${j(options.donemi)});
+          setSelectValue('cmbOgrenciDurumu', ${j(options.ogrenciDurumu)});
+          setSelectValue('cmbDurumu',        ${j(options.onayDurumu)});
+          setSelectValue('cmbGrubu',         ${j(options.grubu)});
+          setSelectValue('cmbSubesi',        ${j(options.subesi)});
+
+          setTimeout(() => {
+            const submitBtn = document.querySelector('[name="btnListeleGrid"]') ||
+                              document.querySelector('input[value="Listele"]') ||
+                              document.querySelector('input[type="submit"]');
+            if (submitBtn) { submitBtn.click(); }
+            else if (typeof __doPostBack === 'function') { __doPostBack('btnListeleGrid', ''); }
+          }, 150);
+        })();
+      `);
+    } catch (e: any) {
+      console.error('[StudentUpdate] submit failed:', e);
+    }
+    this.pendingStudentUpdate.clear();
   }
 
   private async handleBatchStart(
