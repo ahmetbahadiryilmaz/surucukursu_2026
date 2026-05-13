@@ -6,7 +6,6 @@ const DEMO_USERS = ['test@mtsk.app', 'batuhan33mtsk@gmail.com'];
 
 const AdminSidebar = () => {
     const [userEmail, setUserEmail] = useState<string>('');
-    const [userName, setUserName] = useState<string>('');
 
     useEffect(() => {
       const userData = localStorage.getItem("user");
@@ -14,7 +13,6 @@ const AdminSidebar = () => {
         try {
           const parsedUser = JSON.parse(userData);
           setUserEmail(parsedUser.email || '');
-          setUserName(parsedUser.name || parsedUser.email || '');
         } catch (error) {
           console.error("Error parsing user data:", error);
         }
