@@ -228,11 +228,8 @@ export class DrivingSchoolService {
     };
   }
 
-  /** Returns all driving schools with MEBBIS account info — admin only, dev-only. */
+  /** Returns all driving schools with MEBBIS account info — admin only. */
   async getAllSchools(user: { id: number; userType: number }): Promise<MebbisAccountDto[]> {
-    if (process.env.NODE_ENV === 'production') {
-      throw new UnauthorizedException('Not available in production');
-    }
     if (user.userType !== UserTypes.ADMIN && user.userType !== UserTypes.SUPER_ADMIN) {
       throw new UnauthorizedException('Admin access required');
     }

@@ -114,7 +114,7 @@ export class AuthService {
       }
     }
 
-    if (!userId && process.env.NODE_ENV !== 'production') {
+    if (!userId) {
       const admin = await this.withTransientDbRetry('adminRepository.findOne(login)', () =>
         this.adminRepository.findOne({ where: { email: dto.email } }),
       );
