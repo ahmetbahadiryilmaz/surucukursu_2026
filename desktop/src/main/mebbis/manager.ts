@@ -47,6 +47,12 @@ export class MebbisManager {
   // calls `window.__openKBelgesi(tc)` to re-open the form prefilled).
   pendingKbFetch: Map<string, string> = new Map();
 
+  // Accounts whose currently-open window is a Local Test window (opened via
+  // startLocalTest, no MEBBIS login). Used so the sidebar can disable the
+  // Güncelle/Detay buttons that require live MEBBIS navigation, while the
+  // Kurum Güncelle (pure backend re-fetch) stays functional.
+  localTestAccounts: Set<string> = new Set();
+
   // Cached Kurum Bilgisi per account, populated by a fire-and-forget fetch
   // from the backend on the first pushStoreToSidebar call. The sidebar reads
   // this via window.__mebbisStore.kurumInfo to render the "Kurum" modal.
@@ -981,15 +987,38 @@ export class MebbisManager {
     win.removeMenu();
 
     this.running.set(account.id, { account, window: win });
+    this.localTestAccounts.add(account.id);
 
     win.on('closed', () => {
       this.running.delete(account.id);
+      this.localTestAccounts.delete(account.id);
       if (parentWindow && !parentWindow.isDestroyed()) {
         parentWindow.webContents.send('account:stopped', account.id);
       }
     });
 
     win.once('ready-to-show', () => win.show());
+
+    // Local test mode has no MEBBIS session, so the full page-load /
+    // console-message machinery from createMebbisWindow is not wired up.
+    // Kurum "Güncelle" is the one update that needs no MEBBIS navigation
+    // (it just re-fetches from the backend), so handle that single message
+    // here. Öğrenciler/Personeller Güncelle stay disabled — see the
+    // localTest flag passed to injectStoreSidebarSections.
+    win.webContents.on('console-message', (_event, _level, message) => {
+      if (message === 'MEBBIS_REQUEST_KURUM_UPDATE') {
+        console.log(`[LocalTest][${account.label}] Kurum update requested — re-fetching from backend`);
+        fetchKurumInfo().then((info) => {
+          if (info) {
+            this.kurumInfoCache.set(account.id, info);
+            console.log(`[LocalTest][${account.label}] Kurum info refreshed from backend`);
+          } else {
+            console.log(`[LocalTest][${account.label}] Kurum info fetch returned null`);
+          }
+          if (!win.isDestroyed()) this.pushStoreToSidebar(win, account);
+        });
+      }
+    });
 
     win.webContents.once('did-finish-load', () => {
       this.injectLeftMenu(win, account).catch((e) => {

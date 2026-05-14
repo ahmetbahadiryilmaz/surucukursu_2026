@@ -261,6 +261,17 @@ export function buildLeftMenuScript(devSection: string): string {
       gateUpd.textContent = 'Güncelle';
       gateUpd.style.cssText = 'padding: 8px 16px; border: none; border-radius: 4px; background: #4361ee; color: white; cursor: pointer; font-size: 14px; font-weight: 500;';
       gateUpd.onclick = function() {
+        // Local Test mode has no MEBBIS session. Kurum bilgisi can still be
+        // re-fetched from the backend (handler wired in startLocalTest), but
+        // Personel bilgisi needs live MEBBIS navigation — block it with a
+        // clear message instead of hanging on "Yükleniyor...".
+        if (window.__isMebbisLocalTest && missingKind !== 'kurum') {
+          gateMsg.textContent = 'Local Test modunda MEBBIS bağlantısı yok — Personel bilgisi güncellenemez.';
+          gateUpd.disabled = true;
+          gateUpd.style.opacity = '0.6';
+          gateUpd.style.cursor = 'not-allowed';
+          return;
+        }
         gateUpd.disabled = true;
         gateUpd.textContent = 'Yükleniyor...';
         gateUpd.style.opacity = '0.6';

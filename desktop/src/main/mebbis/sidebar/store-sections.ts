@@ -10,9 +10,17 @@ import type { MebbisManager } from '../manager';
 
 export async function injectStoreSidebarSections(_m: MebbisManager, win: BrowserWindow, account: Account): Promise<void> {
     if (win.isDestroyed()) return;
-    console.log(`[Sidebar][${account.label}] Injecting Öğrenciler & Araçlar sections + renderer`);
+    // Local Test windows have no MEBBIS session: Öğrenciler/Personeller toplu
+    // Güncelle and the per-row Detay Çek all require live MEBBIS navigation,
+    // so they are disabled there. Kurum Güncelle is a pure backend re-fetch
+    // and stays enabled (startLocalTest wires its console-message handler).
+    const isLocalTest = _m.localTestAccounts.has(account.id);
+    console.log(`[Sidebar][${account.label}] Injecting Öğrenciler & Araçlar sections + renderer${isLocalTest ? ' (local test — MEBBIS update buttons disabled)' : ''}`);
     const script = `
       (function() {
+        var __isLocalTest = ${isLocalTest ? 'true' : 'false'};
+        // Expose for the separately-injected left-menu script (K Belgesi gate).
+        window.__isMebbisLocalTest = __isLocalTest;
         const sidebar = document.getElementById('mebbis-left-menu');
         if (!sidebar) {
           console.log('[MEBBIS_SIDEBAR] No #mebbis-left-menu found, skipping store sections');
@@ -99,9 +107,18 @@ export async function injectStoreSidebarSections(_m: MebbisManager, win: Browser
           if (Array.isArray(opts.headerActions)) {
             opts.headerActions.forEach(action => {
               const ab = document.createElement('button');
-              ab.style.cssText = 'background: #4361ee; border: none; color: white; cursor: pointer; padding: 6px 14px; font-size: 13px; border-radius: 4px; font-weight: 500;';
-              ab.textContent = action.label;
-              ab.onclick = () => action.onClick(ab);
+              if (action.disabled) {
+                // Greyed-out, non-clickable — used in Local Test mode for the
+                // Güncelle actions that need a live MEBBIS session.
+                ab.style.cssText = 'background: #2a2a4a; border: none; color: #888; cursor: not-allowed; padding: 6px 14px; font-size: 13px; border-radius: 4px; font-weight: 500;';
+                ab.textContent = action.label;
+                ab.disabled = true;
+                if (action.disabledReason) ab.title = action.disabledReason;
+              } else {
+                ab.style.cssText = 'background: #4361ee; border: none; color: white; cursor: pointer; padding: 6px 14px; font-size: 13px; border-radius: 4px; font-weight: 500;';
+                ab.textContent = action.label;
+                ab.onclick = () => action.onClick(ab);
+              }
               rightSide.appendChild(ab);
             });
           }
@@ -220,6 +237,11 @@ export async function injectStoreSidebarSections(_m: MebbisManager, win: Browser
         }
 
         function personnelGuncelle(btn) {
+          // Needs live MEBBIS navigation — not available in Local Test mode.
+          if (__isLocalTest) {
+            if (btn) { btn.textContent = 'Güncelle (MEBBIS gerekli)'; }
+            return;
+          }
           if (btn) { btn.disabled = true; btn.textContent = 'Yükleniyor...'; btn.style.opacity = '0.6'; }
           // Main process handles MTSK→OOK module switch (Modül Çıkış) and
           // ook00001 → ook12001 chain navigation, then runs the detail batch.
@@ -227,6 +249,11 @@ export async function injectStoreSidebarSections(_m: MebbisManager, win: Browser
         }
 
         function studentGuncelle(btn) {
+          // Needs live MEBBIS navigation — not available in Local Test mode.
+          if (__isLocalTest) {
+            if (btn) { btn.textContent = 'Güncelle (MEBBIS gerekli)'; }
+            return;
+          }
           if (btn) { btn.disabled = true; btn.textContent = 'Yükleniyor...'; btn.style.opacity = '0.6'; }
           // Main process navigates to skt02006 (or clicks into it from /skt/)
           // then shows the filter dialog; submit re-POSTs and the list page
@@ -451,19 +478,28 @@ export async function injectStoreSidebarSections(_m: MebbisManager, win: Browser
 
           var updateBtn = document.createElement('button');
           updateBtn.type = 'button';
-          updateBtn.textContent = row.hasDetail ? 'Güncelle' : 'Detay Çek';
-          updateBtn.style.cssText = 'background: #4361ee; border: none; color: white; cursor: pointer; padding: 7px 14px; font-size: 13px; border-radius: 4px; font-weight: 500;';
-          updateBtn.onclick = function() {
+          if (__isLocalTest) {
+            // Detay Çek/Güncelle navigates skt02009 in MEBBIS — impossible
+            // without a session. Show it disabled rather than letting it hang.
+            updateBtn.textContent = row.hasDetail ? 'Güncelle' : 'Detay Çek';
             updateBtn.disabled = true;
-            updateBtn.textContent = 'Yükleniyor...';
-            updateBtn.style.opacity = '0.6';
-            console.log('[MEBBIS_SIDEBAR] Detay update for tc=' + row.tc);
-            console.log('MEBBIS_OPEN_STUDENT:' + row.tc);
-            // Close both this overlay and the table modal so the user can
-            // see the MEBBIS browser doing the navigation.
-            ov.remove();
-            closeStoreModal();
-          };
+            updateBtn.title = 'Local Test modunda MEBBIS bağlantısı yok — devre dışı.';
+            updateBtn.style.cssText = 'background: #2a2a4a; border: none; color: #888; cursor: not-allowed; padding: 7px 14px; font-size: 13px; border-radius: 4px; font-weight: 500;';
+          } else {
+            updateBtn.textContent = row.hasDetail ? 'Güncelle' : 'Detay Çek';
+            updateBtn.style.cssText = 'background: #4361ee; border: none; color: white; cursor: pointer; padding: 7px 14px; font-size: 13px; border-radius: 4px; font-weight: 500;';
+            updateBtn.onclick = function() {
+              updateBtn.disabled = true;
+              updateBtn.textContent = 'Yükleniyor...';
+              updateBtn.style.opacity = '0.6';
+              console.log('[MEBBIS_SIDEBAR] Detay update for tc=' + row.tc);
+              console.log('MEBBIS_OPEN_STUDENT:' + row.tc);
+              // Close both this overlay and the table modal so the user can
+              // see the MEBBIS browser doing the navigation.
+              ov.remove();
+              closeStoreModal();
+            };
+          }
           rightWrap.appendChild(updateBtn);
 
           var sCloseBtn = document.createElement('button');
@@ -892,7 +928,11 @@ export async function injectStoreSidebarSections(_m: MebbisManager, win: Browser
             searchPlaceholder: 'TC veya Ad Soyad ile ara...',
             onRowAction: (row) => { showStudentDetail(row); },
             headerActions: [
-              { label: 'Güncelle', onClick: studentGuncelle },
+              {
+                label: 'Güncelle', onClick: studentGuncelle,
+                disabled: __isLocalTest,
+                disabledReason: 'Local Test modunda MEBBIS bağlantısı yok — Güncelle devre dışı.',
+              },
             ],
           });
         };
@@ -929,7 +969,11 @@ export async function injectStoreSidebarSections(_m: MebbisManager, win: Browser
             searchPlaceholder: 'Ad Soyad, TC, görev veya branş ile ara...',
             onRowAction: showPersonnelDetail,
             headerActions: [
-              { label: 'Güncelle', onClick: personnelGuncelle },
+              {
+                label: 'Güncelle', onClick: personnelGuncelle,
+                disabled: __isLocalTest,
+                disabledReason: 'Local Test modunda MEBBIS bağlantısı yok — Güncelle devre dışı.',
+              },
             ],
           });
         };

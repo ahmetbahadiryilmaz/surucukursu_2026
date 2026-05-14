@@ -1828,6 +1828,17 @@ function buildLeftMenuScript(devSection) {
       gateUpd.textContent = 'G\xFCncelle';
       gateUpd.style.cssText = 'padding: 8px 16px; border: none; border-radius: 4px; background: #4361ee; color: white; cursor: pointer; font-size: 14px; font-weight: 500;';
       gateUpd.onclick = function() {
+        // Local Test mode has no MEBBIS session. Kurum bilgisi can still be
+        // re-fetched from the backend (handler wired in startLocalTest), but
+        // Personel bilgisi needs live MEBBIS navigation \u2014 block it with a
+        // clear message instead of hanging on "Y\xFCkleniyor...".
+        if (window.__isMebbisLocalTest && missingKind !== 'kurum') {
+          gateMsg.textContent = 'Local Test modunda MEBBIS ba\u011Flant\u0131s\u0131 yok \u2014 Personel bilgisi g\xFCncellenemez.';
+          gateUpd.disabled = true;
+          gateUpd.style.opacity = '0.6';
+          gateUpd.style.cursor = 'not-allowed';
+          return;
+        }
         gateUpd.disabled = true;
         gateUpd.textContent = 'Y\xFCkleniyor...';
         gateUpd.style.opacity = '0.6';
@@ -2536,9 +2547,13 @@ async function injectLeftMenu(m, win, account) {
 async function injectStoreSidebarSections(_m, win, account) {
   if (win.isDestroyed())
     return;
-  console.log(`[Sidebar][${account.label}] Injecting \xD6\u011Frenciler & Ara\xE7lar sections + renderer`);
+  const isLocalTest = _m.localTestAccounts.has(account.id);
+  console.log(`[Sidebar][${account.label}] Injecting \xD6\u011Frenciler & Ara\xE7lar sections + renderer${isLocalTest ? " (local test \u2014 MEBBIS update buttons disabled)" : ""}`);
   const script = `
       (function() {
+        var __isLocalTest = ${isLocalTest ? "true" : "false"};
+        // Expose for the separately-injected left-menu script (K Belgesi gate).
+        window.__isMebbisLocalTest = __isLocalTest;
         const sidebar = document.getElementById('mebbis-left-menu');
         if (!sidebar) {
           console.log('[MEBBIS_SIDEBAR] No #mebbis-left-menu found, skipping store sections');
@@ -2625,9 +2640,18 @@ async function injectStoreSidebarSections(_m, win, account) {
           if (Array.isArray(opts.headerActions)) {
             opts.headerActions.forEach(action => {
               const ab = document.createElement('button');
-              ab.style.cssText = 'background: #4361ee; border: none; color: white; cursor: pointer; padding: 6px 14px; font-size: 13px; border-radius: 4px; font-weight: 500;';
-              ab.textContent = action.label;
-              ab.onclick = () => action.onClick(ab);
+              if (action.disabled) {
+                // Greyed-out, non-clickable \u2014 used in Local Test mode for the
+                // G\xFCncelle actions that need a live MEBBIS session.
+                ab.style.cssText = 'background: #2a2a4a; border: none; color: #888; cursor: not-allowed; padding: 6px 14px; font-size: 13px; border-radius: 4px; font-weight: 500;';
+                ab.textContent = action.label;
+                ab.disabled = true;
+                if (action.disabledReason) ab.title = action.disabledReason;
+              } else {
+                ab.style.cssText = 'background: #4361ee; border: none; color: white; cursor: pointer; padding: 6px 14px; font-size: 13px; border-radius: 4px; font-weight: 500;';
+                ab.textContent = action.label;
+                ab.onclick = () => action.onClick(ab);
+              }
               rightSide.appendChild(ab);
             });
           }
@@ -2746,6 +2770,11 @@ async function injectStoreSidebarSections(_m, win, account) {
         }
 
         function personnelGuncelle(btn) {
+          // Needs live MEBBIS navigation \u2014 not available in Local Test mode.
+          if (__isLocalTest) {
+            if (btn) { btn.textContent = 'G\xFCncelle (MEBBIS gerekli)'; }
+            return;
+          }
           if (btn) { btn.disabled = true; btn.textContent = 'Y\xFCkleniyor...'; btn.style.opacity = '0.6'; }
           // Main process handles MTSK\u2192OOK module switch (Mod\xFCl \xC7\u0131k\u0131\u015F) and
           // ook00001 \u2192 ook12001 chain navigation, then runs the detail batch.
@@ -2753,6 +2782,11 @@ async function injectStoreSidebarSections(_m, win, account) {
         }
 
         function studentGuncelle(btn) {
+          // Needs live MEBBIS navigation \u2014 not available in Local Test mode.
+          if (__isLocalTest) {
+            if (btn) { btn.textContent = 'G\xFCncelle (MEBBIS gerekli)'; }
+            return;
+          }
           if (btn) { btn.disabled = true; btn.textContent = 'Y\xFCkleniyor...'; btn.style.opacity = '0.6'; }
           // Main process navigates to skt02006 (or clicks into it from /skt/)
           // then shows the filter dialog; submit re-POSTs and the list page
@@ -2977,19 +3011,28 @@ async function injectStoreSidebarSections(_m, win, account) {
 
           var updateBtn = document.createElement('button');
           updateBtn.type = 'button';
-          updateBtn.textContent = row.hasDetail ? 'G\xFCncelle' : 'Detay \xC7ek';
-          updateBtn.style.cssText = 'background: #4361ee; border: none; color: white; cursor: pointer; padding: 7px 14px; font-size: 13px; border-radius: 4px; font-weight: 500;';
-          updateBtn.onclick = function() {
+          if (__isLocalTest) {
+            // Detay \xC7ek/G\xFCncelle navigates skt02009 in MEBBIS \u2014 impossible
+            // without a session. Show it disabled rather than letting it hang.
+            updateBtn.textContent = row.hasDetail ? 'G\xFCncelle' : 'Detay \xC7ek';
             updateBtn.disabled = true;
-            updateBtn.textContent = 'Y\xFCkleniyor...';
-            updateBtn.style.opacity = '0.6';
-            console.log('[MEBBIS_SIDEBAR] Detay update for tc=' + row.tc);
-            console.log('MEBBIS_OPEN_STUDENT:' + row.tc);
-            // Close both this overlay and the table modal so the user can
-            // see the MEBBIS browser doing the navigation.
-            ov.remove();
-            closeStoreModal();
-          };
+            updateBtn.title = 'Local Test modunda MEBBIS ba\u011Flant\u0131s\u0131 yok \u2014 devre d\u0131\u015F\u0131.';
+            updateBtn.style.cssText = 'background: #2a2a4a; border: none; color: #888; cursor: not-allowed; padding: 7px 14px; font-size: 13px; border-radius: 4px; font-weight: 500;';
+          } else {
+            updateBtn.textContent = row.hasDetail ? 'G\xFCncelle' : 'Detay \xC7ek';
+            updateBtn.style.cssText = 'background: #4361ee; border: none; color: white; cursor: pointer; padding: 7px 14px; font-size: 13px; border-radius: 4px; font-weight: 500;';
+            updateBtn.onclick = function() {
+              updateBtn.disabled = true;
+              updateBtn.textContent = 'Y\xFCkleniyor...';
+              updateBtn.style.opacity = '0.6';
+              console.log('[MEBBIS_SIDEBAR] Detay update for tc=' + row.tc);
+              console.log('MEBBIS_OPEN_STUDENT:' + row.tc);
+              // Close both this overlay and the table modal so the user can
+              // see the MEBBIS browser doing the navigation.
+              ov.remove();
+              closeStoreModal();
+            };
+          }
           rightWrap.appendChild(updateBtn);
 
           var sCloseBtn = document.createElement('button');
@@ -3418,7 +3461,11 @@ async function injectStoreSidebarSections(_m, win, account) {
             searchPlaceholder: 'TC veya Ad Soyad ile ara...',
             onRowAction: (row) => { showStudentDetail(row); },
             headerActions: [
-              { label: 'G\xFCncelle', onClick: studentGuncelle },
+              {
+                label: 'G\xFCncelle', onClick: studentGuncelle,
+                disabled: __isLocalTest,
+                disabledReason: 'Local Test modunda MEBBIS ba\u011Flant\u0131s\u0131 yok \u2014 G\xFCncelle devre d\u0131\u015F\u0131.',
+              },
             ],
           });
         };
@@ -3455,7 +3502,11 @@ async function injectStoreSidebarSections(_m, win, account) {
             searchPlaceholder: 'Ad Soyad, TC, g\xF6rev veya bran\u015F ile ara...',
             onRowAction: showPersonnelDetail,
             headerActions: [
-              { label: 'G\xFCncelle', onClick: personnelGuncelle },
+              {
+                label: 'G\xFCncelle', onClick: personnelGuncelle,
+                disabled: __isLocalTest,
+                disabledReason: 'Local Test modunda MEBBIS ba\u011Flant\u0131s\u0131 yok \u2014 G\xFCncelle devre d\u0131\u015F\u0131.',
+              },
             ],
           });
         };
@@ -6329,6 +6380,11 @@ var MebbisManager = class _MebbisManager {
     // (either the form is blank → toast "MEBBIS'te bulunamadı" or matches →
     // calls `window.__openKBelgesi(tc)` to re-open the form prefilled).
     this.pendingKbFetch = /* @__PURE__ */ new Map();
+    // Accounts whose currently-open window is a Local Test window (opened via
+    // startLocalTest, no MEBBIS login). Used so the sidebar can disable the
+    // Güncelle/Detay buttons that require live MEBBIS navigation, while the
+    // Kurum Güncelle (pure backend re-fetch) stays functional.
+    this.localTestAccounts = /* @__PURE__ */ new Set();
     // Cached Kurum Bilgisi per account, populated by a fire-and-forget fetch
     // from the backend on the first pushStoreToSidebar call. The sidebar reads
     // this via window.__mebbisStore.kurumInfo to render the "Kurum" modal.
@@ -7156,13 +7212,30 @@ var MebbisManager = class _MebbisManager {
     });
     win.removeMenu();
     this.running.set(account.id, { account, window: win });
+    this.localTestAccounts.add(account.id);
     win.on("closed", () => {
       this.running.delete(account.id);
+      this.localTestAccounts.delete(account.id);
       if (parentWindow && !parentWindow.isDestroyed()) {
         parentWindow.webContents.send("account:stopped", account.id);
       }
     });
     win.once("ready-to-show", () => win.show());
+    win.webContents.on("console-message", (_event, _level, message) => {
+      if (message === "MEBBIS_REQUEST_KURUM_UPDATE") {
+        console.log(`[LocalTest][${account.label}] Kurum update requested \u2014 re-fetching from backend`);
+        fetchKurumInfo().then((info) => {
+          if (info) {
+            this.kurumInfoCache.set(account.id, info);
+            console.log(`[LocalTest][${account.label}] Kurum info refreshed from backend`);
+          } else {
+            console.log(`[LocalTest][${account.label}] Kurum info fetch returned null`);
+          }
+          if (!win.isDestroyed())
+            this.pushStoreToSidebar(win, account);
+        });
+      }
+    });
     win.webContents.once("did-finish-load", () => {
       this.injectLeftMenu(win, account).catch((e) => {
         console.error(`[LocalTest][${account.label}] injectLeftMenu failed:`, e);
