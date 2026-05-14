@@ -3,12 +3,14 @@
  * Build the remote-deployable bundle.
  *
  * Source layout (all under src/ui/ or src/main/):
- *   src/ui/mebbis-left-menu/   → remote-code/scripts/left-menu.js      (browser IIFE)
  *   src/ui/mebbis-auto-fill/   → remote-code/scripts/auto-fill-login.js (browser IIFE)
  *   src/ui/mebbis-status/      → remote-code/scripts/hide-status.js     (browser IIFE)
  *                                remote-code/scripts/show-status.js     (browser IIFE)
  *   src/main/app-controller.ts → remote-code/main/app-bundle.js         (Node CJS)
  *   src/ui/driving-schools/    → remote-code/renderer/                  (verbatim copy)
+ *
+ * NOTE: the left menu (left-menu.js) is no longer a remote bundle — it ships
+ * inside the exe via src/main/mebbis/sidebar/left-menu-script.ts.
  *
  * Does NOT bump version.json — run `npm run bump:remote-version` separately.
  */
@@ -57,10 +59,6 @@ function browserIife(entryPoint, outfile) {
 async function bundleBrowserScripts() {
   fs.mkdirSync(OUT_SCRIPTS, { recursive: true });
   await Promise.all([
-    browserIife(
-      path.join(SRC_UI, 'mebbis-left-menu', 'index.js'),
-      path.join(OUT_SCRIPTS, 'left-menu.js'),
-    ),
     browserIife(
       path.join(SRC_UI, 'mebbis-auto-fill', 'index.js'),
       path.join(OUT_SCRIPTS, 'auto-fill-login.js'),

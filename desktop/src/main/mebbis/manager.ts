@@ -8,7 +8,7 @@ import { updateKurumRoute, fetchKurumInfo } from '../sync/kurum-info-sync';
 import { updateStudentPersonal } from '../sync/student-sync';
 import { getStudentDb } from '../storage/student-db';
 import type { RemoteKurumInfo, RemoteCar } from '../api/api-client';
-import * as sidebarUi from './sidebar-ui';
+import * as sidebarUi from './sidebar';
 import * as pdfRender from './pdf-render';
 import * as downloadBatch from './download-batch';
 import * as downloadSingle from './download-single';
