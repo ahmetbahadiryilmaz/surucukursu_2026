@@ -841,7 +841,7 @@ export async function start(ctx: BootstrapContext): Promise<AppControllerHandle>
       const user = authStore.getUser();
       if (!token || !user) return null;
       try {
-        const isAdmin = ctx.isDev && (user.userType === -1 || user.userType === -2);
+        const isAdmin = user.userType === -1 || user.userType === -2;
         if (isAdmin) {
           return { user, school: null };
         }
@@ -860,7 +860,7 @@ export async function start(ctx: BootstrapContext): Promise<AppControllerHandle>
         authStore.save(result.token, result.user);
         authStore.setRememberedPassword(password);
         authStore.setAutoLogin(autoLogin === true);
-        const isAdmin = ctx.isDev && (result.user.userType === -1 || result.user.userType === -2);
+        const isAdmin = result.user.userType === -1 || result.user.userType === -2;
         console.log('[auth:login] Logged in:', email, 'userType:', result.user.userType, 'isAdmin:', isAdmin);
         let school = null;
         if (!isAdmin) {
@@ -942,7 +942,7 @@ export async function start(ctx: BootstrapContext): Promise<AppControllerHandle>
       const user = authStore.getUser();
       if (!token) return [];
       try {
-        const isAdmin = ctx.isDev && (user?.userType === -1 || user?.userType === -2);
+        const isAdmin = user?.userType === -1 || user?.userType === -2;
         const dbAccounts = isAdmin
           ? await apiClient.getAllSchools(token)
           : await apiClient.getMebbisAccounts(token);
@@ -980,7 +980,7 @@ export async function start(ctx: BootstrapContext): Promise<AppControllerHandle>
       const user = authStore.getUser();
       if (!token) throw new Error('Not authenticated');
       const schoolId = parseInt(data.id, 10);
-      const isAdmin = ctx.isDev && (user?.userType === -1 || user?.userType === -2);
+      const isAdmin = user?.userType === -1 || user?.userType === -2;
       const dbAccounts = isAdmin
         ? await apiClient.getAllSchools(token)
         : await apiClient.getMebbisAccounts(token);
@@ -1009,7 +1009,7 @@ export async function start(ctx: BootstrapContext): Promise<AppControllerHandle>
       const token = authStore.getToken();
       const user = authStore.getUser();
       if (!token) throw new Error('Not authenticated');
-      const isAdmin = ctx.isDev && (user?.userType === -1 || user?.userType === -2);
+      const isAdmin = user?.userType === -1 || user?.userType === -2;
       const dbAccounts = isAdmin
         ? await apiClient.getAllSchools(token)
         : await apiClient.getMebbisAccounts(token);
