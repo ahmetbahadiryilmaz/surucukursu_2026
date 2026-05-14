@@ -29,7 +29,7 @@ const Logout = () => {
         console.log("User data cleared, theme preference preserved");
         
         // Redirect to login page
-        navigate("/");
+        navigate("/login");
       }
     };
 

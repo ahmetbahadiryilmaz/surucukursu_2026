@@ -78,7 +78,7 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({ children }) => {
       localStorage.removeItem('user');
       localStorage.removeItem('userRole');
       localStorage.removeItem('activeDrivingSchool');
-      window.location.href = '/';
+      window.location.href = '/login';
     }, 100);
   }, []);
 

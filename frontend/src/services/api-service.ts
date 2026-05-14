@@ -218,7 +218,7 @@ class ApiService {
       const response = await this.axiosService.get("/auth/me");
       if (response.status == 401) {
         await this.authentication.logout();
-        window.location.href = "/";
+        window.location.href = "/login";
       }
       return response.data;
     }
@@ -623,7 +623,7 @@ class ApiService {
     //if logged in
     if (this.getToken()) {
       this.clearLocalStorage();
-      window.location.href = "/";
+      window.location.href = "/login";
       toast.warning("Oturum süreniz dolmuş. Lütfen tekrar giriş yapın.");
     }
   }

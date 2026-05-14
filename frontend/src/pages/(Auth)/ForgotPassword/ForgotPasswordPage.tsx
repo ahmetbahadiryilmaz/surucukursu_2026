@@ -57,7 +57,7 @@ export default function ForgotPasswordPage() {
         setError2(result.message || "Bir hata oluştu.");
       } else {
         setSuccess(result?.message || "Şifreniz başarıyla güncellendi!");
-        setTimeout(() => navigate("/"), 2000);
+        setTimeout(() => navigate("/login"), 2000);
       }
     } catch (err: any) {
       setError2(err?.response?.data?.message || "Geçersiz kod veya bir hata oluştu.");
@@ -115,7 +115,7 @@ export default function ForgotPasswordPage() {
                   type="button"
                   variant="ghost"
                   className="w-full"
-                  onClick={() => navigate("/")}
+                  onClick={() => navigate("/login")}
                 >
                   ← Girişe Dön
                 </Button>

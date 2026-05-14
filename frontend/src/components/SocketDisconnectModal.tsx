@@ -11,7 +11,7 @@ const SocketDisconnectModal: React.FC = () => {
   const handleReconnect = async () => {
     if (disconnectReason === 'token_expired') {
       // For token expired, redirect to login instead of trying to reconnect
-      window.location.href = '/';
+      window.location.href = '/login';
       return;
     }
 

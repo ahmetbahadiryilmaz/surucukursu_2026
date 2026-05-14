@@ -22,11 +22,11 @@ export default function LogoutPage() {
         ToastService.success("Başarıyla çıkış yapıldı");
         
         // Redirect to login page
-        navigate("/", { replace: true });
+        navigate("/login", { replace: true });
       } catch (error) {
         console.error("Logout error:", error);
         ToastService.error("Çıkış yapılırken bir hata oluştu");
-        navigate("/", { replace: true });
+        navigate("/login", { replace: true });
       }
     };
 

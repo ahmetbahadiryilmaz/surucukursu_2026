@@ -1,6 +1,7 @@
 import { Routes, Route } from "react-router-dom";
 import { default as AdminLayout } from "@/pages/Admin/Layout";
 import { default as DrivingSchoolLayout } from "@/pages/DrivingSchool/Layout";
+import LandingPage from "@/pages/Landing";
 import LoginPage from "@/pages/(Auth)/Login";
 import Logout from "@/pages/(Auth)/Logout";
 import ForgotPasswordPage from "@/pages/(Auth)/ForgotPassword/ForgotPasswordPage";
@@ -23,7 +24,8 @@ const DrivingSchoolRoute = () => (
 export const AppRoutes = () => {
   return (
     <Routes>
-      <Route path="/" element={<LoginPage />} />
+      <Route path="/" element={<LandingPage />} />
+      <Route path="/login" element={<LoginPage />} />
       <Route path="/forgot-password" element={<ForgotPasswordPage />} />
       <Route path="/admin/*" element={<AdminRoute />} />
       <Route path="/driving-school/*" element={<DrivingSchoolRoute />} />
