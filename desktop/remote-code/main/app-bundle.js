@@ -6487,7 +6487,14 @@ function pushStoreToSidebar(m, win, account) {
 var MebbisManager = class _MebbisManager {
   constructor() {
     this.running = /* @__PURE__ */ new Map();
-    this.loginAttempts = /* @__PURE__ */ new Map();
+    /**
+     * Accounts whose MEBBIS login page has already been auto-filled this
+     * session. Presence = "auto-fill used". There is NO auto-retry: if the
+     * window lands back on the login page, the saved credentials were rejected
+     * and control is handed to the user. Cleared on a successful login, on
+     * stop(), and on a fresh start().
+     */
+    this.loginAutoFilled = /* @__PURE__ */ new Set();
     this.autoRefreshIntervals = /* @__PURE__ */ new Map();
     this.activityLogger = null;
     this.batchStateListener = null;
@@ -6658,7 +6665,7 @@ var MebbisManager = class _MebbisManager {
       existing.window.focus();
       return;
     }
-    this.loginAttempts.delete(account.id);
+    this.loginAutoFilled.delete(account.id);
     const partition = `persist:mebbis-${account.id}`;
     console.log(`[${account.label}] Using partition: ${partition}`);
     const win = new import_electron11.BrowserWindow({
@@ -7029,10 +7036,9 @@ var MebbisManager = class _MebbisManager {
       console.log(`[${account.label}] PAGE LOADED: ${currentURL}`);
       this.saveResponse(win, account, currentURL);
       if (this.isLoginPage(currentURL)) {
-        const attempts = this.loginAttempts.get(account.id) || 0;
-        if (attempts >= 1) {
-          console.log(`[${account.label}] Max login attempts (${attempts}) reached, stopping auto-fill`);
-          this.showStatus(win, "LOGIN FAILED - Max attempts reached", "#FF0000");
+        if (this.loginAutoFilled.has(account.id)) {
+          console.log(`[${account.label}] Login page again \u2014 auto-fill already used, awaiting manual login`);
+          this.showStatus(win, "Otomatik giri\u015F ba\u015Far\u0131s\u0131z \u2014 l\xFCtfen manuel giri\u015F yap\u0131n", "#FFA500");
           if (this.pendingDownload) {
             this.pendingDownload = null;
             this.pendingDownloadPhase = null;
@@ -7042,8 +7048,8 @@ var MebbisManager = class _MebbisManager {
             this.pendingDownloadPhase = null;
           }
         } else {
-          this.loginAttempts.set(account.id, attempts + 1);
-          console.log(`[${account.label}] LOGIN PAGE! Auto-filling... (attempt ${attempts + 1})`);
+          this.loginAutoFilled.add(account.id);
+          console.log(`[${account.label}] LOGIN PAGE! Auto-filling (one-shot)...`);
           this.showStatus(win, "TRYING LOGIN...", "#FF6B6B");
           this.autoFillLogin(win, account);
         }
@@ -7181,7 +7187,7 @@ var MebbisManager = class _MebbisManager {
       } else if (this.isPreAuthPage(currentURL)) {
         console.log(`[${account.label}] Pre-auth verification page, awaiting user`);
       } else {
-        this.loginAttempts.set(account.id, 0);
+        this.loginAutoFilled.delete(account.id);
         console.log(`[${account.label}] Success! Hiding status`);
         this.hideStatus(win);
         this.injectLeftMenu(win, account);
@@ -7192,14 +7198,6 @@ var MebbisManager = class _MebbisManager {
       console.log(`[${account.label}] DOM READY: ${currentURL}`);
       if (!this.isPreAuthPage(currentURL)) {
         this.injectLeftMenu(win, account);
-      }
-      if (this.isLoginPage(currentURL)) {
-        const attempts = this.loginAttempts.get(account.id) || 0;
-        if (attempts < 1) {
-          console.log(`[${account.label}] Login page (dom-ready), auto-filling...`);
-          this.showStatus(win, "TRYING LOGIN...", "#FF6B6B");
-          this.autoFillLogin(win, account);
-        }
       }
     });
     console.log(`========== STARTED: ${account.label} ==========
@@ -7212,34 +7210,51 @@ var MebbisManager = class _MebbisManager {
     const fallback = `
       (function() {
         console.log('[MEBBIS] Auto-fill script loaded (fallback)');
-        function tryFill() {
-          const usernameField = document.getElementById('txtKullaniciAd');
-          const passwordField = document.getElementById('txtSifre');
-          if (usernameField && passwordField) {
-            usernameField.value = __USERNAME__;
-            passwordField.value = __PASSWORD__;
-            usernameField.dispatchEvent(new Event('input', { bubbles: true }));
-            usernameField.dispatchEvent(new Event('change', { bubbles: true }));
-            passwordField.dispatchEvent(new Event('input', { bubbles: true }));
-            passwordField.dispatchEvent(new Event('change', { bubbles: true }));
-            setTimeout(() => {
-              const submitBtn =
-                document.getElementById('btnGiris') ||
-                document.getElementById('dogrula') ||
-                document.querySelector('button[id*="Giris"]') ||
-                document.querySelector('button[id*="giris"]') ||
-                document.querySelector('input[type="submit"]') ||
-                Array.from(document.querySelectorAll('button')).find(b =>
-                  b.textContent.includes('Giri\u015F') || b.textContent.includes('giri\u015F')
-                );
-              if (submitBtn) { submitBtn.click(); }
-              else { const f = usernameField.closest('form'); if (f) f.submit(); }
-            }, 300);
-            return true;
-          }
-          return false;
+        if (window.__mebbisAutoFillRan) {
+          console.log('[MEBBIS] Auto-fill already ran on this page, skipping (fallback)');
+          return;
         }
-        tryFill();
+        var MAX_WAIT_MS = 15000;
+        var POLL_MS = 100;
+        var waited = 0;
+        function doFill(usernameField, passwordField) {
+          window.__mebbisAutoFillRan = true;
+          usernameField.value = __USERNAME__;
+          passwordField.value = __PASSWORD__;
+          usernameField.dispatchEvent(new Event('input', { bubbles: true }));
+          usernameField.dispatchEvent(new Event('change', { bubbles: true }));
+          passwordField.dispatchEvent(new Event('input', { bubbles: true }));
+          passwordField.dispatchEvent(new Event('change', { bubbles: true }));
+          setTimeout(function() {
+            var submitBtn =
+              document.getElementById('btnGiris') ||
+              document.getElementById('dogrula') ||
+              document.querySelector('button[id*="Giris"]') ||
+              document.querySelector('button[id*="giris"]') ||
+              document.querySelector('input[type="submit"]') ||
+              Array.from(document.querySelectorAll('button')).find(function(b) {
+                return b.textContent.includes('Giri\u015F') || b.textContent.includes('giri\u015F');
+              });
+            if (submitBtn) { submitBtn.click(); }
+            else { var f = usernameField.closest('form'); if (f) f.submit(); }
+          }, 300);
+        }
+        function poll() {
+          var usernameField = document.getElementById('txtKullaniciAd');
+          var passwordField = document.getElementById('txtSifre');
+          if (usernameField && passwordField) {
+            console.log('[MEBBIS] Login fields ready, filling (fallback)');
+            doFill(usernameField, passwordField);
+            return;
+          }
+          waited += POLL_MS;
+          if (waited >= MAX_WAIT_MS) {
+            console.warn('[MEBBIS] Login fields never appeared, giving up (fallback)');
+            return;
+          }
+          setTimeout(poll, POLL_MS);
+        }
+        poll();
       })();
     `;
     await getCodeLoader().runScriptOrFallback(win, "scripts/auto-fill-login.js", fallback, {
@@ -7248,7 +7263,7 @@ var MebbisManager = class _MebbisManager {
       SUBMIT: true,
       READONLY: false
     });
-    console.log(`[${account.label}] Auto-fill script executed`);
+    console.log(`[${account.label}] Auto-fill script injected (polls for login fields)`);
   }
   showStatus(win, message, color) {
     const fallback = `
@@ -7356,7 +7371,7 @@ var MebbisManager = class _MebbisManager {
       entry.window.close();
     }
     this.running.delete(accountId);
-    this.loginAttempts.delete(accountId);
+    this.loginAutoFilled.delete(accountId);
     this.pendingOpenStudent.delete(accountId);
     this.demoSessionUsage.delete(accountId);
   }

@@ -1,20 +1,40 @@
 console.log('[MEBBIS] Auto-fill script loaded');
 
-function tryFill() {
-  const usernameField = document.getElementById('txtKullaniciAd');
-  const passwordField = document.getElementById('txtSifre');
-  if (usernameField && passwordField) {
+(function () {
+  // One-shot guard for the auto-login (submit) flow: never fill + submit more
+  // than once per page load, even if the script happens to be injected again.
+  // There is NO auto-retry — a second visit to the login page is left to the
+  // user. The read-only flow has its own idempotency via dataset.mebbisLocked.
+  if (__SUBMIT__ && window.__mebbisAutoFillRan) {
+    console.log('[MEBBIS] Auto-fill+submit already ran on this page, skipping');
+    return;
+  }
+
+  // Wait-for-element: MEBBIS default.aspx is server-rendered so the fields are
+  // normally in the initial HTML, but poll anyway so a slow/late render can
+  // never make the fill silently no-op.
+  var MAX_WAIT_MS = 15000;
+  var POLL_MS = 100;
+  var waited = 0;
+
+  function fill(usernameField, passwordField) {
     if (__READONLY__ && usernameField.dataset.mebbisLocked === '1') {
-      return true;
+      return;
     }
+    if (__SUBMIT__) {
+      window.__mebbisAutoFillRan = true;
+    }
+
     usernameField.value = __USERNAME__;
     passwordField.value = __PASSWORD__;
+
     if (__SUBMIT__) {
       usernameField.dispatchEvent(new Event('input', { bubbles: true }));
       usernameField.dispatchEvent(new Event('change', { bubbles: true }));
       passwordField.dispatchEvent(new Event('input', { bubbles: true }));
       passwordField.dispatchEvent(new Event('change', { bubbles: true }));
     }
+
     if (__READONLY__) {
       usernameField.readOnly = true;
       passwordField.readOnly = true;
@@ -39,6 +59,7 @@ function tryFill() {
         b.onclick = function(e) { if (e && e.preventDefault) e.preventDefault(); return false; };
       });
     }
+
     if (__SUBMIT__) {
       setTimeout(() => {
         const submitBtn =
@@ -54,9 +75,23 @@ function tryFill() {
         else { const f = usernameField.closest('form'); if (f) f.submit(); }
       }, 300);
     }
-    return true;
   }
-  return false;
-}
 
-tryFill();
+  function poll() {
+    const usernameField = document.getElementById('txtKullaniciAd');
+    const passwordField = document.getElementById('txtSifre');
+    if (usernameField && passwordField) {
+      console.log('[MEBBIS] Login fields ready, filling');
+      fill(usernameField, passwordField);
+      return;
+    }
+    waited += POLL_MS;
+    if (waited >= MAX_WAIT_MS) {
+      console.warn('[MEBBIS] Login fields never appeared after ' + MAX_WAIT_MS + 'ms, giving up');
+      return;
+    }
+    setTimeout(poll, POLL_MS);
+  }
+
+  poll();
+})();

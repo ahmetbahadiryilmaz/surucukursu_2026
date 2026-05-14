@@ -2,12 +2,20 @@
 (() => {
   // src/ui/mebbis-auto-fill/index.js
   console.log("[MEBBIS] Auto-fill script loaded");
-  function tryFill() {
-    const usernameField = document.getElementById("txtKullaniciAd");
-    const passwordField = document.getElementById("txtSifre");
-    if (usernameField && passwordField) {
+  (function() {
+    if (__SUBMIT__ && window.__mebbisAutoFillRan) {
+      console.log("[MEBBIS] Auto-fill+submit already ran on this page, skipping");
+      return;
+    }
+    var MAX_WAIT_MS = 15e3;
+    var POLL_MS = 100;
+    var waited = 0;
+    function fill(usernameField, passwordField) {
       if (__READONLY__ && usernameField.dataset.mebbisLocked === "1") {
-        return true;
+        return;
+      }
+      if (__SUBMIT__) {
+        window.__mebbisAutoFillRan = true;
       }
       usernameField.value = __USERNAME__;
       passwordField.value = __PASSWORD__;
@@ -71,9 +79,22 @@
           }
         }, 300);
       }
-      return true;
     }
-    return false;
-  }
-  tryFill();
+    function poll() {
+      const usernameField = document.getElementById("txtKullaniciAd");
+      const passwordField = document.getElementById("txtSifre");
+      if (usernameField && passwordField) {
+        console.log("[MEBBIS] Login fields ready, filling");
+        fill(usernameField, passwordField);
+        return;
+      }
+      waited += POLL_MS;
+      if (waited >= MAX_WAIT_MS) {
+        console.warn("[MEBBIS] Login fields never appeared after " + MAX_WAIT_MS + "ms, giving up");
+        return;
+      }
+      setTimeout(poll, POLL_MS);
+    }
+    poll();
+  })();
 })();
