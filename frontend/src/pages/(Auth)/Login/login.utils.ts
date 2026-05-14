@@ -96,6 +96,45 @@ export const getStoredUserData = (): { user: UserData; token: string } | null =>
 };
 
 /**
+ * Maps a login request error (usually an Axios error) to a user-friendly
+ * Turkish message. Avoids leaking raw messages like
+ * "İstek 401 durum koduyla başarısız oldu." to the UI.
+ */
+export const getLoginErrorMessage = (error: any): string => {
+  // Server responded with an error status
+  if (error?.response) {
+    const status = error.response.status;
+    const backendMessage = error.response.data?.message;
+
+    switch (status) {
+      case 400:
+      case 422:
+        return backendMessage || 'Girdiğiniz bilgiler geçersiz. Lütfen kontrol edin.';
+      case 401:
+        // Backend sends "Invalid credentials" — never show it as-is.
+        return 'E-posta veya şifre hatalı. Lütfen bilgilerinizi kontrol edin.';
+      case 403:
+        return 'Bu hesabın giriş yetkisi bulunmuyor.';
+      case 429:
+        return 'Çok fazla deneme yapıldı. Lütfen bir süre sonra tekrar deneyin.';
+      default:
+        if (status >= 500) {
+          return 'Sunucuya şu anda ulaşılamıyor. Lütfen daha sonra tekrar deneyin.';
+        }
+        return backendMessage || 'Giriş yapılamadı. Lütfen tekrar deneyin.';
+    }
+  }
+
+  // Request was made but no response (network/CORS/timeout)
+  if (error?.request) {
+    return 'Sunucuya bağlanılamadı. İnternet bağlantınızı kontrol edin.';
+  }
+
+  // Something else (e.g. a validation Error thrown before the request)
+  return error?.message || 'Giriş yapılamadı. Lütfen tekrar deneyin.';
+};
+
+/**
  * Determines redirect path based on user type
  */
 export const getRedirectPath = (userType: number): string => {

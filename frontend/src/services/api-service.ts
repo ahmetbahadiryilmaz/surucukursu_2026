@@ -143,18 +143,22 @@ class ApiService {
   authentication = {
     login: async (email: string, password: string): Promise<LoginResponse> => {
       this.disableToast();
-      const response = await this.axiosService.post<LoginResponse>("/auth/login", { email, password });
-      this.enableToast();
-      if (response.data.token && response.data.user) {
-        // Store token and user data using centralized methods
-        this.setToken(response.data.token);
-        this.setUser(response.data.user);
-        console.log("Login successful, localStorage updated");
-      } else {
-        console.error("Token veya kullanıcı bilgisi alınamadı.");
+      try {
+        const response = await this.axiosService.post<LoginResponse>("/auth/login", { email, password });
+        if (response.data.token && response.data.user) {
+          // Store token and user data using centralized methods
+          this.setToken(response.data.token);
+          this.setUser(response.data.user);
+          console.log("Login successful, localStorage updated");
+        } else {
+          console.error("Token veya kullanıcı bilgisi alınamadı.");
+        }
+
+        return response.data;
+      } finally {
+        // Always re-enable toasts, even when login fails
+        this.enableToast();
       }
-      
-      return response.data;
     },
 
     register: async (email: string, username: string, password: string): Promise<any> => {

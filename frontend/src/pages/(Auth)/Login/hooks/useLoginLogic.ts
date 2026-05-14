@@ -5,7 +5,7 @@ import { apiService } from "@/services/api-service";
 import ToastService from "@/lib/toast";
 import { LoginFormData } from "../login.types";
 import { LoginResponse } from "@/shared/types";
-import { formatEmail, validateLoginForm, getRedirectPath } from "../login.utils";
+import { formatEmail, validateLoginForm, getRedirectPath, getLoginErrorMessage } from "../login.utils";
 
 export const useLoginLogic = () => {
   const navigate = useNavigate();
@@ -62,9 +62,11 @@ export const useLoginLogic = () => {
       navigate(redirectPath);
       
     } catch (error: any) {
-      ToastService.update(loadingToast, 'Giriş başarısız!', 'error');
+      const friendlyMessage = getLoginErrorMessage(error);
+      ToastService.update(loadingToast, friendlyMessage, 'error');
 
-      throw error;
+      // Re-throw with the friendly message so LoginForm can display it
+      throw new Error(friendlyMessage);
     }
   };
 
