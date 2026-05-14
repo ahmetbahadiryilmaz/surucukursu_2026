@@ -276,11 +276,12 @@ export function buildLeftMenuScript(devSection: string): string {
         gateUpd.textContent = 'Yükleniyor...';
         gateUpd.style.opacity = '0.6';
         console.log(missingKind === 'kurum' ? 'MEBBIS_REQUEST_KURUM_UPDATE' : 'MEBBIS_REQUEST_PERSONNEL_UPDATE');
-        // Personel update navigates MEBBIS away (page reloads, gate is gone).
-        // Kurum update only re-fetches from the backend — no navigation — so
-        // poll __mebbisStore and, once kurumInfo lands, close the gate and
-        // re-enter K Belgesi. Time out after ~30s so a failed fetch doesn't
-        // leave the button stuck on "Yükleniyor..." forever.
+        // Personel update always navigates MEBBIS away (page reloads, gate is
+        // gone). Kurum update navigates to skt01001 too — UNLESS the window is
+        // already on skt01001, where the main process re-scrapes in place with
+        // no reload. This poll covers that in-place case (and acts as a 30s
+        // timeout fallback): once kurumInfo lands it closes the gate and
+        // re-enters K Belgesi; on timeout it re-enables the button.
         if (missingKind === 'kurum') {
           var waited = 0;
           var poll = setInterval(function() {

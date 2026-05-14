@@ -863,6 +863,20 @@ function tokenOrNull3() {
     return null;
   }
 }
+function pushKurumInfo(mebbisAccountId, payload) {
+  const token = tokenOrNull3();
+  if (!token) {
+    console.log("[KurumInfoSync] No auth token, skipping push");
+    return Promise.resolve(null);
+  }
+  return apiClient.ingestKurumInfo(token, mebbisAccountId, payload).then((r) => {
+    console.log(`[KurumInfoSync] Pushed (account=${mebbisAccountId}): info_id=${r.kurum_info_id}, programs=${r.programs}, vehicles=${r.vehicles}`);
+    return r;
+  }).catch((e) => {
+    console.error("[KurumInfoSync] Push failed:", e?.message || e);
+    return null;
+  });
+}
 function updateKurumRoute(route) {
   const token = tokenOrNull3();
   if (!token)
@@ -1843,11 +1857,12 @@ function buildLeftMenuScript(devSection) {
         gateUpd.textContent = 'Y\xFCkleniyor...';
         gateUpd.style.opacity = '0.6';
         console.log(missingKind === 'kurum' ? 'MEBBIS_REQUEST_KURUM_UPDATE' : 'MEBBIS_REQUEST_PERSONNEL_UPDATE');
-        // Personel update navigates MEBBIS away (page reloads, gate is gone).
-        // Kurum update only re-fetches from the backend \u2014 no navigation \u2014 so
-        // poll __mebbisStore and, once kurumInfo lands, close the gate and
-        // re-enter K Belgesi. Time out after ~30s so a failed fetch doesn't
-        // leave the button stuck on "Y\xFCkleniyor..." forever.
+        // Personel update always navigates MEBBIS away (page reloads, gate is
+        // gone). Kurum update navigates to skt01001 too \u2014 UNLESS the window is
+        // already on skt01001, where the main process re-scrapes in place with
+        // no reload. This poll covers that in-place case (and acts as a 30s
+        // timeout fallback): once kurumInfo lands it closes the gate and
+        // re-enters K Belgesi; on timeout it re-enables the button.
         if (missingKind === 'kurum') {
           var waited = 0;
           var poll = setInterval(function() {
@@ -6297,6 +6312,120 @@ function scrapePersonnelDetail(m, win, account) {
   });
 }
 
+// src/main/mebbis/kurum-flows.ts
+function parseAndPushKurumInfo(m, win, account, force) {
+  if (win.isDestroyed())
+    return;
+  if (!force && m.kurumInfoCache.has(account.id))
+    return;
+  console.log(`[KurumInfoParser][${account.label}] Scraping skt01001 (force=${force})`);
+  win.webContents.executeJavaScript(`
+    (function() {
+      function txt(id) {
+        var el = document.getElementById(id);
+        if (!el) return '';
+        return (el.value || el.textContent || '')
+          .replace(/\\u00a0/g, ' ').replace(/\\s+/g, ' ').trim();
+      }
+      function cellText(td) {
+        return (td && td.textContent || '')
+          .replace(/\\u00a0/g, ' ').replace(/\\s+/g, ' ').trim();
+      }
+      // dgProgramlar and dgAracBilgileri share the same shape: the header row
+      // carries class "frmListBaslik"; data rows are plain <tr>.
+      function gridRows(gridId, minCells) {
+        var grid = document.getElementById(gridId);
+        if (!grid) return [];
+        var out = [];
+        var trs = grid.querySelectorAll('tr');
+        for (var i = 0; i < trs.length; i++) {
+          var tr = trs[i];
+          if (tr.classList && tr.classList.contains('frmListBaslik')) continue;
+          var tds = tr.querySelectorAll('td');
+          if (tds.length < minCells) continue;
+          var cells = [];
+          for (var j = 0; j < tds.length; j++) cells.push(cellText(tds[j]));
+          out.push(cells);
+        }
+        return out;
+      }
+
+      // dgProgramlar columns:
+      //   0:Ehliyet S\u0131n\u0131f\u0131 | 1:Program Ruhsat Alma Tarihi |
+      //   2:Program\u0131n Kapanma Tarihi | 3:Durumu
+      var programs = gridRows('dgProgramlar', 4).map(function(c) {
+        return {
+          ehliyetSinifi: c[0] || '',
+          ruhsatTarihi:  c[1] || '',
+          kapanmaTarihi: c[2] || '',
+          durum:         c[3] || '',
+        };
+      });
+
+      // dgAracBilgileri columns:
+      //   0:Plaka | 1:Ehliyet S\u0131n\u0131f\u0131 | 2:Markas\u0131 | 3:Modeli | 4:Model Y\u0131l\u0131 |
+      //   5:Tescil Tarihi | 6:Hizmete Giri\u015F | 7:Hizmetten \xC7\u0131k\u0131\u015F |
+      //   8:Arac\u0131n Durumu | 9:MEM Onay Durumu
+      var vehicles = gridRows('dgAracBilgileri', 10).map(function(c) {
+        return {
+          plaka:          c[0] || '',
+          ehliyetSinifi:  c[1] || '',
+          marka:          c[2] || '',
+          model:          c[3] || '',
+          modelYili:      c[4] || '',
+          tescilTarihi:   c[5] || '',
+          hizmeteGiris:   c[6] || '',
+          hizmettenCikis: c[7] || '',
+          durum:          c[8] || '',
+          memOnay:        c[9] || '',
+        };
+      });
+
+      return {
+        kurumKodu:     txt('lblKurumKodu'),
+        kurumAdi:      txt('lblKurumAdi'),
+        kurumAdres:    txt('lblKurumAdres'),
+        kurumTelefon:  txt('lblKurumTelefon'),
+        binaKontenjan: txt('lblBinaKontenjan'),
+        acilmaTarihi:  txt('lblAcilmaTarihi'),
+        programs: programs,
+        vehicles: vehicles,
+      };
+    })();
+  `).then((result) => {
+    if (!result || !result.kurumAdi) {
+      console.log(`[KurumInfoParser][${account.label}] No kurum ad\u0131 found on skt01001 \u2014 skipping push`);
+      return;
+    }
+    console.log(`[KurumInfoParser][${account.label}] Found: ${result.kurumAdi} (programs=${result.programs.length}, vehicles=${result.vehicles.length})`);
+    pushKurumInfo(account.id, {
+      kurumKodu: result.kurumKodu || void 0,
+      kurumAdi: result.kurumAdi || void 0,
+      kurumAdres: result.kurumAdres || void 0,
+      kurumTelefon: result.kurumTelefon || void 0,
+      binaKontenjan: result.binaKontenjan || void 0,
+      acilmaTarihi: result.acilmaTarihi || void 0,
+      programs: result.programs,
+      vehicles: result.vehicles
+    }).then((r) => {
+      if (!r) {
+        console.log(`[KurumInfoParser][${account.label}] Backend push returned null (no token / failed)`);
+        return;
+      }
+      fetchKurumInfo().then((info) => {
+        if (!info)
+          return;
+        m.kurumInfoCache.set(account.id, info);
+        if (!win.isDestroyed())
+          m.pushStoreToSidebar(win, account);
+      }).catch(() => {
+      });
+    });
+  }).catch((e) => {
+    console.error(`[KurumInfoParser][${account.label}] scrape failed:`, e);
+  });
+}
+
 // src/main/mebbis/store.ts
 function serializeStore(m, account) {
   const students = getStudentDb().serialize(account.id);
@@ -6374,6 +6503,12 @@ var MebbisManager = class _MebbisManager {
     // ook12001 this update cycle, preventing infinite reload loops when the
     // grid is initially empty and needs the "Aç" filter applied.
     this.personnelAutoSearched = /* @__PURE__ */ new Set();
+    // Kurum-update navigation: when the user clicks "Güncelle" in the Kurum
+    // modal we set this flag, navigate to skt01001 (the MTSK "Kurum Bilgileri"
+    // page), and force a re-scrape on load. skt01001 lives in the MTSK module,
+    // so if the window is currently inside the OOK module a direct navigation
+    // bounces back — we click "Modül Çıkış" first, mirroring the personnel flow.
+    this.pendingKurumUpdate = /* @__PURE__ */ new Set();
     // K Belgesi auto-fetch flow: when the user types a TC into K Belgesi that
     // is not in the local student cache, we navigate skt02009 to scrape that
     // student's detail. accountId → expected TC. Cleared on detail-load
@@ -6797,17 +6932,50 @@ var MebbisManager = class _MebbisManager {
         }
       }
       if (message === "MEBBIS_REQUEST_KURUM_UPDATE") {
-        console.log(`[${account.label}] Kurum update requested \u2014 re-fetching from backend`);
-        fetchKurumInfo().then((info) => {
-          if (info) {
-            this.kurumInfoCache.set(account.id, info);
-            console.log(`[${account.label}] Kurum info refreshed from backend`);
-          } else {
-            console.log(`[${account.label}] Kurum info fetch returned null`);
-          }
-          if (!win.isDestroyed())
-            this.pushStoreToSidebar(win, account);
-        });
+        console.log(`[KurumUpdate][${account.label}] G\xFCncelle requested`);
+        this.pendingKurumUpdate.add(account.id);
+        const currentURL = win.webContents.getURL();
+        const lowerURL = currentURL.toLowerCase();
+        if (lowerURL.includes("skt01001")) {
+          console.log(`[KurumUpdate][${account.label}] Already on skt01001 \u2014 re-scraping in place`);
+          this.pendingKurumUpdate.delete(account.id);
+          this.parseAndPushKurumInfo(win, account, true);
+        } else if (lowerURL.includes("/ookgm/")) {
+          console.log(`[KurumUpdate][${account.label}] In OOK module \u2014 clicking Mod\xFCl \xC7\u0131k\u0131\u015F`);
+          win.webContents.executeJavaScript(`
+            (function() {
+              const all = Array.from(document.querySelectorAll('a, td, button, input[type="button"]'));
+              for (const el of all) {
+                const txt = (el.textContent || el.value || '').trim();
+                if (txt === 'Mod\xFCl \xC7\u0131k\u0131\u015F' || txt === 'Modul Cikis') { el.click(); return true; }
+              }
+              for (const el of all) {
+                const href = el.getAttribute('href') || '';
+                const onclick = el.getAttribute('onclick') || '';
+                if (href.toLowerCase().includes('main.aspx') || onclick.toLowerCase().includes('main.aspx')) {
+                  el.click(); return true;
+                }
+              }
+              console.log('[MEBBIS] Mod\xFCl \xC7\u0131k\u0131\u015F not found, falling back to direct skt01001 navigation');
+              return false;
+            })();
+          `).then((clicked) => {
+            if (!clicked) {
+              win.loadURL("https://mebbis.meb.gov.tr/SKT/skt01001.aspx").catch((e) => {
+                console.error(`[KurumUpdate][${account.label}] skt01001 fallback failed:`, e);
+                this.pendingKurumUpdate.delete(account.id);
+              });
+            }
+          }).catch(() => {
+            win.loadURL("https://mebbis.meb.gov.tr/SKT/skt01001.aspx").catch(() => {
+            });
+          });
+        } else {
+          win.loadURL("https://mebbis.meb.gov.tr/SKT/skt01001.aspx").catch((e) => {
+            console.error(`[KurumUpdate][${account.label}] loadURL skt01001 failed:`, e);
+            this.pendingKurumUpdate.delete(account.id);
+          });
+        }
       }
       if (message === "MEBBIS_BATCH_CANCEL") {
         console.log(`[${account.label}] Batch cancelled by user`);
@@ -6925,6 +7093,12 @@ var MebbisManager = class _MebbisManager {
         this.hideStatus(win);
         this.injectLeftMenu(win, account);
         this.parseAndIngestStudentList(win, account);
+      } else if (currentURL.toLowerCase().includes("skt01001")) {
+        const forced = this.pendingKurumUpdate.has(account.id);
+        this.pendingKurumUpdate.delete(account.id);
+        this.hideStatus(win);
+        this.injectLeftMenu(win, account);
+        this.parseAndPushKurumInfo(win, account, forced);
       } else if (currentURL.toLowerCase().includes("skt04002")) {
         this.hideStatus(win);
         this.injectLeftMenu(win, account);
@@ -6935,6 +7109,13 @@ var MebbisManager = class _MebbisManager {
         win.loadURL("https://mebbis.meb.gov.tr/Ookgm/ook00001.aspx").catch((e) => {
           console.error(`[PersonnelUpdate][${account.label}] ook00001 from main failed:`, e);
           this.pendingPersonnelUpdate.delete(account.id);
+        });
+      } else if (currentURL.toLowerCase().includes("main.aspx") && this.pendingKurumUpdate.has(account.id)) {
+        console.log(`[KurumUpdate][${account.label}] Main portal loaded after Mod\xFCl \xC7\u0131k\u0131\u015F, navigating to skt01001`);
+        this.injectLeftMenu(win, account);
+        win.loadURL("https://mebbis.meb.gov.tr/SKT/skt01001.aspx").catch((e) => {
+          console.error(`[KurumUpdate][${account.label}] skt01001 from main failed:`, e);
+          this.pendingKurumUpdate.delete(account.id);
         });
       } else if (currentURL.toLowerCase().includes("ook00001") && this.pendingPersonnelUpdate.has(account.id)) {
         console.log(`[PersonnelUpdate][${account.label}] OOK home loaded, navigating to ook12001`);
@@ -7063,7 +7244,9 @@ var MebbisManager = class _MebbisManager {
     `;
     await getCodeLoader().runScriptOrFallback(win, "scripts/auto-fill-login.js", fallback, {
       USERNAME: account.username,
-      PASSWORD: account.password
+      PASSWORD: account.password,
+      SUBMIT: true,
+      READONLY: false
     });
     console.log(`[${account.label}] Auto-fill script executed`);
   }
@@ -7108,6 +7291,10 @@ var MebbisManager = class _MebbisManager {
   /** skt04002 ddlPersonel scrape — extracts personnel/staff into the local DB. */
   parseAndIngestPersonnelList(win, account) {
     return parseAndIngestPersonnelList(this, win, account);
+  }
+  /** skt01001 scrape — kurum header + Programlar/Araç grids → backend store. */
+  parseAndPushKurumInfo(win, account, force) {
+    return parseAndPushKurumInfo(this, win, account, force);
   }
   /**
    * ook12001 (Personel Arama) list scrape — canonical personnel inventory in

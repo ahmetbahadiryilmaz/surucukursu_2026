@@ -14,6 +14,7 @@ import * as downloadBatch from './download-batch';
 import * as downloadSingle from './download-single';
 import * as studentFlows from './student-flows';
 import * as personnelFlows from './personnel-flows';
+import * as kurumFlows from './kurum-flows';
 import * as store from './store';
 import { RunningAccount, PERIOD_HELPERS_JS } from './constants';
 export { PERIOD_HELPERS_JS };
@@ -39,6 +40,13 @@ export class MebbisManager {
   // ook12001 this update cycle, preventing infinite reload loops when the
   // grid is initially empty and needs the "Aç" filter applied.
   personnelAutoSearched: Set<string> = new Set();
+
+  // Kurum-update navigation: when the user clicks "Güncelle" in the Kurum
+  // modal we set this flag, navigate to skt01001 (the MTSK "Kurum Bilgileri"
+  // page), and force a re-scrape on load. skt01001 lives in the MTSK module,
+  // so if the window is currently inside the OOK module a direct navigation
+  // bounces back — we click "Modül Çıkış" first, mirroring the personnel flow.
+  pendingKurumUpdate: Set<string> = new Set();
 
   // K Belgesi auto-fetch flow: when the user types a TC into K Belgesi that
   // is not in the local student cache, we navigate skt02009 to scrape that
@@ -499,16 +507,55 @@ export class MebbisManager {
         }
       }
       if (message === 'MEBBIS_REQUEST_KURUM_UPDATE') {
-        console.log(`[${account.label}] Kurum update requested — re-fetching from backend`);
-        fetchKurumInfo().then((info) => {
-          if (info) {
-            this.kurumInfoCache.set(account.id, info);
-            console.log(`[${account.label}] Kurum info refreshed from backend`);
-          } else {
-            console.log(`[${account.label}] Kurum info fetch returned null`);
-          }
-          if (!win.isDestroyed()) this.pushStoreToSidebar(win, account);
-        });
+        console.log(`[KurumUpdate][${account.label}] Güncelle requested`);
+        this.pendingKurumUpdate.add(account.id);
+        const currentURL = win.webContents.getURL();
+        const lowerURL = currentURL.toLowerCase();
+        if (lowerURL.includes('skt01001')) {
+          // Already on the Kurum Bilgileri page — re-scrape in place, no nav.
+          console.log(`[KurumUpdate][${account.label}] Already on skt01001 — re-scraping in place`);
+          this.pendingKurumUpdate.delete(account.id);
+          this.parseAndPushKurumInfo(win, account, true);
+        } else if (lowerURL.includes('/ookgm/')) {
+          // Inside the OOK module — a direct SKT navigation bounces back. Click
+          // "Modül Çıkış" first so the skt01001 loadURL on the next page-load
+          // sticks (same two-step the personnel flow uses for MTSK→OOK).
+          console.log(`[KurumUpdate][${account.label}] In OOK module — clicking Modül Çıkış`);
+          win.webContents.executeJavaScript(`
+            (function() {
+              const all = Array.from(document.querySelectorAll('a, td, button, input[type="button"]'));
+              for (const el of all) {
+                const txt = (el.textContent || el.value || '').trim();
+                if (txt === 'Modül Çıkış' || txt === 'Modul Cikis') { el.click(); return true; }
+              }
+              for (const el of all) {
+                const href = el.getAttribute('href') || '';
+                const onclick = el.getAttribute('onclick') || '';
+                if (href.toLowerCase().includes('main.aspx') || onclick.toLowerCase().includes('main.aspx')) {
+                  el.click(); return true;
+                }
+              }
+              console.log('[MEBBIS] Modül Çıkış not found, falling back to direct skt01001 navigation');
+              return false;
+            })();
+          `).then((clicked: boolean) => {
+            if (!clicked) {
+              win.loadURL('https://mebbis.meb.gov.tr/SKT/skt01001.aspx').catch((e) => {
+                console.error(`[KurumUpdate][${account.label}] skt01001 fallback failed:`, e);
+                this.pendingKurumUpdate.delete(account.id);
+              });
+            }
+          }).catch(() => {
+            win.loadURL('https://mebbis.meb.gov.tr/SKT/skt01001.aspx').catch(() => {});
+          });
+        } else {
+          // Portal or another MTSK page — a direct navigation into skt01001
+          // works (the download flow proves direct SKT navigation sticks).
+          win.loadURL('https://mebbis.meb.gov.tr/SKT/skt01001.aspx').catch((e) => {
+            console.error(`[KurumUpdate][${account.label}] loadURL skt01001 failed:`, e);
+            this.pendingKurumUpdate.delete(account.id);
+          });
+        }
       }
       if (message === 'MEBBIS_BATCH_CANCEL') {
         console.log(`[${account.label}] Batch cancelled by user`);
@@ -646,6 +693,15 @@ export class MebbisManager {
         this.hideStatus(win);
         this.injectLeftMenu(win, account);
         this.parseAndIngestStudentList(win, account);
+      } else if (currentURL.toLowerCase().includes('skt01001')) {
+        // Kurum Bilgileri page. A pending "Güncelle" forces a re-scrape; a
+        // plain user visit scrapes passively (once per session) so the Kurum
+        // modal and K Belgesi form auto-populate.
+        const forced = this.pendingKurumUpdate.has(account.id);
+        this.pendingKurumUpdate.delete(account.id);
+        this.hideStatus(win);
+        this.injectLeftMenu(win, account);
+        this.parseAndPushKurumInfo(win, account, forced);
       } else if (currentURL.toLowerCase().includes('skt04002')) {
         // skt04002 hosts a ddlPersonel dropdown — passive personnel scrape.
         this.hideStatus(win);
@@ -659,6 +715,15 @@ export class MebbisManager {
         win.loadURL('https://mebbis.meb.gov.tr/Ookgm/ook00001.aspx').catch((e) => {
           console.error(`[PersonnelUpdate][${account.label}] ook00001 from main failed:`, e);
           this.pendingPersonnelUpdate.delete(account.id);
+        });
+      } else if (currentURL.toLowerCase().includes('main.aspx') && this.pendingKurumUpdate.has(account.id)) {
+        // Modül Çıkış landed us on the portal — chain to skt01001. The next
+        // page-load reaches the skt01001 branch above which runs the scrape.
+        console.log(`[KurumUpdate][${account.label}] Main portal loaded after Modül Çıkış, navigating to skt01001`);
+        this.injectLeftMenu(win, account);
+        win.loadURL('https://mebbis.meb.gov.tr/SKT/skt01001.aspx').catch((e) => {
+          console.error(`[KurumUpdate][${account.label}] skt01001 from main failed:`, e);
+          this.pendingKurumUpdate.delete(account.id);
         });
       } else if (currentURL.toLowerCase().includes('ook00001') && this.pendingPersonnelUpdate.has(account.id)) {
         // Güncelle landed us on OOK home — session is now established.
@@ -778,6 +843,7 @@ export class MebbisManager {
 
     // Hardcoded fallback used when the remote script is not yet cached.
     // Placeholders __USERNAME__ / __PASSWORD__ are substituted by runScriptOrFallback.
+    // (The remote script also expects __SUBMIT__ / __READONLY__ — see the call below.)
     const fallback = `
       (function() {
         console.log('[MEBBIS] Auto-fill script loaded (fallback)');
@@ -812,9 +878,16 @@ export class MebbisManager {
       })();
     `;
 
+    // SUBMIT/READONLY must be passed: the remote auto-fill-login.js references
+    // __SUBMIT__ and __READONLY__. Any placeholder not supplied here is left as
+    // a bare identifier in the injected script, which throws a ReferenceError
+    // and silently aborts the whole auto-fill (login appears stuck on "TRYING
+    // LOGIN..."). SUBMIT=true → fill + submit; READONLY=false → fields editable.
     await getCodeLoader().runScriptOrFallback(win, 'scripts/auto-fill-login.js', fallback, {
       USERNAME: account.username,
       PASSWORD: account.password,
+      SUBMIT: true,
+      READONLY: false,
     });
     console.log(`[${account.label}] Auto-fill script executed`);
   }
@@ -866,6 +939,11 @@ export class MebbisManager {
   /** skt04002 ddlPersonel scrape — extracts personnel/staff into the local DB. */
   parseAndIngestPersonnelList(win: BrowserWindow, account: Account): void {
     return personnelFlows.parseAndIngestPersonnelList(this, win, account);
+  }
+
+  /** skt01001 scrape — kurum header + Programlar/Araç grids → backend store. */
+  parseAndPushKurumInfo(win: BrowserWindow, account: Account, force: boolean): void {
+    return kurumFlows.parseAndPushKurumInfo(this, win, account, force);
   }
 
   /**
