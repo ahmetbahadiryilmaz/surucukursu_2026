@@ -125,7 +125,23 @@ export function parseAndPushKurumInfo(
       fetchKurumInfo().then((info) => {
         if (!info) return;
         m.kurumInfoCache.set(account.id, info);
-        if (!win.isDestroyed()) m.pushStoreToSidebar(win, account);
+        if (!win.isDestroyed()) {
+          m.pushStoreToSidebar(win, account);
+          if (force) {
+            // User-triggered "Mebbisden Güncelle" — return them to the Kurum
+            // panel with a fresh snapshot and a "Güncellendi" badge.
+            win.webContents.executeJavaScript(`
+              (function() {
+                try {
+                  window.__kurumUpdatePending = true;
+                  if (typeof window.__mebbisShowKurumDetail === 'function') {
+                    window.__mebbisShowKurumDetail();
+                  }
+                } catch (e) { console.log('[KurumUpdate] reopen failed: ' + e); }
+              })();
+            `).catch(() => {});
+          }
+        }
       }).catch(() => {});
     });
   }).catch((e: any) => {

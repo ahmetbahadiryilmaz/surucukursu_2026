@@ -245,7 +245,7 @@ export function buildLeftMenuScript(devSection: string): string {
       gateMsg.style.cssText = 'font-size: 14px; color: #ccc; margin-bottom: 20px; line-height: 1.5;';
       gateMsg.textContent = missingKind === 'kurum'
         ? 'Lütfen Kurum Bilgisi güncelleyin.'
-        : 'Lütfen Personel Bilgisi güncelleyin.';
+        : 'Personel Bilgisi elle girilmeli, en az 1 personel ekleyin.';
       gateModal.appendChild(gateMsg);
 
       var gateBtns = document.createElement('div');
@@ -256,6 +256,29 @@ export function buildLeftMenuScript(devSection: string): string {
       gateCancel.style.cssText = 'padding: 8px 16px; border: 1px solid #2a2a4a; border-radius: 4px; background: none; color: #ccc; cursor: pointer; font-size: 14px;';
       gateCancel.onclick = function() { gateOv.remove(); };
       gateBtns.appendChild(gateCancel);
+
+      // Personel case: open the manual-entry form directly. Kurum case
+      // continues to trigger a MEBBIS scrape via the legacy console
+      // message + polling path below.
+      if (missingKind !== 'kurum') {
+        var gatePersonelEkle = document.createElement('button');
+        gatePersonelEkle.textContent = 'Personel Ekle';
+        gatePersonelEkle.style.cssText = 'padding: 8px 16px; border: none; border-radius: 4px; background: #4361ee; color: white; cursor: pointer; font-size: 14px; font-weight: 500;';
+        gatePersonelEkle.onclick = function() {
+          gateOv.remove();
+          if (typeof window.__openPersonnelAddForm === 'function') {
+            window.__openPersonnelAddForm(null);
+          } else {
+            console.warn('[KBGate] __openPersonnelAddForm not available');
+          }
+        };
+        gateBtns.appendChild(gatePersonelEkle);
+        gateModal.appendChild(gateBtns);
+        gateOv.appendChild(gateModal);
+        gateOv.onclick = function(e) { if (e.target === gateOv) gateOv.remove(); };
+        document.body.appendChild(gateOv);
+        return;
+      }
 
       var gateUpd = document.createElement('button');
       gateUpd.textContent = 'Güncelle';

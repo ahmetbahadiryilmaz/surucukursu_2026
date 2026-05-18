@@ -107,18 +107,24 @@ export async function injectStoreSidebarSections(_m: MebbisManager, win: Browser
           if (Array.isArray(opts.headerActions)) {
             opts.headerActions.forEach(action => {
               const ab = document.createElement('button');
+              // Common visual: icon (SVG) + label, side by side.
+              var baseCss = 'display: inline-flex; align-items: center; gap: 6px; border: none; padding: 6px 12px; font-size: 13px; border-radius: 4px; font-weight: 500;';
               if (action.disabled) {
                 // Greyed-out, non-clickable — used in Local Test mode for the
                 // Güncelle actions that need a live MEBBIS session.
-                ab.style.cssText = 'background: #2a2a4a; border: none; color: #888; cursor: not-allowed; padding: 6px 14px; font-size: 13px; border-radius: 4px; font-weight: 500;';
-                ab.textContent = action.label;
+                ab.style.cssText = baseCss + 'background: #2a2a4a; color: #888; cursor: not-allowed;';
                 ab.disabled = true;
                 if (action.disabledReason) ab.title = action.disabledReason;
               } else {
-                ab.style.cssText = 'background: #4361ee; border: none; color: white; cursor: pointer; padding: 6px 14px; font-size: 13px; border-radius: 4px; font-weight: 500;';
-                ab.textContent = action.label;
+                var bg = action.variant === 'secondary' ? '#2a2a4a' : '#4361ee';
+                ab.style.cssText = baseCss + 'background: ' + bg + '; color: white; cursor: pointer;';
                 ab.onclick = () => action.onClick(ab);
               }
+              // Build innerHTML so SVG icons render. Both fields are
+              // controlled by us (no untrusted user input), so this is safe.
+              var iconHtml = action.iconSvg ? action.iconSvg : '';
+              var labelHtml = '<span>' + String(action.label).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;') + '</span>';
+              ab.innerHTML = iconHtml + labelHtml;
               rightSide.appendChild(ab);
             });
           }
@@ -738,12 +744,14 @@ export async function injectStoreSidebarSections(_m: MebbisManager, win: Browser
           titleWrap.appendChild(sub);
 
           var kGuncelleBtn = document.createElement('button');
-          kGuncelleBtn.textContent = 'Güncelle';
-          kGuncelleBtn.style.cssText = 'background: #4361ee; color: white; border: none; border-radius: 4px; padding: 6px 14px; font-size: 13px; cursor: pointer; flex-shrink: 0;';
+          kGuncelleBtn.style.cssText = 'background: #4361ee; color: white; border: none; border-radius: 4px; padding: 6px 14px; font-size: 13px; cursor: pointer; flex-shrink: 0; display: inline-flex; align-items: center; gap: 6px;';
+          kGuncelleBtn.innerHTML = syncIconSvg + '<span>Mebbisden Güncelle</span>';
           kGuncelleBtn.onclick = function() {
             kGuncelleBtn.disabled = true;
-            kGuncelleBtn.textContent = 'Yükleniyor...';
+            var lbl = kGuncelleBtn.querySelector('span');
+            if (lbl) lbl.textContent = 'Yükleniyor...';
             kGuncelleBtn.style.opacity = '0.6';
+            window.__kurumUpdatePending = true;
             console.log('MEBBIS_REQUEST_KURUM_UPDATE');
           };
 
@@ -758,11 +766,23 @@ export async function injectStoreSidebarSections(_m: MebbisManager, win: Browser
 
           // Meta strip — mirrors the Öğrenci Detay style
           var meta = document.createElement('div');
-          meta.style.cssText = 'padding: 8px 0; font-size: 12px; color: #888; flex-shrink: 0;';
+          meta.style.cssText = 'padding: 8px 0; font-size: 12px; color: #888; flex-shrink: 0; display: flex; align-items: center; gap: 10px;';
+          var metaText = document.createElement('span');
           if (info && info.last_scraped_at) {
-            meta.textContent = 'Son güncelleme: ' + fmtTimestamp(info.last_scraped_at);
+            metaText.textContent = 'Son güncelleme: ' + fmtTimestamp(info.last_scraped_at);
           } else {
-            meta.textContent = 'Kurum bilgisi henüz çekilmedi.';
+            metaText.textContent = 'Kurum bilgisi henüz çekilmedi.';
+          }
+          meta.appendChild(metaText);
+          if (window.__kurumUpdatePending && info) {
+            window.__kurumUpdatePending = false;
+            var okBadge = document.createElement('span');
+            okBadge.style.cssText = 'background: #2ecc71; color: #fff; border-radius: 4px; padding: 2px 8px; font-size: 11px; font-weight: 600;';
+            okBadge.textContent = '✓ Güncellendi';
+            meta.appendChild(okBadge);
+            setTimeout(function() {
+              if (okBadge && okBadge.parentNode) okBadge.parentNode.removeChild(okBadge);
+            }, 3000);
           }
           pane.appendChild(meta);
 
@@ -948,6 +968,14 @@ export async function injectStoreSidebarSections(_m: MebbisManager, win: Browser
         };
 
         kurumBtn.onclick = () => { showKurumDetail(); };
+        // Exposed so the main process can reopen the Kurum panel after a
+        // user-triggered "Mebbisden Güncelle" that navigated MEBBIS away.
+        window.__mebbisShowKurumDetail = showKurumDetail;
+
+        // Inline SVG for the "Mebbisten Güncelle" sync icon. 14px square,
+        // currentColor so it inherits the button text color.
+        var syncIconSvg = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="23 4 23 10 17 10"></polyline><polyline points="1 20 1 14 7 14"></polyline><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10"></path><path d="M20.49 15A9 9 0 0 1 5.64 18.36L1 14"></path></svg>';
+        var plusIconSvg = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>';
 
         personnelBtn.onclick = () => {
           const store = window.__mebbisStore || { students: [], plates: [], personnel: [] };
@@ -970,13 +998,110 @@ export async function injectStoreSidebarSections(_m: MebbisManager, win: Browser
             onRowAction: showPersonnelDetail,
             headerActions: [
               {
-                label: 'Güncelle', onClick: personnelGuncelle,
+                label: 'Personel Ekle', onClick: function(btn) { showPersonnelAddForm(btn); },
+                variant: 'secondary',
+                iconSvg: plusIconSvg,
+              },
+              {
+                label: 'Mebbisten Güncelle', onClick: personnelGuncelle,
+                iconSvg: syncIconSvg,
                 disabled: __isLocalTest,
-                disabledReason: 'Local Test modunda MEBBIS bağlantısı yok — Güncelle devre dışı.',
+                disabledReason: 'Local Test modunda MEBBIS bağlantısı yok — güncelleme devre dışı.',
               },
             ],
           });
         };
+
+        // ────────────────────────────────────────────────────────────
+        // Personel Ekle form — used when MEBBIS yetki yok or operator
+        // prefers manual entry. Persists locally and pushes to backend
+        // via the main process (MEBBIS_PERSONNEL_CREATE message).
+        // ────────────────────────────────────────────────────────────
+        function showPersonnelAddForm(triggerBtn) {
+          var ov = document.createElement('div');
+          ov.id = 'mebbis-personnel-add-overlay';
+          ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:100000;display:flex;align-items:center;justify-content:center;font-family:Arial,sans-serif;';
+          var box = document.createElement('div');
+          box.style.cssText = 'background:#1a1a2e;border:1px solid #2a2a4a;border-radius:10px;padding:22px 26px;width:420px;color:#fff;';
+          var h = document.createElement('h3');
+          h.style.cssText = 'margin:0 0 14px 0;color:#4361ee;font-size:16px;';
+          h.textContent = 'Personel Ekle';
+          box.appendChild(h);
+
+          function field(labelText, inputEl) {
+            var w = document.createElement('div');
+            w.style.cssText = 'margin-bottom:12px;';
+            var l = document.createElement('label');
+            l.style.cssText = 'display:block;font-size:12px;color:#9aa0bf;margin-bottom:4px;';
+            l.textContent = labelText;
+            w.appendChild(l);
+            inputEl.style.cssText = 'width:100%;box-sizing:border-box;padding:8px 10px;background:#0f0f1e;border:1px solid #2a2a4a;border-radius:5px;color:#fff;font-size:13px;';
+            w.appendChild(inputEl);
+            return w;
+          }
+
+          var tcIn = document.createElement('input');
+          tcIn.type = 'text'; tcIn.maxLength = 11; tcIn.placeholder = '11 haneli TC';
+          tcIn.oninput = function() { tcIn.value = tcIn.value.replace(/\\D/g, '').slice(0, 11); };
+          box.appendChild(field('TC Kimlik No', tcIn));
+
+          var adIn = document.createElement('input');
+          adIn.type = 'text';
+          box.appendChild(field('Ad', adIn));
+
+          var soyadIn = document.createElement('input');
+          soyadIn.type = 'text';
+          box.appendChild(field('Soyad', soyadIn));
+
+          var gorevSel = document.createElement('select');
+          ['Direksiyon Usta Öğreticisi','Direksiyon Eğitim Direktörü','Usta Öğretici','Müdür','Müdür Yardımcısı','Diğer']
+            .forEach(function(g) { var o = document.createElement('option'); o.value = g; o.textContent = g; gorevSel.appendChild(o); });
+          box.appendChild(field('Görev', gorevSel));
+
+          var telIn = document.createElement('input');
+          telIn.type = 'text'; telIn.placeholder = '05XXXXXXXXX';
+          telIn.oninput = function() { telIn.value = telIn.value.replace(/\\D/g, '').slice(0, 11); };
+          box.appendChild(field('Telefon', telIn));
+
+          var errEl = document.createElement('div');
+          errEl.style.cssText = 'color:#ff6b6b;font-size:12px;min-height:16px;margin:4px 0 10px;';
+          box.appendChild(errEl);
+
+          var btnRow = document.createElement('div');
+          btnRow.style.cssText = 'display:flex;gap:10px;justify-content:flex-end;';
+          var cancel = document.createElement('button');
+          cancel.textContent = 'İptal';
+          cancel.style.cssText = 'padding:8px 16px;border:1px solid #2a2a4a;border-radius:4px;background:none;color:#ccc;cursor:pointer;font-size:13px;';
+          cancel.onclick = function() { ov.remove(); };
+          btnRow.appendChild(cancel);
+          var save = document.createElement('button');
+          save.textContent = 'Kaydet';
+          save.style.cssText = 'padding:8px 16px;border:none;border-radius:4px;background:#4361ee;color:#fff;cursor:pointer;font-size:13px;font-weight:500;';
+          save.onclick = function() {
+            var tc = tcIn.value.trim();
+            var ad = adIn.value.trim();
+            var soyad = soyadIn.value.trim();
+            var gorevi = gorevSel.value;
+            var tel = telIn.value.trim();
+            if (!/^\\d{11}$/.test(tc)) { errEl.textContent = 'TC 11 haneli olmalı.'; return; }
+            if (!ad || !soyad) { errEl.textContent = 'Ad ve Soyad zorunludur.'; return; }
+            errEl.textContent = '';
+            save.disabled = true; save.textContent = 'Kaydediliyor...'; save.style.opacity = '0.6';
+            var payload = { tc: tc, ad: ad, soyad: soyad, gorevi: gorevi, tel: tel };
+            console.log('MEBBIS_PERSONNEL_CREATE:' + JSON.stringify(payload));
+            // Main process flushes the store, which triggers a sidebar
+            // re-render and pushes to backend. Close the form optimistically.
+            setTimeout(function() { ov.remove(); }, 250);
+          };
+          btnRow.appendChild(save);
+          box.appendChild(btnRow);
+          ov.appendChild(box);
+          ov.onclick = function(e) { if (e.target === ov) ov.remove(); };
+          document.body.appendChild(ov);
+          tcIn.focus();
+        }
+        // Expose so the K Belgesi gate ("Personel Ekle" button) can open it.
+        window.__openPersonnelAddForm = showPersonnelAddForm;
 
         window.__mebbisRenderStore = function() {
           const store = window.__mebbisStore || { students: [], plates: [], personnel: [] };

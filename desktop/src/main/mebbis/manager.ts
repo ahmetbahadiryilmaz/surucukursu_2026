@@ -7,6 +7,8 @@ import { updateCarRoute } from '../sync/car-sync';
 import { updateKurumRoute, fetchKurumInfo } from '../sync/kurum-info-sync';
 import { updateStudentPersonal } from '../sync/student-sync';
 import { getStudentDb } from '../storage/student-db';
+import { getPersonnelDb } from '../storage/personnel-db';
+import { pushPersonnelList } from '../sync/personnel-sync';
 import type { RemoteKurumInfo, RemoteCar } from '../api/api-client';
 import * as sidebarUi from './sidebar';
 import * as pdfRender from './pdf-render';
@@ -458,6 +460,39 @@ export class MebbisManager {
           });
         }
       }
+      if (message.startsWith('MEBBIS_PERSONNEL_CREATE:')) {
+        // Manual personnel entry, used when MEBBIS yetkiyok blocks the
+        // OOK scrape. Writes to the local encrypted store and pushes to
+        // the backend; sidebar re-renders so the new row appears.
+        try {
+          const payload = JSON.parse(message.replace('MEBBIS_PERSONNEL_CREATE:', '').trim());
+          const tc = String(payload.tc || '').trim();
+          if (!/^\d{11}$/.test(tc)) {
+            console.error(`[${account.label}] PERSONNEL_CREATE: invalid TC "${tc}"`);
+          } else {
+            const row = {
+              tc,
+              ad: payload.ad || '',
+              soyad: payload.soyad || '',
+              adSoyad: ((payload.ad || '') + ' ' + (payload.soyad || '')).trim(),
+              gorevi: payload.gorevi || '',
+              statusu: 'Manuel',
+              durumu: 'Görevde',
+            };
+            const r = getPersonnelDb().ingestList(account.id, [row]);
+            // tel is a detail-table field — write via ingestDetail so it
+            // sticks even though the list-shape ignores it.
+            if (payload.tel) {
+              getPersonnelDb().ingestDetail(account.id, tc, { tel: String(payload.tel) });
+            }
+            console.log(`[${account.label}] PERSONNEL_CREATE: tc=${tc} created=${r.created} updated=${r.updated}`);
+            pushPersonnelList(account.id, [row]);
+            this.pushStoreToSidebar(win, account);
+          }
+        } catch (e) {
+          console.error(`[${account.label}] MEBBIS_PERSONNEL_CREATE parse error:`, e);
+        }
+      }
       if (message.startsWith('MEBBIS_K_BELGESI:')) {
         const payload = message.replace('MEBBIS_K_BELGESI:', '').trim();
         try {
@@ -624,6 +659,38 @@ export class MebbisManager {
 
       // Save response HTML to responses folder
       this.saveResponse(win, account, currentURL);
+
+      // MEBBIS authorization gate. When the logged-in account lacks rights
+      // for the module we navigated to (e.g. OOK personnel pages), MEBBIS
+      // redirects to /main.aspx?yetkiyok. Without this guard the pending-
+      // update branches below keep re-issuing the forbidden navigation, so
+      // we abort every in-flight flow and show a clear error to the user.
+      if (currentURL.toLowerCase().includes('yetkiyok')) {
+        const hadPending =
+          this.pendingPersonnelUpdate.has(account.id) ||
+          this.pendingKurumUpdate.has(account.id) ||
+          this.pendingStudentUpdate.has(account.id) ||
+          !!this.pendingDownload ||
+          !!this.pendingBatchDownload ||
+          !!this.pendingSimulatorReport ||
+          this.pendingOpenStudent.has(account.id);
+        if (hadPending) {
+          console.warn(`[${account.label}] yetkiyok — aborting all pending flows for this account`);
+          this.pendingPersonnelUpdate.delete(account.id);
+          this.pendingKurumUpdate.delete(account.id);
+          this.pendingStudentUpdate.delete(account.id);
+          this.pendingOpenStudent.delete(account.id);
+          this.personnelAutoSearched.delete(account.id);
+          this.personnelBatchDetailDone.delete(account.id);
+          this.pendingPersonnelBatchDetail = null;
+          if (this.pendingDownload) { this.pendingDownload = null; this.pendingDownloadPhase = null; }
+          if (this.pendingBatchDownload) { this.clearPendingBatchDownload(); this.pendingDownloadPhase = null; }
+          if (this.pendingSimulatorReport) { this.pendingSimulatorReport = null; }
+          this.hideStatus(win);
+          this.showYetkiyokOverlay(win);
+        }
+        return;
+      }
 
       if (this.isLoginPage(currentURL)) {
         if (this.loginAutoFilled.has(account.id)) {
@@ -952,6 +1019,49 @@ export class MebbisManager {
     `;
 
     void getCodeLoader().runScriptOrFallback(win, 'scripts/hide-status.js', fallback);
+  }
+
+  /**
+   * Renders a blocking error overlay inside the MEBBIS BrowserWindow when
+   * MEBBIS redirects to /main.aspx?yetkiyok. The overlay explains that the
+   * logged-in account lacks rights for the module that was just requested,
+   * so the user does not stare at a silently-aborted flow.
+   */
+  showYetkiyokOverlay(win: BrowserWindow) {
+    if (win.isDestroyed()) return;
+    const script = `
+      (function() {
+        if (document.getElementById('mebbis-yetkiyok-overlay')) return;
+        var ov = document.createElement('div');
+        ov.id = 'mebbis-yetkiyok-overlay';
+        ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.65);z-index:2147483647;display:flex;align-items:center;justify-content:center;font-family:Arial,sans-serif;';
+        var modal = document.createElement('div');
+        modal.style.cssText = 'background:#1a1a2e;border:1px solid #2a2a4a;border-radius:10px;padding:28px 32px;max-width:460px;color:#fff;text-align:center;box-shadow:0 10px 40px rgba(0,0,0,0.5);';
+        var icon = document.createElement('div');
+        icon.style.cssText = 'font-size:36px;margin-bottom:10px;';
+        icon.textContent = '⚠';
+        modal.appendChild(icon);
+        var h = document.createElement('h3');
+        h.style.cssText = 'margin:0 0 10px 0;color:#FFA500;font-size:18px;';
+        h.textContent = 'MEBBIS Yetkisi Yok';
+        modal.appendChild(h);
+        var p = document.createElement('div');
+        p.style.cssText = 'font-size:14px;color:#ccc;line-height:1.55;margin-bottom:18px;';
+        p.textContent = 'Bu MEBBIS hesabının ilgili modüle yetkisi bulunmuyor. Personel bilgilerini sidebar üzerinden elle ekleyebilirsiniz.';
+        modal.appendChild(p);
+        var btn = document.createElement('button');
+        btn.textContent = 'Tamam';
+        btn.style.cssText = 'padding:9px 22px;border:none;border-radius:5px;background:#4361ee;color:#fff;cursor:pointer;font-size:14px;font-weight:600;';
+        btn.onclick = function() { ov.remove(); };
+        modal.appendChild(btn);
+        ov.appendChild(modal);
+        ov.onclick = function(e) { if (e.target === ov) ov.remove(); };
+        document.body.appendChild(ov);
+      })();
+    `;
+    win.webContents.executeJavaScript(script).catch((e) => {
+      console.error('[showYetkiyokOverlay] injection failed:', e);
+    });
   }
 
   /** skt02009 detail scrape — captures full student record. */

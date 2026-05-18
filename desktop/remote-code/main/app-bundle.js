@@ -1596,8 +1596,224 @@ function getRequestLogger() {
   return _instance3;
 }
 
-// src/main/mebbis/sidebar/left-menu.ts
+// src/main/storage/personnel-db.ts
 var import_electron6 = require("electron");
+var fs6 = __toESM(require("fs"));
+var path6 = __toESM(require("path"));
+var FILE_NAME2 = "personnel-store.enc";
+var PLAINTEXT_FALLBACK_NAME2 = "personnel-store.json";
+var PersonnelDb = class {
+  constructor() {
+    this.data = { version: 1, accounts: {} };
+    this.dirty = false;
+    this.flushTimer = null;
+    this.encPath = path6.join(import_electron6.app.getPath("userData"), FILE_NAME2);
+    this.plainPath = path6.join(import_electron6.app.getPath("userData"), PLAINTEXT_FALLBACK_NAME2);
+    this.load();
+  }
+  load() {
+    try {
+      if (fs6.existsSync(this.encPath) && import_electron6.safeStorage.isEncryptionAvailable()) {
+        const buf = fs6.readFileSync(this.encPath);
+        const json = import_electron6.safeStorage.decryptString(buf);
+        const parsed = JSON.parse(json);
+        if (parsed && parsed.accounts) {
+          this.data = parsed;
+          console.log(`[PersonnelDb] Loaded encrypted DB \u2014 accounts=${Object.keys(this.data.accounts).length}`);
+          return;
+        }
+      }
+      if (fs6.existsSync(this.plainPath)) {
+        const json = fs6.readFileSync(this.plainPath, "utf-8");
+        const parsed = JSON.parse(json);
+        if (parsed && parsed.accounts) {
+          this.data = parsed;
+          console.log(`[PersonnelDb] Loaded plaintext fallback \u2014 accounts=${Object.keys(this.data.accounts).length}`);
+          return;
+        }
+      }
+      console.log("[PersonnelDb] No existing DB, starting fresh");
+    } catch (e) {
+      console.error("[PersonnelDb] Load failed, starting fresh:", e);
+      this.data = { version: 1, accounts: {} };
+    }
+  }
+  getBucket(accountId) {
+    let b = this.data.accounts[accountId];
+    if (!b) {
+      b = { personnel: {} };
+      this.data.accounts[accountId] = b;
+    }
+    return b;
+  }
+  /**
+   * Replace-or-merge ingest from one scrape. Personnel removed from MEBBIS are
+   * NOT deleted locally — we keep them as soft history (durum likely "Pasif").
+   * Caller can pass a complete list and `removeMissing=true` to harden behavior
+   * once we trust the scrape is complete.
+   */
+  ingestList(accountId, rows) {
+    const bucket = this.getBucket(accountId);
+    const now = Date.now();
+    let created = 0;
+    let updated = 0;
+    for (const row of rows) {
+      if (!row.tc || !/^\d{11}$/.test(row.tc))
+        continue;
+      const combinedName = row.adSoyad || ([row.ad, row.soyad].filter(Boolean).join(" ").trim() || void 0);
+      const existing = bucket.personnel[row.tc];
+      const listFields = [
+        "izinNo",
+        "durum",
+        "ad",
+        "soyad",
+        "statusu",
+        "gorevi",
+        "bransi",
+        "il",
+        "ilce",
+        "kurumKodu",
+        "kurumAdi",
+        "kurumAdiBaslangic",
+        "calismaIzniBas",
+        "calismaIzniBit",
+        "ayrilmaTarihi",
+        "maasKds",
+        "ucretKds",
+        "durumu"
+      ];
+      if (existing) {
+        if (combinedName)
+          existing.adSoyad = combinedName;
+        for (const k of listFields) {
+          const v = row[k];
+          if (v !== void 0 && v !== "")
+            existing[k] = v;
+        }
+        existing.lastSeenAt = now;
+        updated++;
+      } else {
+        const rec = {
+          tc: row.tc,
+          adSoyad: combinedName || "",
+          lastSeenAt: now
+        };
+        for (const k of listFields) {
+          const v = row[k];
+          if (v !== void 0)
+            rec[k] = v;
+        }
+        bucket.personnel[row.tc] = rec;
+        created++;
+      }
+    }
+    if (created || updated)
+      this.markDirty();
+    return { created, updated };
+  }
+  /**
+   * Merge ook12002 detail data into an existing personnel record identified by TC.
+   * Returns false if the TC is not found (list must be ingested first).
+   */
+  ingestDetail(accountId, tc, detail) {
+    if (!tc || !/^\d{11}$/.test(tc))
+      return false;
+    const bucket = this.getBucket(accountId);
+    const rec = bucket.personnel[tc];
+    if (!rec)
+      return false;
+    const detailFields = [
+      "dogumTarihi",
+      "ogrenimBilgisi",
+      "mezuniyetBelgeCinsi",
+      "mezuniyetTarihi",
+      "mezuniyetBelgeTarihi",
+      "mezuniyetBelgeSayisi",
+      "mezuniyetAciklama",
+      "gorevi",
+      "statusu",
+      "bransi",
+      "brans2",
+      "brans3",
+      "brans4",
+      "dersUcret",
+      "netBrutUcret",
+      "calismaIzniBas",
+      "calismaIzniBit",
+      "maasKarsiligiDersSayisi",
+      "dersUcretiKarsiligiDersSayisi",
+      "durumu",
+      "ayrilmaAciklama",
+      "ePosta",
+      "tel"
+    ];
+    for (const k of detailFields) {
+      const v = detail[k];
+      if (v !== void 0)
+        rec[k] = v;
+    }
+    if (detail.derseProgramlar !== void 0)
+      rec.derseProgramlar = detail.derseProgramlar;
+    rec.detailScrapedAt = Date.now();
+    this.markDirty();
+    return true;
+  }
+  serialize(accountId) {
+    const bucket = this.getBucket(accountId);
+    const personnel = Object.values(bucket.personnel).sort((a, b) => a.adSoyad.localeCompare(b.adSoyad, "tr"));
+    return { personnel };
+  }
+  countPersonnel(accountId) {
+    return Object.keys(this.getBucket(accountId).personnel).length;
+  }
+  clearAccount(accountId) {
+    if (this.data.accounts[accountId]) {
+      delete this.data.accounts[accountId];
+      this.markDirty();
+    }
+  }
+  markDirty() {
+    this.dirty = true;
+    if (this.flushTimer)
+      return;
+    this.flushTimer = setTimeout(() => {
+      this.flushTimer = null;
+      this.flush();
+    }, 500);
+  }
+  flush() {
+    if (!this.dirty)
+      return;
+    try {
+      const json = JSON.stringify(this.data);
+      if (import_electron6.safeStorage.isEncryptionAvailable()) {
+        const buf = import_electron6.safeStorage.encryptString(json);
+        fs6.writeFileSync(this.encPath, buf);
+        try {
+          if (fs6.existsSync(this.plainPath))
+            fs6.unlinkSync(this.plainPath);
+        } catch {
+        }
+        console.log(`[PersonnelDb] Flushed encrypted DB (${buf.length} bytes)`);
+      } else {
+        fs6.writeFileSync(this.plainPath, json, "utf-8");
+        console.log("[PersonnelDb] Flushed plaintext fallback (safeStorage unavailable)");
+      }
+      this.dirty = false;
+    } catch (e) {
+      console.error("[PersonnelDb] Flush failed:", e);
+    }
+  }
+};
+var _instance4 = null;
+function getPersonnelDb() {
+  if (!_instance4)
+    _instance4 = new PersonnelDb();
+  return _instance4;
+}
+
+// src/main/mebbis/sidebar/left-menu.ts
+var import_electron7 = require("electron");
 
 // src/main/mebbis/sidebar/left-menu-script.ts
 function buildLeftMenuScript(devSection) {
@@ -1826,7 +2042,7 @@ function buildLeftMenuScript(devSection) {
       gateMsg.style.cssText = 'font-size: 14px; color: #ccc; margin-bottom: 20px; line-height: 1.5;';
       gateMsg.textContent = missingKind === 'kurum'
         ? 'L\xFCtfen Kurum Bilgisi g\xFCncelleyin.'
-        : 'L\xFCtfen Personel Bilgisi g\xFCncelleyin.';
+        : 'Personel Bilgisi elle girilmeli, en az 1 personel ekleyin.';
       gateModal.appendChild(gateMsg);
 
       var gateBtns = document.createElement('div');
@@ -1837,6 +2053,29 @@ function buildLeftMenuScript(devSection) {
       gateCancel.style.cssText = 'padding: 8px 16px; border: 1px solid #2a2a4a; border-radius: 4px; background: none; color: #ccc; cursor: pointer; font-size: 14px;';
       gateCancel.onclick = function() { gateOv.remove(); };
       gateBtns.appendChild(gateCancel);
+
+      // Personel case: open the manual-entry form directly. Kurum case
+      // continues to trigger a MEBBIS scrape via the legacy console
+      // message + polling path below.
+      if (missingKind !== 'kurum') {
+        var gatePersonelEkle = document.createElement('button');
+        gatePersonelEkle.textContent = 'Personel Ekle';
+        gatePersonelEkle.style.cssText = 'padding: 8px 16px; border: none; border-radius: 4px; background: #4361ee; color: white; cursor: pointer; font-size: 14px; font-weight: 500;';
+        gatePersonelEkle.onclick = function() {
+          gateOv.remove();
+          if (typeof window.__openPersonnelAddForm === 'function') {
+            window.__openPersonnelAddForm(null);
+          } else {
+            console.warn('[KBGate] __openPersonnelAddForm not available');
+          }
+        };
+        gateBtns.appendChild(gatePersonelEkle);
+        gateModal.appendChild(gateBtns);
+        gateOv.appendChild(gateModal);
+        gateOv.onclick = function(e) { if (e.target === gateOv) gateOv.remove(); };
+        document.body.appendChild(gateOv);
+        return;
+      }
 
       var gateUpd = document.createElement('button');
       gateUpd.textContent = 'G\xFCncelle';
@@ -2547,7 +2786,7 @@ var LEFT_MENU_DEV_SECTION = `
 async function injectLeftMenu(m, win, account) {
   if (win.isDestroyed())
     return;
-  const devSection = import_electron6.app.isPackaged ? "" : LEFT_MENU_DEV_SECTION;
+  const devSection = import_electron7.app.isPackaged ? "" : LEFT_MENU_DEV_SECTION;
   const script = buildLeftMenuScript(devSection);
   try {
     await win.webContents.executeJavaScript(script);
@@ -2655,18 +2894,24 @@ async function injectStoreSidebarSections(_m, win, account) {
           if (Array.isArray(opts.headerActions)) {
             opts.headerActions.forEach(action => {
               const ab = document.createElement('button');
+              // Common visual: icon (SVG) + label, side by side.
+              var baseCss = 'display: inline-flex; align-items: center; gap: 6px; border: none; padding: 6px 12px; font-size: 13px; border-radius: 4px; font-weight: 500;';
               if (action.disabled) {
                 // Greyed-out, non-clickable \u2014 used in Local Test mode for the
                 // G\xFCncelle actions that need a live MEBBIS session.
-                ab.style.cssText = 'background: #2a2a4a; border: none; color: #888; cursor: not-allowed; padding: 6px 14px; font-size: 13px; border-radius: 4px; font-weight: 500;';
-                ab.textContent = action.label;
+                ab.style.cssText = baseCss + 'background: #2a2a4a; color: #888; cursor: not-allowed;';
                 ab.disabled = true;
                 if (action.disabledReason) ab.title = action.disabledReason;
               } else {
-                ab.style.cssText = 'background: #4361ee; border: none; color: white; cursor: pointer; padding: 6px 14px; font-size: 13px; border-radius: 4px; font-weight: 500;';
-                ab.textContent = action.label;
+                var bg = action.variant === 'secondary' ? '#2a2a4a' : '#4361ee';
+                ab.style.cssText = baseCss + 'background: ' + bg + '; color: white; cursor: pointer;';
                 ab.onclick = () => action.onClick(ab);
               }
+              // Build innerHTML so SVG icons render. Both fields are
+              // controlled by us (no untrusted user input), so this is safe.
+              var iconHtml = action.iconSvg ? action.iconSvg : '';
+              var labelHtml = '<span>' + String(action.label).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;') + '</span>';
+              ab.innerHTML = iconHtml + labelHtml;
               rightSide.appendChild(ab);
             });
           }
@@ -3286,12 +3531,14 @@ async function injectStoreSidebarSections(_m, win, account) {
           titleWrap.appendChild(sub);
 
           var kGuncelleBtn = document.createElement('button');
-          kGuncelleBtn.textContent = 'G\xFCncelle';
-          kGuncelleBtn.style.cssText = 'background: #4361ee; color: white; border: none; border-radius: 4px; padding: 6px 14px; font-size: 13px; cursor: pointer; flex-shrink: 0;';
+          kGuncelleBtn.style.cssText = 'background: #4361ee; color: white; border: none; border-radius: 4px; padding: 6px 14px; font-size: 13px; cursor: pointer; flex-shrink: 0; display: inline-flex; align-items: center; gap: 6px;';
+          kGuncelleBtn.innerHTML = syncIconSvg + '<span>Mebbisden G\xFCncelle</span>';
           kGuncelleBtn.onclick = function() {
             kGuncelleBtn.disabled = true;
-            kGuncelleBtn.textContent = 'Y\xFCkleniyor...';
+            var lbl = kGuncelleBtn.querySelector('span');
+            if (lbl) lbl.textContent = 'Y\xFCkleniyor...';
             kGuncelleBtn.style.opacity = '0.6';
+            window.__kurumUpdatePending = true;
             console.log('MEBBIS_REQUEST_KURUM_UPDATE');
           };
 
@@ -3306,11 +3553,23 @@ async function injectStoreSidebarSections(_m, win, account) {
 
           // Meta strip \u2014 mirrors the \xD6\u011Frenci Detay style
           var meta = document.createElement('div');
-          meta.style.cssText = 'padding: 8px 0; font-size: 12px; color: #888; flex-shrink: 0;';
+          meta.style.cssText = 'padding: 8px 0; font-size: 12px; color: #888; flex-shrink: 0; display: flex; align-items: center; gap: 10px;';
+          var metaText = document.createElement('span');
           if (info && info.last_scraped_at) {
-            meta.textContent = 'Son g\xFCncelleme: ' + fmtTimestamp(info.last_scraped_at);
+            metaText.textContent = 'Son g\xFCncelleme: ' + fmtTimestamp(info.last_scraped_at);
           } else {
-            meta.textContent = 'Kurum bilgisi hen\xFCz \xE7ekilmedi.';
+            metaText.textContent = 'Kurum bilgisi hen\xFCz \xE7ekilmedi.';
+          }
+          meta.appendChild(metaText);
+          if (window.__kurumUpdatePending && info) {
+            window.__kurumUpdatePending = false;
+            var okBadge = document.createElement('span');
+            okBadge.style.cssText = 'background: #2ecc71; color: #fff; border-radius: 4px; padding: 2px 8px; font-size: 11px; font-weight: 600;';
+            okBadge.textContent = '\u2713 G\xFCncellendi';
+            meta.appendChild(okBadge);
+            setTimeout(function() {
+              if (okBadge && okBadge.parentNode) okBadge.parentNode.removeChild(okBadge);
+            }, 3000);
           }
           pane.appendChild(meta);
 
@@ -3496,6 +3755,14 @@ async function injectStoreSidebarSections(_m, win, account) {
         };
 
         kurumBtn.onclick = () => { showKurumDetail(); };
+        // Exposed so the main process can reopen the Kurum panel after a
+        // user-triggered "Mebbisden G\xFCncelle" that navigated MEBBIS away.
+        window.__mebbisShowKurumDetail = showKurumDetail;
+
+        // Inline SVG for the "Mebbisten G\xFCncelle" sync icon. 14px square,
+        // currentColor so it inherits the button text color.
+        var syncIconSvg = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="23 4 23 10 17 10"></polyline><polyline points="1 20 1 14 7 14"></polyline><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10"></path><path d="M20.49 15A9 9 0 0 1 5.64 18.36L1 14"></path></svg>';
+        var plusIconSvg = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>';
 
         personnelBtn.onclick = () => {
           const store = window.__mebbisStore || { students: [], plates: [], personnel: [] };
@@ -3518,13 +3785,110 @@ async function injectStoreSidebarSections(_m, win, account) {
             onRowAction: showPersonnelDetail,
             headerActions: [
               {
-                label: 'G\xFCncelle', onClick: personnelGuncelle,
+                label: 'Personel Ekle', onClick: function(btn) { showPersonnelAddForm(btn); },
+                variant: 'secondary',
+                iconSvg: plusIconSvg,
+              },
+              {
+                label: 'Mebbisten G\xFCncelle', onClick: personnelGuncelle,
+                iconSvg: syncIconSvg,
                 disabled: __isLocalTest,
-                disabledReason: 'Local Test modunda MEBBIS ba\u011Flant\u0131s\u0131 yok \u2014 G\xFCncelle devre d\u0131\u015F\u0131.',
+                disabledReason: 'Local Test modunda MEBBIS ba\u011Flant\u0131s\u0131 yok \u2014 g\xFCncelleme devre d\u0131\u015F\u0131.',
               },
             ],
           });
         };
+
+        // \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+        // Personel Ekle form \u2014 used when MEBBIS yetki yok or operator
+        // prefers manual entry. Persists locally and pushes to backend
+        // via the main process (MEBBIS_PERSONNEL_CREATE message).
+        // \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+        function showPersonnelAddForm(triggerBtn) {
+          var ov = document.createElement('div');
+          ov.id = 'mebbis-personnel-add-overlay';
+          ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:100000;display:flex;align-items:center;justify-content:center;font-family:Arial,sans-serif;';
+          var box = document.createElement('div');
+          box.style.cssText = 'background:#1a1a2e;border:1px solid #2a2a4a;border-radius:10px;padding:22px 26px;width:420px;color:#fff;';
+          var h = document.createElement('h3');
+          h.style.cssText = 'margin:0 0 14px 0;color:#4361ee;font-size:16px;';
+          h.textContent = 'Personel Ekle';
+          box.appendChild(h);
+
+          function field(labelText, inputEl) {
+            var w = document.createElement('div');
+            w.style.cssText = 'margin-bottom:12px;';
+            var l = document.createElement('label');
+            l.style.cssText = 'display:block;font-size:12px;color:#9aa0bf;margin-bottom:4px;';
+            l.textContent = labelText;
+            w.appendChild(l);
+            inputEl.style.cssText = 'width:100%;box-sizing:border-box;padding:8px 10px;background:#0f0f1e;border:1px solid #2a2a4a;border-radius:5px;color:#fff;font-size:13px;';
+            w.appendChild(inputEl);
+            return w;
+          }
+
+          var tcIn = document.createElement('input');
+          tcIn.type = 'text'; tcIn.maxLength = 11; tcIn.placeholder = '11 haneli TC';
+          tcIn.oninput = function() { tcIn.value = tcIn.value.replace(/\\D/g, '').slice(0, 11); };
+          box.appendChild(field('TC Kimlik No', tcIn));
+
+          var adIn = document.createElement('input');
+          adIn.type = 'text';
+          box.appendChild(field('Ad', adIn));
+
+          var soyadIn = document.createElement('input');
+          soyadIn.type = 'text';
+          box.appendChild(field('Soyad', soyadIn));
+
+          var gorevSel = document.createElement('select');
+          ['Direksiyon Usta \xD6\u011Freticisi','Direksiyon E\u011Fitim Direkt\xF6r\xFC','Usta \xD6\u011Fretici','M\xFCd\xFCr','M\xFCd\xFCr Yard\u0131mc\u0131s\u0131','Di\u011Fer']
+            .forEach(function(g) { var o = document.createElement('option'); o.value = g; o.textContent = g; gorevSel.appendChild(o); });
+          box.appendChild(field('G\xF6rev', gorevSel));
+
+          var telIn = document.createElement('input');
+          telIn.type = 'text'; telIn.placeholder = '05XXXXXXXXX';
+          telIn.oninput = function() { telIn.value = telIn.value.replace(/\\D/g, '').slice(0, 11); };
+          box.appendChild(field('Telefon', telIn));
+
+          var errEl = document.createElement('div');
+          errEl.style.cssText = 'color:#ff6b6b;font-size:12px;min-height:16px;margin:4px 0 10px;';
+          box.appendChild(errEl);
+
+          var btnRow = document.createElement('div');
+          btnRow.style.cssText = 'display:flex;gap:10px;justify-content:flex-end;';
+          var cancel = document.createElement('button');
+          cancel.textContent = '\u0130ptal';
+          cancel.style.cssText = 'padding:8px 16px;border:1px solid #2a2a4a;border-radius:4px;background:none;color:#ccc;cursor:pointer;font-size:13px;';
+          cancel.onclick = function() { ov.remove(); };
+          btnRow.appendChild(cancel);
+          var save = document.createElement('button');
+          save.textContent = 'Kaydet';
+          save.style.cssText = 'padding:8px 16px;border:none;border-radius:4px;background:#4361ee;color:#fff;cursor:pointer;font-size:13px;font-weight:500;';
+          save.onclick = function() {
+            var tc = tcIn.value.trim();
+            var ad = adIn.value.trim();
+            var soyad = soyadIn.value.trim();
+            var gorevi = gorevSel.value;
+            var tel = telIn.value.trim();
+            if (!/^\\d{11}$/.test(tc)) { errEl.textContent = 'TC 11 haneli olmal\u0131.'; return; }
+            if (!ad || !soyad) { errEl.textContent = 'Ad ve Soyad zorunludur.'; return; }
+            errEl.textContent = '';
+            save.disabled = true; save.textContent = 'Kaydediliyor...'; save.style.opacity = '0.6';
+            var payload = { tc: tc, ad: ad, soyad: soyad, gorevi: gorevi, tel: tel };
+            console.log('MEBBIS_PERSONNEL_CREATE:' + JSON.stringify(payload));
+            // Main process flushes the store, which triggers a sidebar
+            // re-render and pushes to backend. Close the form optimistically.
+            setTimeout(function() { ov.remove(); }, 250);
+          };
+          btnRow.appendChild(save);
+          box.appendChild(btnRow);
+          ov.appendChild(box);
+          ov.onclick = function(e) { if (e.target === ov) ov.remove(); };
+          document.body.appendChild(ov);
+          tcIn.focus();
+        }
+        // Expose so the K Belgesi gate ("Personel Ekle" button) can open it.
+        window.__openPersonnelAddForm = showPersonnelAddForm;
 
         window.__mebbisRenderStore = function() {
           const store = window.__mebbisStore || { students: [], plates: [], personnel: [] };
@@ -3562,9 +3926,9 @@ async function injectStoreSidebarSections(_m, win, account) {
 }
 
 // src/main/mebbis/pdf-render.ts
-var import_electron7 = require("electron");
-var path6 = __toESM(require("path"));
-var fs6 = __toESM(require("fs"));
+var import_electron8 = require("electron");
+var path7 = __toESM(require("path"));
+var fs7 = __toESM(require("fs"));
 
 // src/main/templates/template-fetcher.ts
 var _getToken5 = () => null;
@@ -3615,7 +3979,7 @@ function fetchSimulatorTemplate(m, templateName) {
   return fetchEncryptedTemplate(relPath);
 }
 async function generatePdfFromHtml(m, html) {
-  const pdfWin = new import_electron7.BrowserWindow({
+  const pdfWin = new import_electron8.BrowserWindow({
     width: 794,
     height: 1123,
     show: false,
@@ -3680,7 +4044,7 @@ async function generatePdfFromTemplate(m, studentInfo, lessons, sinif) {
   } catch (err) {
     throw new Error(`Template indirilemedi: ${templateName} - ${err.message}`);
   }
-  const pdfWin = new import_electron7.BrowserWindow({
+  const pdfWin = new import_electron8.BrowserWindow({
     width: 794,
     height: 1123,
     show: false,
@@ -3777,7 +4141,7 @@ function extractSimulatorSessions(m, lessons) {
 async function generateSimulatorReportPdf(m, studentInfo, simulatorSessions, simulationType, account, parentWindow) {
   console.log(`[${account.label}] Generating ${simulationType} simulator report PDF...`);
   console.log(`[${account.label}] Sessions to include: ${simulatorSessions.length}`);
-  const result = await import_electron7.dialog.showOpenDialog(parentWindow, {
+  const result = await import_electron8.dialog.showOpenDialog(parentWindow, {
     title: "Simulat\xF6r Raporlar\u0131 - Klas\xF6r Se\xE7in",
     properties: ["openDirectory", "createDirectory"]
   });
@@ -3787,9 +4151,9 @@ async function generateSimulatorReportPdf(m, studentInfo, simulatorSessions, sim
   const tc = studentInfo["tc-kimlik-no"] || "";
   const studentName = (studentInfo["ad-soyad"] || "unknown").replace(/[^a-zA-ZğüşöçıİĞÜŞÖÇ0-9\s]/g, "").replace(/\s+/g, "_");
   const safeLabel = account.label.replace(/[^a-zA-ZğüşöçıİĞÜŞÖÇ0-9\s]/g, "").replace(/\s+/g, "_");
-  const studentDir = path6.join(result.filePaths[0], `${tc}_${studentName}_${safeLabel}`);
-  if (!fs6.existsSync(studentDir))
-    fs6.mkdirSync(studentDir, { recursive: true });
+  const studentDir = path7.join(result.filePaths[0], `${tc}_${studentName}_${safeLabel}`);
+  if (!fs7.existsSync(studentDir))
+    fs7.mkdirSync(studentDir, { recursive: true });
   const record = simulatorSessions[0];
   const recordo = simulatorSessions.length >= 2 ? simulatorSessions[1] : null;
   const instructorName = record?.[8] || "Bilinmeyen";
@@ -3802,7 +4166,7 @@ async function generateSimulatorReportPdf(m, studentInfo, simulatorSessions, sim
   if (simulationType === "sesim" || simulationType === "both") {
     const htmlContent = await m.generateSesimHtml(studentInfo, simulatorSessions, account.label);
     const pdfBuffer = await m.generatePdfFromHtml(htmlContent);
-    fs6.writeFileSync(path6.join(studentDir, "sesim.pdf"), pdfBuffer);
+    fs7.writeFileSync(path7.join(studentDir, "sesim.pdf"), pdfBuffer);
     console.log(`[${account.label}] Saved sesim.pdf`);
   }
   if (simulationType === "ana_grup" || simulationType === "both") {
@@ -3825,7 +4189,7 @@ async function generateSimulatorReportPdf(m, studentInfo, simulatorSessions, sim
       });
       const scenarioPdf = await m.generatePdfFromHtml(html);
       const safeScenarioName = scenario.replace(/[^a-zA-ZğüşöçıİĞÜŞÖÇ0-9 ]/g, "").trim();
-      fs6.writeFileSync(path6.join(studentDir, `${i + 1}_${safeScenarioName}.pdf`), scenarioPdf);
+      fs7.writeFileSync(path7.join(studentDir, `${i + 1}_${safeScenarioName}.pdf`), scenarioPdf);
     }
   }
   const ek4Html = await m.generateEk4Html(
@@ -3838,7 +4202,7 @@ async function generateSimulatorReportPdf(m, studentInfo, simulatorSessions, sim
     // tarih (ders tarihi)
   );
   const ek4Pdf = await m.generatePdfFromHtml(ek4Html);
-  fs6.writeFileSync(path6.join(studentDir, "ek4.pdf"), ek4Pdf);
+  fs7.writeFileSync(path7.join(studentDir, "ek4.pdf"), ek4Pdf);
   console.log(`[${account.label}] Saved ek4.pdf`);
   m.logPdf(account, "simulator_raporu", 1);
   return studentDir;
@@ -4019,7 +4383,7 @@ async function generateKBelgesiPdf(m, data, parentWin) {
   document.getElementById('kb-print').onclick = function(){ document.title = 'KB_PRINT'; };
 })();</script>`;
   const mergedHtml = html.replace("</body>", previewChrome + "</body>");
-  const previewWin = new import_electron7.BrowserWindow({
+  const previewWin = new import_electron8.BrowserWindow({
     parent: parentWin,
     width: 900,
     height: 1180,
@@ -4059,9 +4423,9 @@ async function generateKBelgesiPdf(m, data, parentWin) {
 }
 
 // src/main/mebbis/download-batch.ts
-var import_electron8 = require("electron");
-var path7 = __toESM(require("path"));
-var fs7 = __toESM(require("fs"));
+var import_electron9 = require("electron");
+var path8 = __toESM(require("path"));
+var fs8 = __toESM(require("fs"));
 
 // src/main/mebbis/constants.ts
 var PERIOD_HELPERS_JS = `
@@ -4204,7 +4568,7 @@ async function handleBatchGeneric(m, batchType, account, parentWin) {
 async function handleBatchStart(m, options, account, win) {
   if (!m.pendingBatchDownload)
     return;
-  const folderResult = await import_electron8.dialog.showOpenDialog(win, {
+  const folderResult = await import_electron9.dialog.showOpenDialog(win, {
     title: "PDF Kay\u0131t Klas\xF6r\xFC Se\xE7in",
     properties: ["openDirectory", "createDirectory"]
   });
@@ -4391,7 +4755,7 @@ async function batchGenerateForStudent(m, lessonData, student, account) {
   if (batchType === "direksiyon") {
     const pdfBuffer = await m.generatePdfFromTemplate(lessonData.studentInfo, lessonData.lessons);
     const filename = `direksiyon_${student.tc}_${studentName}.pdf`;
-    fs7.writeFileSync(path7.join(outputDir, filename), pdfBuffer);
+    fs8.writeFileSync(path8.join(outputDir, filename), pdfBuffer);
     console.log(`[${account.label}] Batch: saved ${filename}`);
     m.pendingBatchDownload.completed++;
     m.logPdf(account, "direksiyon_takip", 1);
@@ -4418,14 +4782,14 @@ async function batchGenerateForStudent(m, lessonData, student, account) {
     const recordo = simulatorSessions.length >= 2 ? simulatorSessions[1] : null;
     const donem = record?.[0] || "bilinmeyen";
     const safeDonem = donem.replace(/[^a-zA-ZğüşöçıİĞÜŞÖÇ0-9\s\-]/g, "").replace(/\s+/g, "-").trim();
-    const periodDir = path7.join(outputDir, safeDonem);
-    const studentDir = path7.join(periodDir, `${student.tc}_${studentName}`);
-    if (!fs7.existsSync(studentDir))
-      fs7.mkdirSync(studentDir, { recursive: true });
+    const periodDir = path8.join(outputDir, safeDonem);
+    const studentDir = path8.join(periodDir, `${student.tc}_${studentName}`);
+    if (!fs8.existsSync(studentDir))
+      fs8.mkdirSync(studentDir, { recursive: true });
     if (simType === "sesim" || simType === "both") {
       const sesimHtml = await m.generateSesimHtml(lessonData.studentInfo, simulatorSessions, account.label);
       const sesimPdf = await m.generatePdfFromHtml(sesimHtml);
-      fs7.writeFileSync(path7.join(studentDir, "sesim.pdf"), sesimPdf);
+      fs8.writeFileSync(path8.join(studentDir, "sesim.pdf"), sesimPdf);
     }
     if (simType === "ana_grup" || simType === "both") {
       const scenarios = m.getAnagrupScenarios();
@@ -4445,7 +4809,7 @@ async function batchGenerateForStudent(m, lessonData, student, account) {
         });
         const pdf = await m.generatePdfFromHtml(html);
         const safeName = scenarios[i].replace(/[^a-zA-ZğüşöçıİĞÜŞÖÇ0-9 ]/g, "").trim();
-        fs7.writeFileSync(path7.join(studentDir, `${i + 1}_${safeName}.pdf`), pdf);
+        fs8.writeFileSync(path8.join(studentDir, `${i + 1}_${safeName}.pdf`), pdf);
       }
     }
     const ek4Html = await m.generateEk4Html(
@@ -4459,7 +4823,7 @@ async function batchGenerateForStudent(m, lessonData, student, account) {
       // tarih
     );
     const ek4Pdf = await m.generatePdfFromHtml(ek4Html);
-    fs7.writeFileSync(path7.join(studentDir, "ek4.pdf"), ek4Pdf);
+    fs8.writeFileSync(path8.join(studentDir, "ek4.pdf"), ek4Pdf);
     console.log(`[${account.label}] Batch: simulator + ek4 saved for ${student.tc} in ${safeDonem}`);
     m.pendingBatchDownload.completed++;
     m.logPdf(account, "simulator_raporu", 1);
@@ -4492,7 +4856,7 @@ ${errorSummary}` : `Klas\xF6r: ${outputDir}`;
     setTimeout(() => {
       m.hideBatchStatus(win);
     }, 8e3);
-    import_electron8.dialog.showMessageBox(win, {
+    import_electron9.dialog.showMessageBox(win, {
       type: "info",
       title: titles[batchType] || "\xC7oklu \u0130ndirme",
       message: dialogMsg,
@@ -4815,8 +5179,8 @@ async function handleSkt02006Results(m, win, account) {
 }
 
 // src/main/mebbis/download-single.ts
-var import_electron9 = require("electron");
-var fs8 = __toESM(require("fs"));
+var import_electron10 = require("electron");
+var fs9 = __toESM(require("fs"));
 async function downloadDireksiyonTakip(m, tc, _partition, account, parentWin, sinif) {
   console.log(`[${account.label}] Starting direksiyon takip download for TC: ${tc}, sinif: ${sinif}`);
   parentWin.webContents.executeJavaScript(`
@@ -5046,15 +5410,15 @@ async function handleSkt02009Results(m, win, account) {
     const pdfBuffer = await m.generatePdfFromTemplate(lessonData.studentInfo, lessonData.lessons, sinif);
     const studentName = (lessonData.studentInfo["ad-soyad"] || "unknown").replace(/[^a-zA-ZğüşöçıİĞÜŞÖÇ0-9]/g, "_");
     const defaultFilename = `direksiyon_${tc}_${studentName}.pdf`;
-    const result = await import_electron9.dialog.showSaveDialog(parentWin, {
+    const result = await import_electron10.dialog.showSaveDialog(parentWin, {
       title: "Direksiyon Takip PDF Kaydet",
       defaultPath: defaultFilename,
       filters: [{ name: "PDF", extensions: ["pdf"] }]
     });
     if (!result.canceled && result.filePath) {
-      fs8.writeFileSync(result.filePath, pdfBuffer);
+      fs9.writeFileSync(result.filePath, pdfBuffer);
       console.log(`[${account.label}] PDF saved to: ${result.filePath}`);
-      import_electron9.shell.showItemInFolder(result.filePath);
+      import_electron10.shell.showItemInFolder(result.filePath);
       m.logPdf(account, "direksiyon_takip", 1);
     }
     parentWin.webContents.executeJavaScript(`
@@ -5067,7 +5431,7 @@ async function handleSkt02009Results(m, win, account) {
   } catch (error) {
     console.error(`[${account.label}] Download error:`, error);
     const errMsg = error?.message || "PDF olu\u015Fturulamad\u0131";
-    import_electron9.dialog.showMessageBox(parentWin, {
+    import_electron10.dialog.showMessageBox(parentWin, {
       type: "error",
       title: "Direksiyon Takip Hatas\u0131",
       message: errMsg,
@@ -5234,7 +5598,7 @@ async function handleSkt02009SimulatorResults(m, win, account) {
       parentWin || win
     );
     console.log(`[${account.label}] Simulator + EK4 PDFs saved to: ${savedDir}`);
-    import_electron9.shell.openPath(savedDir);
+    import_electron10.shell.openPath(savedDir);
     if (parentWin && !parentWin.isDestroyed()) {
       parentWin.webContents.executeJavaScript(`
           (function() {
@@ -5248,7 +5612,7 @@ async function handleSkt02009SimulatorResults(m, win, account) {
     console.error(`[${account.label}] Simulator report error:`, error);
     const errMsg = error?.message || "Simulat\xF6r raporu olu\u015Fturulamad\u0131";
     if (parentWin && !parentWin.isDestroyed()) {
-      import_electron9.dialog.showMessageBox(parentWin, {
+      import_electron10.dialog.showMessageBox(parentWin, {
         type: "error",
         title: "Simulat\xF6r Raporu Hatas\u0131",
         message: errMsg,
@@ -5776,222 +6140,6 @@ async function submitStudentUpdateForm(m, win, options) {
   m.pendingStudentUpdate.clear();
 }
 
-// src/main/storage/personnel-db.ts
-var import_electron10 = require("electron");
-var fs9 = __toESM(require("fs"));
-var path8 = __toESM(require("path"));
-var FILE_NAME2 = "personnel-store.enc";
-var PLAINTEXT_FALLBACK_NAME2 = "personnel-store.json";
-var PersonnelDb = class {
-  constructor() {
-    this.data = { version: 1, accounts: {} };
-    this.dirty = false;
-    this.flushTimer = null;
-    this.encPath = path8.join(import_electron10.app.getPath("userData"), FILE_NAME2);
-    this.plainPath = path8.join(import_electron10.app.getPath("userData"), PLAINTEXT_FALLBACK_NAME2);
-    this.load();
-  }
-  load() {
-    try {
-      if (fs9.existsSync(this.encPath) && import_electron10.safeStorage.isEncryptionAvailable()) {
-        const buf = fs9.readFileSync(this.encPath);
-        const json = import_electron10.safeStorage.decryptString(buf);
-        const parsed = JSON.parse(json);
-        if (parsed && parsed.accounts) {
-          this.data = parsed;
-          console.log(`[PersonnelDb] Loaded encrypted DB \u2014 accounts=${Object.keys(this.data.accounts).length}`);
-          return;
-        }
-      }
-      if (fs9.existsSync(this.plainPath)) {
-        const json = fs9.readFileSync(this.plainPath, "utf-8");
-        const parsed = JSON.parse(json);
-        if (parsed && parsed.accounts) {
-          this.data = parsed;
-          console.log(`[PersonnelDb] Loaded plaintext fallback \u2014 accounts=${Object.keys(this.data.accounts).length}`);
-          return;
-        }
-      }
-      console.log("[PersonnelDb] No existing DB, starting fresh");
-    } catch (e) {
-      console.error("[PersonnelDb] Load failed, starting fresh:", e);
-      this.data = { version: 1, accounts: {} };
-    }
-  }
-  getBucket(accountId) {
-    let b = this.data.accounts[accountId];
-    if (!b) {
-      b = { personnel: {} };
-      this.data.accounts[accountId] = b;
-    }
-    return b;
-  }
-  /**
-   * Replace-or-merge ingest from one scrape. Personnel removed from MEBBIS are
-   * NOT deleted locally — we keep them as soft history (durum likely "Pasif").
-   * Caller can pass a complete list and `removeMissing=true` to harden behavior
-   * once we trust the scrape is complete.
-   */
-  ingestList(accountId, rows) {
-    const bucket = this.getBucket(accountId);
-    const now = Date.now();
-    let created = 0;
-    let updated = 0;
-    for (const row of rows) {
-      if (!row.tc || !/^\d{11}$/.test(row.tc))
-        continue;
-      const combinedName = row.adSoyad || ([row.ad, row.soyad].filter(Boolean).join(" ").trim() || void 0);
-      const existing = bucket.personnel[row.tc];
-      const listFields = [
-        "izinNo",
-        "durum",
-        "ad",
-        "soyad",
-        "statusu",
-        "gorevi",
-        "bransi",
-        "il",
-        "ilce",
-        "kurumKodu",
-        "kurumAdi",
-        "kurumAdiBaslangic",
-        "calismaIzniBas",
-        "calismaIzniBit",
-        "ayrilmaTarihi",
-        "maasKds",
-        "ucretKds",
-        "durumu"
-      ];
-      if (existing) {
-        if (combinedName)
-          existing.adSoyad = combinedName;
-        for (const k of listFields) {
-          const v = row[k];
-          if (v !== void 0 && v !== "")
-            existing[k] = v;
-        }
-        existing.lastSeenAt = now;
-        updated++;
-      } else {
-        const rec = {
-          tc: row.tc,
-          adSoyad: combinedName || "",
-          lastSeenAt: now
-        };
-        for (const k of listFields) {
-          const v = row[k];
-          if (v !== void 0)
-            rec[k] = v;
-        }
-        bucket.personnel[row.tc] = rec;
-        created++;
-      }
-    }
-    if (created || updated)
-      this.markDirty();
-    return { created, updated };
-  }
-  /**
-   * Merge ook12002 detail data into an existing personnel record identified by TC.
-   * Returns false if the TC is not found (list must be ingested first).
-   */
-  ingestDetail(accountId, tc, detail) {
-    if (!tc || !/^\d{11}$/.test(tc))
-      return false;
-    const bucket = this.getBucket(accountId);
-    const rec = bucket.personnel[tc];
-    if (!rec)
-      return false;
-    const detailFields = [
-      "dogumTarihi",
-      "ogrenimBilgisi",
-      "mezuniyetBelgeCinsi",
-      "mezuniyetTarihi",
-      "mezuniyetBelgeTarihi",
-      "mezuniyetBelgeSayisi",
-      "mezuniyetAciklama",
-      "gorevi",
-      "statusu",
-      "bransi",
-      "brans2",
-      "brans3",
-      "brans4",
-      "dersUcret",
-      "netBrutUcret",
-      "calismaIzniBas",
-      "calismaIzniBit",
-      "maasKarsiligiDersSayisi",
-      "dersUcretiKarsiligiDersSayisi",
-      "durumu",
-      "ayrilmaAciklama",
-      "ePosta",
-      "tel"
-    ];
-    for (const k of detailFields) {
-      const v = detail[k];
-      if (v !== void 0)
-        rec[k] = v;
-    }
-    if (detail.derseProgramlar !== void 0)
-      rec.derseProgramlar = detail.derseProgramlar;
-    rec.detailScrapedAt = Date.now();
-    this.markDirty();
-    return true;
-  }
-  serialize(accountId) {
-    const bucket = this.getBucket(accountId);
-    const personnel = Object.values(bucket.personnel).sort((a, b) => a.adSoyad.localeCompare(b.adSoyad, "tr"));
-    return { personnel };
-  }
-  countPersonnel(accountId) {
-    return Object.keys(this.getBucket(accountId).personnel).length;
-  }
-  clearAccount(accountId) {
-    if (this.data.accounts[accountId]) {
-      delete this.data.accounts[accountId];
-      this.markDirty();
-    }
-  }
-  markDirty() {
-    this.dirty = true;
-    if (this.flushTimer)
-      return;
-    this.flushTimer = setTimeout(() => {
-      this.flushTimer = null;
-      this.flush();
-    }, 500);
-  }
-  flush() {
-    if (!this.dirty)
-      return;
-    try {
-      const json = JSON.stringify(this.data);
-      if (import_electron10.safeStorage.isEncryptionAvailable()) {
-        const buf = import_electron10.safeStorage.encryptString(json);
-        fs9.writeFileSync(this.encPath, buf);
-        try {
-          if (fs9.existsSync(this.plainPath))
-            fs9.unlinkSync(this.plainPath);
-        } catch {
-        }
-        console.log(`[PersonnelDb] Flushed encrypted DB (${buf.length} bytes)`);
-      } else {
-        fs9.writeFileSync(this.plainPath, json, "utf-8");
-        console.log("[PersonnelDb] Flushed plaintext fallback (safeStorage unavailable)");
-      }
-      this.dirty = false;
-    } catch (e) {
-      console.error("[PersonnelDb] Flush failed:", e);
-    }
-  }
-};
-var _instance4 = null;
-function getPersonnelDb() {
-  if (!_instance4)
-    _instance4 = new PersonnelDb();
-  return _instance4;
-}
-
 // src/main/mebbis/personnel-flows.ts
 function parseAndIngestPersonnelList(m, win, account) {
   if (win.isDestroyed())
@@ -6416,8 +6564,22 @@ function parseAndPushKurumInfo(m, win, account, force) {
         if (!info)
           return;
         m.kurumInfoCache.set(account.id, info);
-        if (!win.isDestroyed())
+        if (!win.isDestroyed()) {
           m.pushStoreToSidebar(win, account);
+          if (force) {
+            win.webContents.executeJavaScript(`
+              (function() {
+                try {
+                  window.__kurumUpdatePending = true;
+                  if (typeof window.__mebbisShowKurumDetail === 'function') {
+                    window.__mebbisShowKurumDetail();
+                  }
+                } catch (e) { console.log('[KurumUpdate] reopen failed: ' + e); }
+              })();
+            `).catch(() => {
+            });
+          }
+        }
       }).catch(() => {
       });
     });
@@ -6883,6 +7045,34 @@ var MebbisManager = class _MebbisManager {
           });
         }
       }
+      if (message.startsWith("MEBBIS_PERSONNEL_CREATE:")) {
+        try {
+          const payload = JSON.parse(message.replace("MEBBIS_PERSONNEL_CREATE:", "").trim());
+          const tc = String(payload.tc || "").trim();
+          if (!/^\d{11}$/.test(tc)) {
+            console.error(`[${account.label}] PERSONNEL_CREATE: invalid TC "${tc}"`);
+          } else {
+            const row = {
+              tc,
+              ad: payload.ad || "",
+              soyad: payload.soyad || "",
+              adSoyad: ((payload.ad || "") + " " + (payload.soyad || "")).trim(),
+              gorevi: payload.gorevi || "",
+              statusu: "Manuel",
+              durumu: "G\xF6revde"
+            };
+            const r = getPersonnelDb().ingestList(account.id, [row]);
+            if (payload.tel) {
+              getPersonnelDb().ingestDetail(account.id, tc, { tel: String(payload.tel) });
+            }
+            console.log(`[${account.label}] PERSONNEL_CREATE: tc=${tc} created=${r.created} updated=${r.updated}`);
+            pushPersonnelList(account.id, [row]);
+            this.pushStoreToSidebar(win, account);
+          }
+        } catch (e) {
+          console.error(`[${account.label}] MEBBIS_PERSONNEL_CREATE parse error:`, e);
+        }
+      }
       if (message.startsWith("MEBBIS_K_BELGESI:")) {
         const payload = message.replace("MEBBIS_K_BELGESI:", "").trim();
         try {
@@ -7035,6 +7225,33 @@ var MebbisManager = class _MebbisManager {
       const currentURL = win.webContents.getURL();
       console.log(`[${account.label}] PAGE LOADED: ${currentURL}`);
       this.saveResponse(win, account, currentURL);
+      if (currentURL.toLowerCase().includes("yetkiyok")) {
+        const hadPending = this.pendingPersonnelUpdate.has(account.id) || this.pendingKurumUpdate.has(account.id) || this.pendingStudentUpdate.has(account.id) || !!this.pendingDownload || !!this.pendingBatchDownload || !!this.pendingSimulatorReport || this.pendingOpenStudent.has(account.id);
+        if (hadPending) {
+          console.warn(`[${account.label}] yetkiyok \u2014 aborting all pending flows for this account`);
+          this.pendingPersonnelUpdate.delete(account.id);
+          this.pendingKurumUpdate.delete(account.id);
+          this.pendingStudentUpdate.delete(account.id);
+          this.pendingOpenStudent.delete(account.id);
+          this.personnelAutoSearched.delete(account.id);
+          this.personnelBatchDetailDone.delete(account.id);
+          this.pendingPersonnelBatchDetail = null;
+          if (this.pendingDownload) {
+            this.pendingDownload = null;
+            this.pendingDownloadPhase = null;
+          }
+          if (this.pendingBatchDownload) {
+            this.clearPendingBatchDownload();
+            this.pendingDownloadPhase = null;
+          }
+          if (this.pendingSimulatorReport) {
+            this.pendingSimulatorReport = null;
+          }
+          this.hideStatus(win);
+          this.showYetkiyokOverlay(win);
+        }
+        return;
+      }
       if (this.isLoginPage(currentURL)) {
         if (this.loginAutoFilled.has(account.id)) {
           console.log(`[${account.label}] Login page again \u2014 auto-fill already used, awaiting manual login`);
@@ -7294,6 +7511,49 @@ var MebbisManager = class _MebbisManager {
       })();
     `;
     void getCodeLoader().runScriptOrFallback(win, "scripts/hide-status.js", fallback);
+  }
+  /**
+   * Renders a blocking error overlay inside the MEBBIS BrowserWindow when
+   * MEBBIS redirects to /main.aspx?yetkiyok. The overlay explains that the
+   * logged-in account lacks rights for the module that was just requested,
+   * so the user does not stare at a silently-aborted flow.
+   */
+  showYetkiyokOverlay(win) {
+    if (win.isDestroyed())
+      return;
+    const script = `
+      (function() {
+        if (document.getElementById('mebbis-yetkiyok-overlay')) return;
+        var ov = document.createElement('div');
+        ov.id = 'mebbis-yetkiyok-overlay';
+        ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.65);z-index:2147483647;display:flex;align-items:center;justify-content:center;font-family:Arial,sans-serif;';
+        var modal = document.createElement('div');
+        modal.style.cssText = 'background:#1a1a2e;border:1px solid #2a2a4a;border-radius:10px;padding:28px 32px;max-width:460px;color:#fff;text-align:center;box-shadow:0 10px 40px rgba(0,0,0,0.5);';
+        var icon = document.createElement('div');
+        icon.style.cssText = 'font-size:36px;margin-bottom:10px;';
+        icon.textContent = '\u26A0';
+        modal.appendChild(icon);
+        var h = document.createElement('h3');
+        h.style.cssText = 'margin:0 0 10px 0;color:#FFA500;font-size:18px;';
+        h.textContent = 'MEBBIS Yetkisi Yok';
+        modal.appendChild(h);
+        var p = document.createElement('div');
+        p.style.cssText = 'font-size:14px;color:#ccc;line-height:1.55;margin-bottom:18px;';
+        p.textContent = 'Bu MEBBIS hesab\u0131n\u0131n ilgili mod\xFCle yetkisi bulunmuyor. Personel bilgilerini sidebar \xFCzerinden elle ekleyebilirsiniz.';
+        modal.appendChild(p);
+        var btn = document.createElement('button');
+        btn.textContent = 'Tamam';
+        btn.style.cssText = 'padding:9px 22px;border:none;border-radius:5px;background:#4361ee;color:#fff;cursor:pointer;font-size:14px;font-weight:600;';
+        btn.onclick = function() { ov.remove(); };
+        modal.appendChild(btn);
+        ov.appendChild(modal);
+        ov.onclick = function(e) { if (e.target === ov) ov.remove(); };
+        document.body.appendChild(ov);
+      })();
+    `;
+    win.webContents.executeJavaScript(script).catch((e) => {
+      console.error("[showYetkiyokOverlay] injection failed:", e);
+    });
   }
   /** skt02009 detail scrape — captures full student record. */
   parseAndLogStudentPage(win, account) {
